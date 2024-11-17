@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+
+    <style>
+        body {
+            height: 4600px;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- /**
+    *Throttling ensures that a function is executed at a c
+    onsistent interval, no matter how many times it’s triggered.
+
+    General Rule: Use throttle when you want the function to execute at a consistent rate (e.g., 
+    every 200ms) while the event continues to be triggered. It's ideal for situations where you
+     want to perform an action repeatedly, but not as frequently as the event itself is triggered.
+
+    Scroll Events (Lazy Loading, Infinite Scrolling):
+    Button Clicks (Rate Limiting):
+    Real-Time Position Tracking (Mouse Movement, Dragging):
+
+    */ -->
+
+    <script>
+
+        function throttle(func, limit) {
+            let inThrottle;
+            return function (...args) {
+                if (!inThrottle) {
+                    func.apply(this, args);
+                    inThrottle = true;
+                    setTimeout(() => (inThrottle = false), limit);
+                }
+            };
+        }
+
+        const handleScroll = throttle(() => {
+            console.log('User scrolled:', window.scrollY);
+        }, 200);
+
+        window.addEventListener('scroll', handleScroll);
+
+    </script>
+
+</body>
+
+</html>

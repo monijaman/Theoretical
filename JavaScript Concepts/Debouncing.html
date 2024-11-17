@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+
+<body>
+    <!-- /**
+    * Debouncing ensures that a function is only executed after a
+    * certain amount of time has passed since the last invocation,
+    * useful for events like typing or resizing.
+
+
+    General Rule: Use debounce when you want the function to execute 
+    only once after a series of rapid events. It's ideal for situations
+     where you want to delay execution until the user has stopped performing an action.
+
+     Search Input Fields (Autocomplete):
+     Form Validation:
+     Window Resize Event:
+    */ -->
+    <input style="background:#efefef" type="text" placeholdre="Input Here" value="" id="searchInput"
+        name="searchInput" />
+
+    <script>
+
+        let debounceTimer;
+        const handleSearch = (event) => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                console.log(`Searching for: ${event.target.value}`);
+            }, 500); // Only triggers 500ms after the user stops typing
+        };
+
+        document.getElementById('searchInput').addEventListener('input', handleSearch);
+
+
+    </script>
+
+
+    <table>
+        <thead>
+            <tr>
+                <th><strong>Criteria</strong></th>
+                <th><strong>Debounce</strong></th>
+                <th><strong>Throttle</strong></th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Function Execution</strong></td>
+                <td>Executes <strong>after a delay</strong> of inactivity</td>
+                <td>Executes <strong>at regular intervals</strong></td>
+            </tr>
+            <tr>
+                <td><strong>Use Case</strong></td>
+                <td>User actions that might stop after a short time</td>
+                <td>Continuous actions over a longer duration</td>
+            </tr>
+            <tr>
+                <td><strong>Examples</strong></td>
+                <td>Search input, form validation, resize events</td>
+                <td>Scroll events, mouse movement, button clicks</td>
+            </tr>
+            <tr>
+                <td><strong>Best For</strong></td>
+                <td>Reducing the number of calls</td>
+                <td>Rate-limiting function execution</td>
+            </tr>
+        </tbody>
+    </table>
+</body>
+
+</html>
