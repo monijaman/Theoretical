@@ -490,6 +490,11 @@ const computer = new Computer();
 computer.start();
 ```
 
+Why this violates ISP:
+
+- The Developer class is forced to implement manageTeam(), which it does not need.
+- This creates unnecessary dependencies and potential for misuse.
+
 ### Good Example (Following DIP)
 
 ```typescript
