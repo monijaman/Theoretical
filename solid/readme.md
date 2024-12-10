@@ -492,8 +492,8 @@ computer.start();
 
 Why this violates ISP:
 
-- The Developer class is forced to implement manageTeam(), which it does not need.
-- This creates unnecessary dependencies and potential for misuse.
+- The Computer class depends on the Device abstraction instead of concrete implementations.
+- New devices can be added or replaced without modifying the Computer class.
 
 ### Good Example (Following DIP)
 
