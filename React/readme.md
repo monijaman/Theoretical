@@ -211,3 +211,8 @@ Use context or a shared parent component.
 ### 41. How to perform automatic redirect after login?
 
 Use `useNavigate` from React Router or the `Navigate` component to redirect after authentication.
+
+Useful Links:
+
+- https://github.com/sudheerj/reactjs-interview-questions
+- https://codeinterview.io/blog/reactjs-coding-interview-questions/
