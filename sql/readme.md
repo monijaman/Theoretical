@@ -27,7 +27,7 @@
   - [AVG()](sql#sql-avg-function)
   - [SUM()](#sql-sum-function)
   - [MAX() and MIN()](#max-and-min)
-- [SQL String Functions](#sql-string-functions)
+- [SQL String Functions](sql#sql-string-functions)
   - [CONCAT()](#concat)
   - [LEN()](#len)
   - [UPPER() / LOWER()](#upper--lower)
