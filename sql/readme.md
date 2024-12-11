@@ -1,4 +1,41 @@
-# Sql
+# SQL Guide
+
+## Index
+
+1. [SQL SELECT Statement](#1-sql-select-statement)
+2. [SQL INSERT Statement](#2-sql-insert-statement)
+3. [SQL DELETE Statement](#3-sql-delete-statement)
+4. [SQL UPDATE Statement](#4-sql-update-statement)
+5. [SQL WHERE Clause](#5-sql-where-clause)
+6. [SQL ORDER BY Keyword](#6-sql-order-by-keyword)
+7. [SQL LIKE Operator](#7-sql-like-operator)
+8. [SQL IN Operator](#8-sql-in-operator)
+9. [SQL BETWEEN Operator](#9-sql-between-operator)
+10. [SQL JOIN](#10-sql-join)
+11. [SQL UNION Operator](#11-sql-union-operator)
+12. [SQL GROUP BY Statement](#12-sql-group-by-statement)
+13. [SQL HAVING Clause](#13-sql-having-clause)
+14. [SQL CASE Statement](#14-sql-case-statement)
+15. [SQL SELECT DISTINCT Statement](#15-sql-select-distinct-statement)
+16. [SQL EXISTS Operator](#16-sql-exists-operator)
+17. [SQL ANY and ALL Operators](#17-sql-any-and-all-operators)
+18. [SQL IFNULL(), ISNULL(), COALESCE(), and NVL() Functions](#18-sql-ifnull-isnull-coalesce-and-nvl-functions)
+19. [SQL NULL Values](#19-sql-null-values)
+20. [SQL Aliases](#20-sql-aliases)
+21. [SQL Aggregate Functions](#21-sql-aggregate-functions)
+    - [COUNT()](#211-count)
+    - [AVG()](#212-avg)
+    - [SUM()](#213-sum)
+    - [MAX() and MIN()](#214-max-and-min)
+22. [SQL String Functions](#22-sql-string-functions)
+    - [CONCAT()](#221-concat)
+    - [LEN()](#222-len)
+    - [UPPER() / LOWER()](#223-upper-lower)
+23. [SQL Date Functions](#23-sql-date-functions)
+    - [CURRENT_TIMESTAMP](#231-current_timestamp)
+    - [YEAR(), MONTH(), DATE](#232-year-month-date)
+
+---
 
 ## SQL SELECT Statement
 
@@ -601,4 +638,60 @@ The following SQL statement finds the highest patient's weight:
 ```sql
 SELECT MAX(weight) FROM patients;
 SELECT MIN(weight) FROM patients;
+```
+
+## String:
+
+SQL CONCAT() Function
+
+The CONCAT() function adds two or more expressions together.
+
+```sql
+SELECT CONCAT(first_name,' ', last_name) AS full_name
+FROM patients;
+```
+
+## SQL LEN() Function
+
+The LEN() function returns the length of the string in bytes.
+
+Note: Depending on the language, LEN may go by another name such as LENGTH.
+
+```sql
+SELECT first_name, LEN(first_name) AS length_of_name
+FROM patients;
+```
+
+## SQL UPPER() / LOWER() Function
+
+```sql
+SELECT first_name, UPPER(first_name) AS uppercase_name
+FROM patients;
+```
+
+---
+
+# Date
+
+## SQL CURRENT_TIMESTAMP Function
+
+The CURRENT_TIMESTAMP function returns the current date and time.
+
+Note: The date and time is returned as "YYYY-MM-DD HH-MM-SS" (string)
+
+CURRENT_TIMESTAMP Example:
+The following SQL statement shows the current timestamp:
+
+```sql
+SELECT CURRENT_TIMESTAMP;
+```
+
+## SQL Year()/Month()/Date Function
+
+The YEAR() function returns the year part for a given date (a number from 1000 to 9999).
+
+```sql
+SELECT year(current_timestamp)
+SELECT month(current_timestamp)
+SELECT date(current_timestamp)
 ```
