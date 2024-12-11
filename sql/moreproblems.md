@@ -204,9 +204,34 @@ note: COUNT(\*) is an aggregate function and should be used in a grouped context
 
 ```sql
 
+SELECT
+  patient_id,
+  first_name
+FROM patients
+WHERE
+  first_name LIKE 's%s'
+  AND len(first_name) >= 6;
+
+SELECT
+  patient_id,
+  first_name
+FROM patients
+WHERE first_name LIKE 's____%s';
+
+
+SELECT
+  patient_id,
+  first_name
+FROM patients
+where
+  first_name like 's%'
+  and first_name like '%s'
+  and len(first_name) >= 6;
 ```
 
-## Problem 14
+## Show patient_id, first_name, last_name from patients whos diagnosis is 'Dementia'.
+
+Primary diagnosis is stored in the admissions table.
 
 ### Show
 
