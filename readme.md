@@ -56,3 +56,45 @@ INSERT INTO users (id, name, email) VALUES (1, 'Alice', 'alice@example.com');
 - Item 1
 - Item 2
   - Sub-item
+
+/_
+Enter your query below.
+Please append a semicolon ";" at the end of the query
+_/
+
+WITH MonthlyTotals AS (
+SELECT
+YEAR(o.orderdate) AS year,
+MONTH(o.orderdate) AS month,
+o.customerid,
+SUM(od.unitprice \* od.quantity) AS total_monthly_spending
+FROM
+orders o
+JOIN
+order_details od ON o.orderid = od.orderid
+GROUP BY
+year, month, o.customerid
+),
+MaxMonthlySpending AS (
+SELECT
+year,
+month,
+MAX(total_monthly_spending) AS max_spending
+FROM
+MonthlyTotals
+GROUP BY
+year, month
+)
+SELECT
+mt.year,
+mt.month,
+mt.customerid,
+mt.total_monthly_spending
+FROM
+MonthlyTotals mt
+JOIN
+MaxMonthlySpending mms ON mt.year = mms.year AND mt.month = mms.month
+WHERE
+mt.total_monthly_spending = mms.max_spending
+ORDER BY
+mt.year, mt.month, mt.customerid;

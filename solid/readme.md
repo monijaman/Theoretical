@@ -14,24 +14,6 @@ This means that a class or function should focus on a single task or responsibil
 
 ---
 
-## Benefits of SRP
-
-1. **Improved Maintainability**  
-   By limiting a class to a single responsibility, it becomes easier to understand, test, and modify.
-
-2. **Reduced Coupling**  
-   Classes with distinct responsibilities are less likely to depend on one another unnecessarily.
-
-3. **Enhanced Reusability**  
-   Focused classes or functions are easier to reuse in different parts of an application.
-
-4. **Better Collaboration**  
-   Developers can work on separate responsibilities without stepping on each other’s toes.
-
----
-
-## Examples
-
 ### Example of Violating SRP
 
 ```typescript
@@ -100,10 +82,6 @@ emailSender.sendEmail(report, "example@example.com");
 
 ## SOLID Principles - O: Open-Closed Principle
 
-The **Open-Closed Principle (OCP)** is the second principle in SOLID, emphasizing extensibility in software design.
-
----
-
 ## What is OCP?
 
 The **Open-Closed Principle** states:
@@ -126,8 +104,6 @@ This principle ensures that new functionality can be added to existing code with
    Avoids unintentional side effects caused by altering established code.
 
 ---
-
-## Examples
 
 ### Bad Example (Violating OCP)
 
@@ -215,12 +191,6 @@ console.log(processor.process(premium, 100)); // Output: 120
 ---
 
 ## SOLID Principles - R: Liskov Substitution Principle
-
-The **Liskov Substitution Principle (LSP)** is the third principle in SOLID, ensuring that derived classes can be used interchangeably with their base classes without breaking the application.
-
----
-
-### What is LSP?
 
 The **Liskov Substitution Principle** states:
 
@@ -314,12 +284,6 @@ Why this follows LSP:
 ---
 
 # SOLID Principles - I: Interface Segregation Principle
-
-The **Interface Segregation Principle (ISP)** is the fourth principle in SOLID, emphasizing that interfaces should be small and specific, catering to the exact needs of their clients.
-
----
-
-## What is ISP?
 
 The **Interface Segregation Principle** states:
 
@@ -427,12 +391,6 @@ Why this violates ISP:
 
 ### SOLID Principles - D: Dependency Inversion Principle
 
-The **Dependency Inversion Principle (DIP)** is the fifth principle in SOLID, focusing on reducing the coupling between high-level modules and low-level modules by relying on abstractions.
-
----
-
-## What is DIP?
-
 The **Dependency Inversion Principle** states:
 
 **"High-level modules should not depend on low-level modules. Both should depend on abstractions. Abstractions should not depend on details. Details should depend on abstractions."**
@@ -459,81 +417,93 @@ This principle ensures that high-level business logic is not tightly coupled to 
 ### Bad Example (Violating DIP)
 
 ```typescript
-class Keyboard {
-  connect(): string {
-    return "Keyboard connected";
+class SQLDatabase {
+  connect(): void {
+    console.log("Connected to SQL database.");
+  }
+
+  query(sql: string): void {
+    console.log(`Executing SQL query: ${sql}`);
   }
 }
 
-class Monitor {
-  connect(): string {
-    return "Monitor connected";
-  }
-}
-
-class Computer {
-  private keyboard: Keyboard;
-  private monitor: Monitor;
+class DataService {
+  private db: SQLDatabase;
 
   constructor() {
-    this.keyboard = new Keyboard();
-    this.monitor = new Monitor();
+    this.db = new SQLDatabase();
   }
 
-  start(): void {
-    console.log(this.keyboard.connect());
-    console.log(this.monitor.connect());
+  fetchData(): void {
+    this.db.connect();
+    this.db.query("SELECT * FROM users");
   }
 }
 
-const computer = new Computer();
-computer.start();
+const service = new DataService();
+service.fetchData();
 ```
 
 Why this violates ISP:
 
-- The Computer class depends on the Device abstraction instead of concrete implementations.
-- New devices can be added or replaced without modifying the Computer class.
+- The DataService class depends directly on the SQLDatabase implementation.
+- If the database type changes (e.g., to a NoSQL database), the DataService class must be modified.
 
 ### Good Example (Following DIP)
 
 ```typescript
-interface Device {
-  connect(): string;
+// Define an abstraction for the database
+interface Database {
+  connect(): void;
+  query(query: string): void;
 }
 
-class Keyboard implements Device {
-  connect(): string {
-    return "Keyboard connected";
+// Implement SQL database using the abstraction
+class SQLDatabase implements Database {
+  connect(): void {
+    console.log("Connected to SQL database.");
+  }
+
+  query(sql: string): void {
+    console.log(`Executing SQL query: ${sql}`);
   }
 }
 
-class Monitor implements Device {
-  connect(): string {
-    return "Monitor connected";
+// Implement NoSQL database using the abstraction
+class NoSQLDatabase implements Database {
+  connect(): void {
+    console.log("Connected to NoSQL database.");
+  }
+
+  query(nosqlQuery: string): void {
+    console.log(`Executing NoSQL query: ${nosqlQuery}`);
   }
 }
 
-class Computer {
-  private devices: Device[];
+// Use the abstraction in the service
+class DataService {
+  private db: Database;
 
-  constructor(devices: Device[]) {
-    this.devices = devices;
+  constructor(db: Database) {
+    this.db = db;
   }
 
-  start(): void {
-    this.devices.forEach((device) => console.log(device.connect()));
+  fetchData(): void {
+    this.db.connect();
+    this.db.query("SELECT * FROM users");
   }
 }
 
 // Usage
-const keyboard = new Keyboard();
-const monitor = new Monitor();
-const computer = new Computer([keyboard, monitor]);
-computer.start();
+const sqlService = new DataService(new SQLDatabase());
+sqlService.fetchData();
+
+const nosqlService = new DataService(new NoSQLDatabase());
+nosqlService.fetchData();
 ```
 
 Why this follows DIP:
 
-- The Computer class depends on the Device abstraction instead of concrete implementations.
-- New devices can be added or replaced without modifying the Computer class.
+- The DataService depends on the Database abstraction, not a specific implementation.
+- New database types (e.g., NoSQL) can be added without modifying the DataService class.
+- The high-level logic (DataService) and low-level details (SQLDatabase, NoSQLDatabase) are decoupled.
