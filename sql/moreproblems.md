@@ -236,20 +236,245 @@ Primary diagnosis is stored in the admissions table.
 ### Show
 
 ```sql
+SELECT
+  patients.patient_id,
+  first_name,
+  last_name
+FROM patients
+  JOIN admissions ON admissions.patient_id = patients.patient_id
+WHERE diagnosis = 'Dementia';
 
+SELECT
+  patient_id,
+  first_name,
+  last_name
+FROM patients
+WHERE patient_id IN (
+    SELECT patient_id
+    FROM admissions
+    WHERE diagnosis = 'Dementia'
+  );
 ```
 
 ## Problem 15
 
-### Show
+### Display every patient's first_name.
+
+Order the list by the length of each name and then by alphabetically.
 
 ```sql
+SELECT  first_name from patients
+order by len(first_name), first_name asc
 
 ```
 
 ## Problem 16
 
-### Show
+### Show the total amount of male patients and the total amount of female patients in the patients table.
+
+Display the two results in the same row.
+
+```sql
+
+SELECT
+(select count(*) from patients where gender="M") as male_count,
+(select count(*) from patients where gender="F") as female_count;
+
+select
+	SUM(Gender = 'M') as male_count,
+  SUM(Gender ='F') as female_count
+  From patients;
+
+select
+  sum(case when gender = 'M' then 1 end) as male_count,
+  sum(case when gender = 'F' then 1 end) as female_count
+from patients;
+
+```
+
+## Problem 17
+
+### Show first and last name, allergies from patients which have allergies to either 'Penicillin' or 'Morphine'. Show results ordered ascending by allergies then by first_name then by last_name.
+
+```sql
+SELECT
+  first_name,
+  last_name,
+  allergies
+FROM patients
+WHERE
+  allergies IN ('Penicillin', 'Morphine')
+ORDER BY
+  allergies,
+  first_name,
+  last_name;
+
+SELECT
+  first_name,
+  last_name,
+  allergies
+FROM
+  patients
+WHERE
+  allergies = 'Penicillin'
+  OR allergies = 'Morphine'
+ORDER BY
+  allergies ASC,
+  first_name ASC,
+  last_name ASC;
+```
+
+## Problem 18
+
+### Show patient_id, diagnosis from admissions. Find patients admitted multiple times for the same diagnosis.
+
+```sql
+
+select patient_id, diagnosis
+from admissions
+group by patient_id, diagnosis
+having count(*) > 1
+```
+
+## Problem 19
+
+### Show the city and the total number of patients in the city.
+
+Order from most to least patients and then by city name ascending.
+
+```sql
+select city, count(*) as num_patients
+from patients
+group by city
+order by num_patients desc, city asc
+```
+
+## Problem 20
+
+### Show first name, last name and role of every person that is either patient or doctor.
+
+The roles are either "Patient" or "Doctor"
+
+```sql
+select city, count(*) as num_patients
+from patients
+group by city
+order by num_patients desc, city asc
+```
+
+## Problem 21
+
+### Show first name, last name and role of every person that is either patient or doctor.
+
+The roles are either "Patient" or "Doctor"
+
+```sql
+Show first name, last name and role of every person that is either patient or doctor.
+The roles are either "Patient" or "Doctor"
+```
+
+## Problem 22
+
+### Show all allergies ordered by popularity. Remove NULL values from query.
+
+```sql
+SELECT
+  allergies,
+  COUNT(*) AS total_diagnosis
+FROM patients
+WHERE
+  allergies IS NOT NULL
+GROUP BY allergies
+ORDER BY total_diagnosis DESC
+
+
+SELECT
+  allergies,
+  count(*)
+FROM patients
+WHERE allergies NOT NULL
+GROUP BY allergies
+ORDER BY count(*) DESC
+
+
+
+SELECT
+  allergies,
+  count(allergies) AS total_diagnosis
+FROM patients
+GROUP BY allergies
+HAVING
+  allergies IS NOT NULL
+ORDER BY total_diagnosis DESC
+```
+
+## Problem 23
+
+### Show all patient's first_name, last_name, and birth_date who were born in the 1970s decade. Sort the list starting from the earliest birth_date.
+
+```sql
+   select first_name, last_name, birth_date
+   from patients
+   where  year(birth_date)
+   between  1970 and 1979
+   order by birth_date asc
+
+   SELECT
+      first_name,
+      last_name,
+      birth_date
+    FROM patients
+    WHERE
+      birth_date >= '1970-01-01'
+      AND birth_date < '1980-01-01'
+    ORDER BY birth_date ASC
+
+    SELECT
+      first_name,
+      last_name,
+      birth_date
+    FROM patients
+    WHERE year(birth_date) LIKE '197%'
+    ORDER BY birth_date ASC
+```
+
+## Problem 24
+
+### We want to display each patient's full name in a single column. Their last_name in all upper letters must appear first, then first_name in all lower case letters. Separate the last_name and first_name with a comma. Order the list by the first_name in decending order
+
+EX: SMITH,jane
+
+```sql
+
+```
+
+## Problem 23
+
+### Show all allergies ordered by popularity. Remove NULL values from query.
+
+```sql
+
+```
+
+## Problem 23
+
+### Show all allergies ordered by popularity. Remove NULL values from query.
+
+```sql
+
+```
+
+## Problem 23
+
+### Show all allergies ordered by popularity. Remove NULL values from query.
+
+```sql
+
+```
+
+## Problem 23
+
+### Show all allergies ordered by popularity. Remove NULL values from query.
 
 ```sql
 
