@@ -445,39 +445,112 @@ ORDER BY total_diagnosis DESC
 EX: SMITH,jane
 
 ```sql
+SELECT
+  CONCAT(UPPER(last_name), ',', LOWER(first_name)) AS new_name_format
+FROM patients
+ORDER BY first_name DESC;
+
+
+SELECT
+  UPPER(last_name) || ',' || LOWER(first_name) AS new_name_format
+FROM patients
+ORDER BY first_name DESC;
+```
+
+## Problem 25
+
+### Show the province_id(s), sum of height; where the total sum of its patient's height is greater than or equal to 7,000.
+
+```sql
+select patients.province_id,  SUM(height)   as total_height
+from patients
+join province_names
+on patients.province_id=province_names.province_id
+group by patients.province_id
+having total_height >= 7000
+
+
+select * from
+(select province_id, SUM(height) as sum_height
+FROM patients group by province_id)
+where sum_height >= 7000;
 
 ```
 
-## Problem 23
+## Problem 26
 
-### Show all allergies ordered by popularity. Remove NULL values from query.
+### Show the difference between the largest weight and smallest weight for patients with the last name 'Maroni'
 
 ```sql
+SELECT
+  (MAX(weight) - MIN(weight)) AS weight_delta
+FROM patients
+WHERE last_name = 'Maroni';
 
 ```
 
-## Problem 23
+## Problem 27
 
-### Show all allergies ordered by popularity. Remove NULL values from query.
+### Show all of the days of the month (1-31) and how many admission_dates occurred on that day. Sort by the day with most admissions to least admissions.
 
 ```sql
+SELECT *
+FROM admissions
+WHERE patient_id = 542
+GROUP BY patient_id
+HAVING
+  admission_date = MAX(admission_date);
+
+SELECT *
+FROM admissions
+WHERE
+  patient_id = '542'
+  AND admission_date = (
+    SELECT MAX(admission_date)
+    FROM admissions
+    WHERE patient_id = '542'
+  )
+
+
+SELECT *
+FROM admissions
+WHERE patient_id = 542
+ORDER BY admission_date DESC
+LIMIT 1
+
+
+SELECT *
+FROM admissions
+GROUP BY patient_id
+HAVING
+  patient_id = 542
+  AND max(admission_date)
 
 ```
 
-## Problem 23
+## Problem 28
 
-### Show all allergies ordered by popularity. Remove NULL values from query.
+### Show patient_id, attending_doctor_id, and diagnosis for admissions that match one of the two criteria:
 
-```sql
-
-```
-
-## Problem 23
-
-### Show all allergies ordered by popularity. Remove NULL values from query.
+1. patient_id is an odd number and attending_doctor_id is either 1, 5, or 19.
+2. attending_doctor_id contains a 2 and the length of patient_id is 3 characters.
 
 ```sql
-
+SELECT
+  patient_id,
+  attending_doctor_id,
+  diagnosis
+FROM admissions
+WHERE
+  (
+    attending_doctor_id IN (1, 5, 19)
+    AND patient_id % 2 != 0
+  )
+  OR
+  (
+    attending_doctor_id LIKE '%2%'
+    AND len(patient_id) = 3
+  )
 ```
 
 Useful Links:
