@@ -553,6 +553,93 @@ WHERE
   )
 ```
 
+## Problem 29
+
+## Show first_name, last_name, and the total number of admissions attended for each doctor.
+
+```sql
+
+SELECT
+  first_name,
+  last_name,
+  count(*) as admissions_total
+from admissions a
+  join doctors ph on ph.doctor_id = a.attending_doctor_id
+group by attending_doctor_id
+
+ SELECT
+  first_name,
+  last_name,
+  count(*)
+from
+  doctors p,
+  admissions a
+where
+  a.attending_doctor_id = p.doctor_id
+group by p.doctor_id;
+
+```
+
+## Problem 30
+
+### For each doctor, display their id, full name, and the first and last admission date they attended.
+
+```sql
+select doctor_id, concat(first_name, ' ', last_name) as full_name,
+min(a.admission_date) as first_admission,
+mAX(a.admission_date) as last_admission
+from doctors d
+join admissions a
+on d.doctor_id=a.attending_doctor_id
+group by d.doctor_id
+```
+
+## Problem 31
+
+### Display the total amount of patients for each province. Order by descending.
+
+```sql
+SELECT
+  province_name,
+  COUNT(*) as patient_count
+FROM patients pa
+  join province_names pr on pr.province_id = pa.province_id
+group by pr.province_id
+order by patient_count desc;
+```
+
+## Problem 32
+
+### For every admission, display the patient's full name, their admission diagnosis, and their doctor's full name who diagnosed their problem.
+
+```sql
+select concat(p.first_name,' ', p.last_name) as patient_name,
+a.diagnosis as diagnosis,
+concat(d.first_name, ' ',d.last_name) as doctor_name
+from admissions a
+join  patients p
+on a.patient_id = p.patient_id
+join doctors d
+on a.attending_doctor_id = d.doctor_id
+
+```
+
+##
+
+###
+
+```sql
+
+```
+
+##
+
+###
+
+```sql
+
+```
+
 Useful Links:
 
 [Collected From](https://www.sql-practice.com/){targe="\_blank"}
