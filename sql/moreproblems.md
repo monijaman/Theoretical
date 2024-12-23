@@ -624,17 +624,95 @@ on a.attending_doctor_id = d.doctor_id
 
 ```
 
-##
+## Problem 33
 
-###
+### display the first name, last name and number of duplicate patients based on their first name and last name.
+
+```sql
+select
+  first_name,
+  last_name,
+  count(*) as num_of_duplicates
+from patients
+group by
+  first_name,
+  last_name
+having count(*) > 1
+```
+
+## Problem 34
+
+### Display patient's full name, height in the units feet rounded to 1 decimal, weight in the unit pounds rounded to 0 decimals, birth_date, gender non abbreviated.
+
+Convert CM to feet by dividing by 30.48.
+Convert KG to pounds by multiplying by 2.205.
+
+```sql
+ select concat(first_name,' ', last_name) as patient_name,
+ round(height/30.48, 1) as 'height "Feet"',
+ round(weight*2.205, 0) as Weight,
+ birth_date,
+  CASE
+      WHEN gender = 'M'   THEN 'MALE'
+      else 'FEMALE' end as gender_type
+ from patients
+```
+
+## Problem 35
+
+### Show patient_id, first_name, last_name from patients whose does not have any records in the admissions table. (Their patient_id does not exist in any admissions.patient_id rows.)
+
+```sql
+
+ select patient_id, first_name, last_name
+ from patients
+ where patient_id not in (select patient_id from admissions)
+
+
+SELECT
+  patients.patient_id,
+  first_name,
+  last_name
+from patients
+  left join admissions on patients.patient_id = admissions.patient_id
+where admissions.patient_id is NULL
+```
+
+## Problem 36
+
+### Display a single row with max_visits, min_visits, average_visits where the maximum, minimum and average number of admissions per day is calculated. Average is rounded to 2 decimal places.
+
+```sql
+select
+	max(number_of_visits) as max_visits,
+	min(number_of_visits) as min_visits,
+  round(avg(number_of_visits),2) as average_visits
+from (
+  select admission_date, count(*) as number_of_visits
+  from admissions
+  group by admission_date
+)
+```
+
+## Problem 37
+
+### Display patient's full name,
 
 ```sql
 
 ```
 
-##
+## Problem 33
 
-###
+### Display patient's full name,
+
+height in the units feet rounded to 1 decimal,
+weight in the unit pounds rounded to 0 decimals,
+birth_date,
+gender non abbreviated.
+
+Convert CM to feet by dividing by 30.48.
+Convert KG to pounds by multiplying by 2.205.
 
 ```sql
 
