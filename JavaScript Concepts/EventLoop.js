@@ -16,3 +16,6 @@ console.log('Order 3');
  * placed in the event queue to execute after the 
  * current stack is empty (due to the setTimeout).
  */
+
+
+https://www.lydiahallie.com/blog/event-loop
