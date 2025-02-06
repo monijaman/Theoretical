@@ -40,6 +40,7 @@ employee.getWage();
 ```
 
 # “The best functions are those with no parameters!” - Robert C Martin
+## Encapsulation
 
 ## Abstraction
 
