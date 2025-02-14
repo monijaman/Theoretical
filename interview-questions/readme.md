@@ -13,15 +13,16 @@ let is block-scoped, can be updated but not redeclared.
 const is block-scoped, cannot be updated or redeclared.
 Purpose: Tests understanding of variable scoping and immutability.
 
-2. Question: What is the difference between == and === in JavaScript?
-   Answer:
+### Question: What is the difference between == and === in JavaScript?
+
+Answer:
 
 == checks for value equality with type coercion.
 
 === checks for value and type equality without coercion.
 Purpose: Evaluates knowledge of type coercion and strict equality.
 
-## Question: How does React handle state management, and what are the differences between useState and useReducer?
+### Question: How does React handle state management, and what are the differences between useState and useReducer?
 
 Answer:
 
@@ -39,7 +40,8 @@ REST is a standard for creating stateless APIs with endpoints for specific resou
 GraphQL allows clients to request only the data they need, reducing over-fetching.
 Purpose: Tests knowledge of API design and modern alternatives.
 
-Question: Explain the concept of closures in JavaScript.
+### Question: Explain the concept of closures in JavaScript.
+
 Answer:
 
 A closure is a function that retains access to its lexical scope, even when executed outside that scope.
@@ -56,14 +58,15 @@ Review logs and error messages.
 Test locally with production-like settings.
 Purpose: Tests debugging and problem-solving skills.
 
-## Question: Review this code snippet. What issues do you see, and how would you fix them?
+### Question: Review this code snippet. What issues do you see, and how would you fix them?
 
-javascript
-Copy
+```js
 function addNumbers(a, b) {
-return a + b;
+  return a + b;
 }
 console.log(addNumbers("5", "10")); // Outputs "510"
+```
+
 Answer:
 
 The function concatenates strings instead of adding numbers.
@@ -71,10 +74,12 @@ The function concatenates strings instead of adding numbers.
 Fix: Convert inputs to numbers using Number() or parseInt().
 Purpose: Evaluates attention to detail and debugging skills.
 
-2. Problem-Solving Skills (30 minutes)
-   a. Algorithmic Thinking
-   Question: Write a function to reverse a string in JavaScript.
-   Answer:
+## Problem-Solving Skills
+
+## a. Algorithmic Thinking
+
+Question: Write a function to reverse a string in JavaScript.
+Answer:
 
 ```javascript
 function reverseString(str) {
@@ -84,7 +89,7 @@ function reverseString(str) {
 
 Purpose: Tests basic algorithmic thinking and familiarity with JavaScript methods.
 
-## Question: How would you find the first non-repeating character in a string?
+### Question: How would you find the first non-repeating character in a string?
 
 Answer:
 
@@ -103,7 +108,8 @@ function firstNonRepeatingChar(str) {
 
 Purpose: Evaluates problem-solving and optimization skills.
 
-Question: Write a function to check if a number is a palindrome.
+### Question: Write a function to check if a number is a palindrome.
+
 Answer:
 
 ```js
@@ -115,8 +121,10 @@ function isPalindrome(num) {
 
 Purpose: Tests ability to solve problems involving numbers and strings.
 
-b. Real-World Scenarios
-Question: How would you optimize a slow-loading web page?
+## b. Real-World Scenarios
+
+### Question: How would you optimize a slow-loading web page?
+
 Answer:
 
 Minimize and compress assets (CSS, JS, images).
@@ -128,7 +136,7 @@ Enable browser caching.
 Reduce server response time.
 Purpose: Evaluates understanding of web performance optimization.
 
-## Question: You are given a task to implement a feature, but the requirements are unclear. What would you do?
+### Question: You are given a task to implement a feature, but the requirements are unclear. What would you do?
 
 Answer:
 
@@ -139,7 +147,7 @@ Break down the task into smaller, manageable parts.
 Provide a prototype or proof of concept for feedback.
 Purpose: Tests communication and problem-solving in ambiguous situations.
 
-## Question: How would you handle a situation where a teammate’s code is causing bugs in the application?
+### Question: How would you handle a situation where a teammate’s code is causing bugs in the application?
 
 Answer:
 
@@ -150,9 +158,10 @@ Review the code together to identify the issue.
 Suggest improvements and collaborate on a fix.
 Purpose: Evaluates teamwork and conflict resolution skills.
 
-3. Bonus Questions (If Time Permits)
-   Question: Explain the concept of "hoisting" in JavaScript.
-   Answer:
+### 3. Bonus Questions (If Time Permits)
+
+Question: Explain the concept of "hoisting" in JavaScript.
+Answer:
 
 ## Hoisting is JavaScript's behavior of moving declarations to the top of their scope during compilation.
 
@@ -170,7 +179,8 @@ Synchronous code runs sequentially, blocking further execution until the current
 Asynchronous code allows tasks to run in the background, improving performance.
 Purpose: Evaluates knowledge of asynchronous programming.
 
-Question: How would you design a system to handle 1 million requests per second?
+### Question: How would you design a system to handle 1 million requests per second?
+
 Answer:
 
 Use load balancers to distribute traffic.
@@ -195,9 +205,12 @@ This set of questions ensures a comprehensive evaluation of the candidate’s te
 
 Unfortunately, I cannot directly generate a downloadable PDF file for you. However, I can provide you with the text content, which you can copy and paste into a document editor (like Microsoft Word, Google Docs, or any other tool) and save it as a PDF. Here's the content again for your convenience:
 
-Interview Questions for Technical Analysis of a Jr. or Mid-Level Candidate
-Topic: Technical Knowledge and Expertise
-Question: Explain the difference between let, const, and var in JavaScript.
+## Interview Questions for Technical Analysis of a Jr. or Mid-Level Candidate
+
+### Topic: Technical Knowledge and Expertise
+
+### Question: Explain the difference between let, const, and var in JavaScript.
+
 Answer:
 
 var is function-scoped and can be redeclared and updated.
@@ -230,7 +243,8 @@ REST is a standard for creating stateless APIs with endpoints for specific resou
 
 GraphQL allows clients to request only the data they need, reducing over-fetching.
 
-Question: Explain the concept of closures in JavaScript.
+### Question: Explain the concept of closures in JavaScript.
+
 Answer:
 
 A closure is a function that retains access to its lexical scope, even when executed outside that scope.
@@ -245,7 +259,7 @@ Review logs and error messages.
 
 Test locally with production-like settings.
 
-## Question: Review this code snippet. What issues do you see, and how would you fix them?
+### Question: Review this code snippet. What issues do you see, and how would you fix them?
 
 ```js
 function addNumbers(a, b) {
@@ -271,7 +285,7 @@ function reverseString(str) {
 }
 ```
 
-## Question: How would you find the first non-repeating character in a string?
+### Question: How would you find the first non-repeating character in a string?
 
 Answer:
 
@@ -288,7 +302,7 @@ function firstNonRepeatingChar(str) {
 }
 ```
 
-## : Write a function to check if a number is a palindrome.
+### Question : Write a function to check if a number is a palindrome.
 
 Answer:
 
@@ -311,7 +325,7 @@ Enable browser caching.
 
 Reduce server response time.
 
-## Question: You are given a task to implement a feature, but the requirements are unclear. What would you do?
+### Question: You are given a task to implement a feature, but the requirements are unclear. What would you do?
 
 Answer:
 
@@ -321,7 +335,8 @@ Break down the task into smaller, manageable parts.
 
 Provide a prototype or proof of concept for feedback.
 
-Question: How would you handle a situation where a teammate’s code is causing bugs in the application?
+### Question: How would you handle a situation where a teammate’s code is causing bugs in the application?
+
 Answer:
 
 Communicate with the teammate to understand their approach.
@@ -340,7 +355,7 @@ Variables declared with var are hoisted and initialized with undefined.
 
 Functions are fully hoisted.
 
-## Question: What is the difference between synchronous and asynchronous code execution?
+### Question: What is the difference between synchronous and asynchronous code execution?
 
 Answer:
 
@@ -348,7 +363,7 @@ Synchronous code runs sequentially, blocking further execution until the current
 
 Asynchronous code allows tasks to run in the background, improving performance.
 
-## Question: How would you design a system to handle 1 million requests per second?
+### Question: How would you design a system to handle 1 million requests per second?
 
 Answer:
 
@@ -373,9 +388,6 @@ You can copy this content into a document editor, format it as needed, and save 
 
 then .md format for github
 Here’s the content in Markdown (.md) format, which you can use directly on GitHub or any Markdown-supported platform:
-
-markdown
-Copy
 
 # Interview Questions for Technical Analysis of a Jr. or Mid-Level Candidate
 
