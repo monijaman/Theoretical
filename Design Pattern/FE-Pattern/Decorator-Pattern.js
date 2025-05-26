@@ -1,5 +1,5 @@
 /**
- * The Decorator Pattern allows behavior to be added to individual objects, 
+ * The Decorator Pattern allows behavior to be added to individual objects / components, 
  * without affecting the behavior of other objects from the same class.
 
 

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+
+    <script>
+      const withLogging = (Component) => {
+        return (props) => {
+          console.log(`Rendering component with props:`, props);
+          return Component(props); // Call the original function instead of returning JSX
+        };
+      };
+
+      // Example component function
+      const Button = (props) => {
+        console.log(`Button clicked: ${props.label}`);
+        return `Button rendered with label: ${props.label}`;
+      };
+
+      // Wrap the Button component with the decorator
+      const ButtonWithLogging = withLogging(Button);
+
+      // Usage
+      console.log(ButtonWithLogging({ label: "Click Me" }));
+    </script>
+  </head>
+  <body>
+
+    <ButtonWithLogging label="Click Me" />
+  </body>
+</html>
