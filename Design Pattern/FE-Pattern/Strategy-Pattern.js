@@ -8,7 +8,10 @@
 ** Implementing different sorting or filtering algorithms for data.
 ** Handling different payment methods or authentication strategies.
 ** Switching between different ways of rendering components.
+** To avoid complex conditional logic (like many if-else or switch statements).
+** To follow the Open/Closed Principle (open for extension, closed for modification).
  */
+
 
 class SortStrategry {
     sort(data) { }
