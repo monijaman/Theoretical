@@ -1,17 +1,19 @@
 /** @jsx Didact.createElement */
 const Didact = importFromBelow();
 
+// Stories data
 const stories = [
-    { name: "Didact introduction", url: "http://bit.ly/2pX7HNn" },
-    { name: "Rendering DOM elements ", url: "http://bit.ly/2qCOejH" },
-    { name: "Element creation and JSX", url: "http://bit.ly/2qGbw8S" },
-    { name: "Instances and reconciliation", url: "http://bit.ly/2q4A746" },
-    { name: "Components and state", url: "http://bit.ly/2rE16nh" },
-    { name: "Fiber: Incremental reconciliation", url: "http://bit.ly/2gaF1sS" }
+    { name: "Didact introduction", url: "#" },
+    { name: "Rendering DOM elements ", url: "#" },
+    { name: "Element creation and JSX", url: "#" },
+    { name: "Instances and reconciliation", url: "#" },
+    { name: "Components and state", url: "#" },
+    { name: "Fiber: Incremental reconciliation", url: "#" }
 ];
 
 class App extends Didact.Component {
     render() {
+        // Renders the main application UI with a list of stories.
         return (
             <div>
                 <h1>Didact Stories</h1>
@@ -31,11 +33,13 @@ class Story extends Didact.Component {
         this.state = { likes: Math.ceil(Math.random() * 100) };
     }
     like() {
+        // Increments the like count for a story.
         this.setState({
             likes: this.state.likes + 1
         });
     }
     render() {
+        // Renders a single story with a like button and a link.
         const { name, url } = this.props;
         const { likes } = this.state;
         return (
@@ -50,6 +54,7 @@ class Story extends Didact.Component {
     }
 }
 
+// Composite Pattern: Used to compose the UI tree with components like App and Story.
 Didact.render(<App stories={stories} />, document.getElementById("root"));
 
 /** ⬇️⬇️⬇️⬇️⬇️ 🌼Didact🌼 ⬇️⬇️⬇️⬇️⬇️ **/
@@ -59,6 +64,7 @@ function importFromBelow() {
     const TEXT_ELEMENT = "TEXT ELEMENT";
 
     function createElement(type, config, ...args) {
+        // Creates a virtual DOM element with the specified type and properties.
         const props = Object.assign({}, config);
         const hasChildren = args.length > 0;
         const rawChildren = hasChildren ? [].concat(...args) : [];
@@ -69,6 +75,7 @@ function importFromBelow() {
     }
 
     function createTextElement(value) {
+        // Creates a virtual DOM element for text nodes.
         return createElement(TEXT_ELEMENT, { nodeValue: value });
     }
     //#endregion
@@ -80,6 +87,7 @@ function importFromBelow() {
     const isGone = (prev, next) => key => !(key in next);
 
     function updateDomProperties(dom, prevProps, nextProps) {
+        // Updates the DOM properties (attributes, styles, and event listeners) of a DOM element.
         // Remove event listeners
         Object.keys(prevProps)
             .filter(isEvent)
@@ -130,6 +138,7 @@ function importFromBelow() {
     }
 
     function createDomElement(fiber) {
+        // Creates a DOM element based on the fiber type and updates its properties.
         const isTextElement = fiber.type === TEXT_ELEMENT;
         const dom = isTextElement
             ? document.createTextNode("")
@@ -146,11 +155,13 @@ function importFromBelow() {
         }
 
         setState(partialState) {
+            // Schedules a state update for the component.
             scheduleUpdate(this, partialState);
         }
     }
 
     function createInstance(fiber) {
+        // Creates an instance of a class component.
         const instance = new fiber.type(fiber.props);
         instance.__fiber = fiber;
         return instance;
@@ -175,6 +186,7 @@ function importFromBelow() {
     let pendingCommit = null;
 
     function render(elements, containerDom) {
+        // Schedules the rendering of elements into the container DOM.
         updateQueue.push({
             from: HOST_ROOT,
             dom: containerDom,
@@ -184,6 +196,7 @@ function importFromBelow() {
     }
 
     function scheduleUpdate(instance, partialState) {
+        // Schedules a state update for a class component instance.
         updateQueue.push({
             from: CLASS_COMPONENT,
             instance: instance,
@@ -193,6 +206,7 @@ function importFromBelow() {
     }
 
     function performWork(deadline) {
+        // Performs work units until the deadline is reached.
         workLoop(deadline);
         if (nextUnitOfWork || updateQueue.length > 0) {
             requestIdleCallback(performWork);
@@ -200,6 +214,7 @@ function importFromBelow() {
     }
 
     function workLoop(deadline) {
+        // Processes the work units in the fiber tree.
         if (!nextUnitOfWork) {
             resetNextUnitOfWork();
         }
@@ -212,6 +227,7 @@ function importFromBelow() {
     }
 
     function resetNextUnitOfWork() {
+        // Resets the next unit of work based on the update queue.
         const update = updateQueue.shift();
         if (!update) {
             return;
@@ -236,6 +252,7 @@ function importFromBelow() {
     }
 
     function getRoot(fiber) {
+        // Retrieves the root fiber of the fiber tree.
         let node = fiber;
         while (node.parent) {
             node = node.parent;
@@ -244,6 +261,7 @@ function importFromBelow() {
     }
 
     function performUnitOfWork(wipFiber) {
+        // Performs a single unit of work for the given fiber.
         beginWork(wipFiber);
         if (wipFiber.child) {
             return wipFiber.child;
@@ -262,6 +280,7 @@ function importFromBelow() {
     }
 
     function beginWork(wipFiber) {
+        // Begins work on a fiber by updating its state or creating its DOM node.
         if (wipFiber.tag == CLASS_COMPONENT) {
             updateClassComponent(wipFiber);
         } else {
@@ -270,6 +289,7 @@ function importFromBelow() {
     }
 
     function updateHostComponent(wipFiber) {
+        // Updates a host component fiber by creating its DOM node and reconciling its children.
         if (!wipFiber.stateNode) {
             wipFiber.stateNode = createDomElement(wipFiber);
         }
@@ -279,6 +299,7 @@ function importFromBelow() {
     }
 
     function updateClassComponent(wipFiber) {
+        // Updates a class component fiber by calling its render method and reconciling its children.
         let instance = wipFiber.stateNode;
         if (instance == null) {
             // Call class constructor
@@ -298,10 +319,12 @@ function importFromBelow() {
     }
 
     function arrify(val) {
+        // Converts a value into an array if it is not already an array.
         return val == null ? [] : Array.isArray(val) ? val : [val];
     }
 
     function reconcileChildrenArray(wipFiber, newChildElements) {
+        // Reconciles the children of a fiber with the new child elements.
         const elements = arrify(newChildElements);
 
         let index = 0;
@@ -357,6 +380,7 @@ function importFromBelow() {
     }
 
     function cloneChildFibers(parentFiber) {
+        // Clones the child fibers of a parent fiber.
         const oldFiber = parentFiber.alternate;
         if (!oldFiber.child) {
             return;
@@ -385,6 +409,7 @@ function importFromBelow() {
     }
 
     function completeWork(fiber) {
+        // Completes work on a fiber and propagates its effects to its parent.
         if (fiber.tag == CLASS_COMPONENT) {
             fiber.stateNode.__fiber = fiber;
         }
@@ -400,6 +425,7 @@ function importFromBelow() {
     }
 
     function commitAllWork(fiber) {
+        // Commits all the effects of a fiber to the DOM.
         fiber.effects.forEach(f => {
             commitWork(f);
         });
@@ -409,6 +435,7 @@ function importFromBelow() {
     }
 
     function commitWork(fiber) {
+        // Commits a single fiber's effect to the DOM.
         if (fiber.tag == HOST_ROOT) {
             return;
         }
@@ -429,6 +456,7 @@ function importFromBelow() {
     }
 
     function commitDeletion(fiber, domParent) {
+        // Commits the deletion of a fiber's DOM node.
         let node = fiber;
         while (true) {
             if (node.tag == CLASS_COMPONENT) {
