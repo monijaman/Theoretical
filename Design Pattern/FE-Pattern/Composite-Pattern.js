@@ -69,3 +69,75 @@ Render Panel: Content
 Render Button: Save
 Render Button: Cancel
 */
+
+// Functional Menu System Example
+const createMenuItem = (name, action) => ({
+    type: 'item',
+    name,
+    action,
+    render: (indent = 0) => {
+        const spacing = ' '.repeat(indent * 2);
+        return `${spacing}📄 ${name}`;
+    },
+    execute: () => action()
+});
+
+const createMenuGroup = (name, children = []) => ({
+    type: 'group',
+    name,
+    children,
+    add: (item) => {
+        children.push(item);
+    },
+    render: (indent = 0) => {
+        const spacing = ' '.repeat(indent * 2);
+        return [
+            `${spacing}📁 ${name}`,
+            ...children.map(child => child.render(indent + 1))
+        ].join('\n');
+    },
+    execute: () => {
+        console.log(`Opening menu group: ${name}`);
+        children.forEach(child => {
+            if (child.type === 'item') {
+                child.execute();
+            }
+        });
+    }
+});
+
+// Usage Example: Building a File Menu
+const fileMenu = createMenuGroup('File Menu', [
+    createMenuItem('New File', () => console.log('Creating new file...')),
+    createMenuItem('Open', () => console.log('Opening file dialog...'))
+]);
+
+const editMenu = createMenuGroup('Edit Menu', [
+    createMenuItem('Cut', () => console.log('Cutting selection...')),
+    createMenuItem('Copy', () => console.log('Copying selection...'))
+]);
+
+const mainMenu = createMenuGroup('Main Menu');
+mainMenu.add(fileMenu);
+mainMenu.add(editMenu);
+mainMenu.add(createMenuItem('Exit', () => console.log('Exiting application...')));
+
+// Render the menu structure
+console.log(mainMenu.render());
+
+// Execute actions in the File Menu
+fileMenu.execute();
+
+/* Output will look like:
+📁 Main Menu
+  📁 File Menu
+    📄 New File
+    📄 Open
+  📁 Edit Menu
+    📄 Cut
+    📄 Copy
+  📄 Exit
+
+Creating new file...
+Opening file dialog...
+*/

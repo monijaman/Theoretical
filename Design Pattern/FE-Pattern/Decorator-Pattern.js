@@ -50,8 +50,66 @@ const ButtonSuccessWithLogging = withLogging(ButtonSuccess);
 console.log(ButtonWithLogging({ label: 'Click Me' })); // Should log "Log failed"
 console.log(ButtonSuccessWithLogging({ label: 'Submit' })); // Should NOT log "Log failed"
 
-
-
-
 // In a React app:
 // <ButtonWithLogging label="Click Me" />
+
+
+
+
+//#region  Frontend Form Validation Example using Decorators
+const createInputComponent = (value = '') => ({
+    value,
+    render: () => `<input value="${value}" />`,
+});
+
+//#region  Decorator functions for form validation
+const withRequired = (input) => ({
+    ...input,
+    validate: () => {
+        return input.value.length > 0;
+    },
+    render: () => {
+        const baseInput = input.render();
+        return `${baseInput}<span class="required">*</span>`;
+    }
+});
+
+const withMinLength = (minLength) => (input) => ({
+    ...input,
+    validate: () => {
+        const baseValidation = input.validate ? input.validate() : true;
+        return baseValidation && input.value.length >= minLength;
+    },
+    render: () => {
+        const baseInput = input.render();
+        return `${baseInput}<span class="hint">Min length: ${minLength}</span>`;
+    }
+});
+
+const withEmail = (input) => ({
+    ...input,
+    validate: () => {
+        const baseValidation = input.validate ? input.validate() : true;
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return baseValidation && emailRegex.test(input.value);
+    },
+    render: () => {
+        const baseInput = input.render();
+        return `${baseInput}<span class="hint">Enter valid email</span>`;
+    }
+});
+
+//#endregion
+
+// Usage Example
+const emailInput = createInputComponent('test@example');
+const decoratedEmailInput = withRequired(withEmail(emailInput));
+
+const passwordInput = createInputComponent('123');
+const decoratedPasswordInput = withRequired(withMinLength(8)(passwordInput));
+
+console.log(decoratedEmailInput.render());
+console.log('Email valid:', decoratedEmailInput.validate());
+
+console.log(decoratedPasswordInput.render());
+console.log('Password valid:', decoratedPasswordInput.validate());

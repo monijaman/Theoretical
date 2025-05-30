@@ -19,7 +19,7 @@
 //#region  Class-based Factory Pattern =====
 class Button {
     constructor(type) {
-        
+
         this.type = type;
     }
 
@@ -37,7 +37,7 @@ class ButtonFactory {
 const factory = new ButtonFactory();
 const primaryButton = factory.createButton('primary');
 primaryButton.render();
- 
+
 //#region Functional Factory Pattern =====
 function createButton(type) {
     // This function returns an object that "remembers" the 'type' argument.
@@ -52,6 +52,71 @@ function createButton(type) {
 
 const secondaryButton = createButton('secondary');
 const sertiaryButton = createButton('Tertiary');
-secondaryButton.render(); 
-secondaryButton.render(); 
-sertiaryButton.render(); 
+secondaryButton.render();
+secondaryButton.render();
+sertiaryButton.render();
+
+//#endregion
+
+//#region Frontend UI Elements Factory Example
+const createFormElement = (type, config) => {
+    const defaultConfig = {
+        label: '',
+        name: '',
+        placeholder: '',
+        validation: () => true
+    };
+
+    const elementConfig = { ...defaultConfig, ...config };
+
+    const elements = {
+        text: () => ({
+            render: () => ({
+                type: 'text',
+                ...elementConfig,
+                validate: (value) => elementConfig.validation(value)
+            })
+        }),
+
+        email: () => ({
+            render: () => ({
+                type: 'email',
+                ...elementConfig,
+                validate: (value) => {
+                    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                    return emailRegex.test(value) && elementConfig.validation(value);
+                }
+            })
+        }),
+
+        password: () => ({
+            render: () => ({
+                type: 'password',
+                ...elementConfig,
+                validate: (value) => {
+                    const minLength = 8;
+                    return value.length >= minLength && elementConfig.validation(value);
+                }
+            })
+        })
+    };
+
+    return elements[type] ? elements[type]() : null;
+};
+
+// Usage Example:
+const emailInput = createFormElement('email', {
+    label: 'Email Address',
+    name: 'email',
+    placeholder: 'Enter your email',
+    validation: (value) => value.includes('@company.com')
+});
+
+const passwordInput = createFormElement('password', {
+    label: 'Password',
+    name: 'password',
+    placeholder: 'Enter your password'
+});
+
+console.log(emailInput.render());
+console.log(passwordInput.render());

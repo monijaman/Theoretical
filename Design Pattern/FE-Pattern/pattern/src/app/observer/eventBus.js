@@ -1,4 +1,3 @@
-// src/utils/eventBus.js
 
 class EventBus {
   constructor() {

@@ -1,6 +1,7 @@
 'use client';
 import counterModule from './counterModule';
 
+
 export default function ModulePatternPage() {
     const { count, increment, decrement } = counterModule.useCounter();
 
