@@ -1,32 +1,55 @@
 /**
  * The Decorator Pattern allows behavior to be added to individual objects / components, 
  * without affecting the behavior of other objects from the same class.
+ *
+ * Use Cases in Frontend:
+ * - Adding additional functionalities to UI components (e.g., adding logging, styling, validation).
+ * - Enhancing React components using Higher-Order Components (HOCs) or custom hooks.
+ * - Middleware functions in frameworks like Express.
+ */
 
-
-Adding additional functionalities to UI components (e.g., adding logging, styling, validation).
-Enhancing React components using Higher-Order Components (HOCs) or custom hooks.
-Middleware functions in frameworks like Express.
+/**
+ * This file demonstrates the Decorator Pattern.
+ * - The `withLogging` function is a decorator: it takes a component (function) and returns a new function
+ *   that adds logging behavior before calling the original component.
+ * - This allows you to enhance or modify the behavior of the Button component without changing its code.
+ * - The original Button remains unchanged; only the wrapped version (`ButtonWithLogging`) has the extra logging.
+ * - This pattern is commonly used in React via Higher-Order Components (HOCs) to add cross-cutting concerns.
  */
 
 // Decorator function that adds logging functionality
 const withLogging = (Component) => {
     return (props) => {
         console.log(`Rendering component with props:`, props);
-        return Component(props); // Call the original function instead of returning JSX
+        const result = Component(props); // Call the original function
+        // Log "Log failed" if the result indicates a failed login
+        if (result === false || (typeof result === 'string' && result.toLowerCase().includes('failed'))) {
+            console.log('Log failed');
+        }
+        return result;
     };
 };
 
-// Example component function
+// Example component function (failed case)
 const Button = (props) => {
     console.log(`Button clicked: ${props.label}`);
-    return `Button rendered with label: ${props.label}`;
+    return `Login failed for label: ${props.label}`; // Simulate a failed result
 };
 
-// Wrap the Button component with the decorator
+// Example component function (success case)
+const ButtonSuccess = (props) => {
+    console.log(`Button clicked: ${props.label}`);
+    return `Login success for label: ${props.label}`; // Simulate a success result
+};
+
+// Wrap the Button components with the decorator
 const ButtonWithLogging = withLogging(Button);
+const ButtonSuccessWithLogging = withLogging(ButtonSuccess);
 
 // Usage
-console.log(ButtonWithLogging({ label: 'Click Me' }));
+console.log(ButtonWithLogging({ label: 'Click Me' })); // Should log "Log failed"
+console.log(ButtonSuccessWithLogging({ label: 'Submit' })); // Should NOT log "Log failed"
+
 
 
 

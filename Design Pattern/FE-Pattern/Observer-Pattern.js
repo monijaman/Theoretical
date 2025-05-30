@@ -9,6 +9,14 @@
 ** Real-time data updates (e.g., chat applications, notifications).
  */
 
+/**
+ * This file demonstrates the Observer Pattern.
+ * - The Observable class maintains a list of observer functions (subscribers).
+ * - Observers can subscribe (register) or unsubscribe (deregister) to receive updates.
+ * - When the Observable's state changes (or notify is called), all subscribed observers are called with the new data.
+ * - This pattern decouples the subject (Observable) from its observers, allowing for flexible and reactive event handling.
+ */
+
 class Observable {
     constructor() {
         // Initialize an empty array to store observers
@@ -52,7 +60,7 @@ observable.subscribe(observer2);
 observable.notify('Hello, observers!');
 
 // Unsubscribe an observer
-observable.unsubscribe(observer1);
+observable.unsubscribe(observer1);  // remove it to stop receiving updates
 
 // Notify observers again
 observable.notify('Another notification');
