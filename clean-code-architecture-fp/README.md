@@ -148,3 +148,6 @@ const registerUser = userController({ createUserUseCase });
 
 _Diagram: Replace `cleancode.png` with your own architecture diagram image in the project root._
 ![alt text](image.png)
+
+- [Clean Architecture Example](https://github.com/dev-mastery/comments-api/tree/master/src)
+- [Clean Architecture Example Video](https://www.youtube.com/watch?v=CnailTcJV_U&list=PLcb3YuQNaC-uM1vHqdBP9yOw-hB1IZmAB)
