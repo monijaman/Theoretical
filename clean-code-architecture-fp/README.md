@@ -4,9 +4,6 @@
 
 ![Clean Code Architecture Diagram](./architecture.png)
 
-_Diagram: Replace `architecture.png` with your own architecture diagram image in the project root._
-![alt text](image.png)
-
 ---
 
 ## Why is this Project Clean Code?
@@ -36,9 +33,6 @@ This project is designed to embody clean code principles by:
 ---
 
 ![Clean Code Architecture Diagram](./flow.png)
-
-_Diagram: Replace `flow.png` with your own architecture diagram image in the project root._
-![alt text](image.png)
 
 ## Clean Architecture Layers Explained (Ordering Machine Example)
 
@@ -145,9 +139,6 @@ const registerUser = userController({ createUserUseCase });
 ```
 
 ![Clean Code Architecture Diagram](./cleancode.png)
-
-_Diagram: Replace `cleancode.png` with your own architecture diagram image in the project root._
-![alt text](image.png)
 
 - [Clean Architecture Example](https://github.com/dev-mastery/comments-api/tree/master/src)
 - [Clean Architecture Example Video](https://www.youtube.com/watch?v=CnailTcJV_U&list=PLcb3YuQNaC-uM1vHqdBP9yOw-hB1IZmAB)
