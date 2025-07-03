@@ -507,3 +507,7 @@ Why this follows DIP:
 - The DataService depends on the Database abstraction, not a specific implementation.
 - New database types (e.g., NoSQL) can be added without modifying the DataService class.
 - The high-level logic (DataService) and low-level details (SQLDatabase, NoSQLDatabase) are decoupled.
+
+---
+
+[Google Slides: SOLID Principles Presentation](https://docs.google.com/presentation/d/1POYN1KcDGihdptsRCCSCCZtpT-VIIz6aveGexPwoUYo/edit?usp=sharing)
