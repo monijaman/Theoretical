@@ -107,4 +107,10 @@ const createUserUseCase = createUser({ userRepository, createUserEntity });
 const registerUser = userController({ createUserUseCase });
 ```
 
+## Clean Code Architecture Diagram
+
+![Clean Code Architecture Diagram](./architecture.png)
+
+_Diagram: Replace `architecture.png` with your own architecture diagram image in the project root._
+
 ---
