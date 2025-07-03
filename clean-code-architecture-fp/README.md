@@ -37,3 +37,74 @@ This project is designed to embody clean code principles by:
 
 - [Clean Architecture by Uncle Bob](https://8thlight.com/blog/uncle-bob/2012/08/13/the-clean-architecture.html)
 - [Functional Programming in JavaScript](https://eloquentjavascript.net/)
+
+## Example Code for Each Layer
+
+### Entity (src/entities/user.js)
+
+```js
+// Pure function for creating a user entity
+function createUserEntity({ id, name, email }) {
+  if (!name || !email) throw new Error("Name and email are required");
+  return Object.freeze({ id, name, email });
+}
+```
+
+### Use Case (src/usecases/createUser.js)
+
+```js
+// Pure function, dependencies injected
+function createUser({ userRepository, createUserEntity }) {
+  return async function ({ name, email }) {
+    if (await userRepository.getUserByEmail(email)) {
+      throw new Error("User already exists");
+    }
+    const user = createUserEntity({ id: Date.now(), name, email });
+    return userRepository.saveUser(user);
+  };
+}
+```
+
+### Gateway (src/gateways/userRepository.js)
+
+```js
+// In-memory user repository
+const users = [];
+function saveUser(user) {
+  users.push(user);
+  return user;
+}
+function getUserByEmail(email) {
+  return users.find((u) => u.email === email) || null;
+}
+```
+
+### Delivery (src/delivery/userController.js)
+
+```js
+// Handles input/output, calls use case
+function userController({ createUserUseCase }) {
+  return async function registerUser(req) {
+    try {
+      const user = await createUserUseCase(req);
+      return { status: 201, body: user };
+    } catch (err) {
+      return { status: 400, body: { error: err.message } };
+    }
+  };
+}
+```
+
+### Composition Root (src/index.js)
+
+```js
+// Wires everything together
+const { createUserEntity } = require("./entities/user");
+const userRepository = require("./gateways/userRepository");
+const { createUser } = require("./usecases/createUser");
+const { userController } = require("./delivery/userController");
+const createUserUseCase = createUser({ userRepository, createUserEntity });
+const registerUser = userController({ createUserUseCase });
+```
+
+---
