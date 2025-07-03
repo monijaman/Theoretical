@@ -3,6 +3,7 @@
 ## Why is this Project Clean Code?
 
 This project is designed to embody clean code principles by:
+
 - **Separation of Concerns:** Each file and folder has a single, well-defined responsibility. Business logic, data access, and input/output are all separated.
 - **Explicit Dependencies:** All dependencies are injected as arguments, making the code easy to test and reason about. No module imports another layer directly except through explicit composition in the entry point.
 - **Pure Functions:** Core logic (entities and use cases) is implemented as pure functions, which are predictable and have no side effects.
@@ -18,6 +19,7 @@ This project is designed to embody clean code principles by:
 - **Composition Root (index.js):** Wires everything together by injecting dependencies. This is the only place where layers are composed.
 
 **Dependency Direction:**
+
 - All dependencies point inward: delivery → use cases → entities.
 - Outer layers depend on inner layers, never the reverse.
 - This makes the core logic (entities, use cases) independent and reusable.
@@ -32,5 +34,6 @@ This project is designed to embody clean code principles by:
 ---
 
 ## References
+
 - [Clean Architecture by Uncle Bob](https://8thlight.com/blog/uncle-bob/2012/08/13/the-clean-architecture.html)
 - [Functional Programming in JavaScript](https://eloquentjavascript.net/)
