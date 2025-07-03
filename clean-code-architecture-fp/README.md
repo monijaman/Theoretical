@@ -35,6 +35,34 @@ This project is designed to embody clean code principles by:
 
 ---
 
+![Clean Code Architecture Diagram](./flow.png)
+
+_Diagram: Replace `flow.png` with your own architecture diagram image in the project root._
+![alt text](image.png)
+
+## Clean Architecture Layers Explained (Ordering Machine Example)
+
+- **Frameworks and Drivers (Outer Layer):**
+
+  - This is where your app talks to the outside world. It could be a touchscreen, a web page, or a payment device.
+  - _Example:_ The screen where you tap to order food, or the card reader for payments.
+
+- **Interface Adapters:**
+
+  - These are like translators. They take what the user does (like pressing buttons) and turn it into something the app can use.
+  - _Example:_ Code that takes your order from the screen and sends it to the app logic.
+
+- **Application Business Rules / Use Cases:**
+
+  - This is the brain of your app. It decides what happens when you order food, checks your balance, and calculates the total.
+  - _Example:_ Logic that checks if you have enough money and processes your order.
+
+- **Enterprise Business Rules / Entities (Core):**
+  - These are the most important rules that never change, no matter where the app runs. They are shared across different apps.
+  - _Example:_ Rules for what makes a valid order, or how to securely store user info.
+
+_In short: The outside layers handle user actions and devices, the middle layers adapt data, and the inner layers do the real work. Everything depends on the core, but the core depends on nothing else!_
+
 ## Running the Example
 
 1. Clone or copy this folder.
@@ -115,3 +143,8 @@ const { userController } = require("./delivery/userController");
 const createUserUseCase = createUser({ userRepository, createUserEntity });
 const registerUser = userController({ createUserUseCase });
 ```
+
+![Clean Code Architecture Diagram](./cleancode.png)
+
+_Diagram: Replace `cleancode.png` with your own architecture diagram image in the project root._
+![alt text](image.png)
