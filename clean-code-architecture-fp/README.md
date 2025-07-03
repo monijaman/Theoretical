@@ -1,5 +1,14 @@
 # Clean Code Architecture in JavaScript (Functional Approach)
 
+## Clean Code Architecture Diagram
+
+![Clean Code Architecture Diagram](./architecture.png)
+
+_Diagram: Replace `architecture.png` with your own architecture diagram image in the project root._
+![alt text](image.png)
+
+---
+
 ## Why is this Project Clean Code?
 
 This project is designed to embody clean code principles by:
@@ -106,11 +115,3 @@ const { userController } = require("./delivery/userController");
 const createUserUseCase = createUser({ userRepository, createUserEntity });
 const registerUser = userController({ createUserUseCase });
 ```
-
-## Clean Code Architecture Diagram
-
-![Clean Code Architecture Diagram](./architecture.png)
-
-_Diagram: Replace `architecture.png` with your own architecture diagram image in the project root._
-
----
