@@ -13,6 +13,7 @@ type User struct {
 	Address    string
 	Password   string
 	ProfilePic string
+	UserType   string // Added to support roles (CUSTOMER, SELLER, ADMIN, etc.)
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
 }

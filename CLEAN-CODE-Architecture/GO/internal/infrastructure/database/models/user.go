@@ -22,6 +22,7 @@ type UserModel struct {
 	Address    string    `gorm:"type:varchar(255)"`
 	Password   string    `gorm:"type:varchar(255);not null"`
 	ProfilePic string    `gorm:"type:varchar(255)"`
+	UserType   string    `gorm:"type:varchar(50);default:'customer'"`
 	CreatedAt  time.Time `gorm:"autoCreateTime"`
 	UpdatedAt  time.Time `gorm:"autoUpdateTime"`
 }
@@ -40,6 +41,7 @@ func (m *UserModel) ToEntity() *entity.User {
 		Address:    m.Address,
 		Password:   m.Password,
 		ProfilePic: m.ProfilePic,
+		UserType:   m.UserType,
 		CreatedAt:  m.CreatedAt,
 		UpdatedAt:  m.UpdatedAt,
 	}
@@ -59,6 +61,7 @@ func FromEntity(u *entity.User) *UserModel {
 		Address:    u.Address,
 		Password:   u.Password,
 		ProfilePic: u.ProfilePic,
+		UserType:   u.UserType,
 		CreatedAt:  u.CreatedAt,
 		UpdatedAt:  u.UpdatedAt,
 	}
