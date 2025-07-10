@@ -1,7 +1,8 @@
 /**
  * SOLID Principles: Single Responsibility Principle (SRP) Example
  * 
- * The Single Responsibility Principle states that a class/function should have only one reason to change.
+ * The Single Responsibility Principle states that 
+ * a class/function should have only one reason to change.
  * In other words, a class/function should have only one job or responsibility.
  */
 

@@ -110,6 +110,42 @@ robotISP.work();
 
 
 
+
+
+//#region  Functional Approach - Following ISP
+
+
+
+/**
+ * BAD Functional Approach - Violating ISP
+ * Here, the factory creates objects with unnecessary methods for all clients.
+ * For example, a robot gets eat and sleep methods it doesn't need.
+ */
+
+//#region  Functional Approach - BAD Example (Violating ISP)
+function createWorkerWithAll() {
+    return {
+        work: () => console.log('Working...'),
+        eat: () => console.log('Eating...'),
+        sleep: () => console.log('Sleeping...')
+    };
+}
+
+// Human worker: uses all methods
+const humanBadFunc = createWorkerWithAll();
+humanBadFunc.work();
+humanBadFunc.eat();
+humanBadFunc.sleep();
+
+// Robot worker: forced to have eat and sleep methods it doesn't need
+const robotBadFunc = createWorkerWithAll();
+robotBadFunc.work();
+// robotBadFunc.eat(); // Not needed for robots
+// robotBadFunc.sleep(); // Not needed for robots
+//#endregion
+
+
+ 
 //#region  Functional Approach - Following ISP
 /**
  * Functional Approach - Following ISP
@@ -168,3 +204,4 @@ robotFunc.work();
  * - No unnecessary dependencies or methods.
  * - Follows the Interface Segregation Principle in a functional style.
  */
+//#endregion  Functional Approach - BAD Example (Violating ISP)

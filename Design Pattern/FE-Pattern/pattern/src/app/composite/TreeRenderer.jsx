@@ -13,7 +13,7 @@ export default function TreeRenderer() {
     const input = new UILeaf('Input');
     const header = new UILeaf('Header');
 
-    const form = new UIComposite('Form');
+    const form = new UICompoSgsite('Form');
     form.add(input);
     form.add(button);
 
