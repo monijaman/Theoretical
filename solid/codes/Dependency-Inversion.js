@@ -59,22 +59,34 @@ reportDIP.generate();
 //#endregion
 
 /**
- * Functional Approach - Following DIP
- * Use dependency injection by passing dependencies as arguments to functions.
+ * Functional Approach - BAD Example (Violating DIP)
+ * The function directly uses a concrete logger, making it hard to test or swap.
  */
-
-function createReport(logger) {
+function badReportFunc() {
+    const logger = {
+        log: (msg) => console.log('BadLogger:', msg)
+    };
     return {
-        generate: () => logger.log('Report generated (functional)')
+        generate: () => logger.log('Report generated (bad functional)')
     };
 }
+const badReport = badReportFunc();
+badReport.generate();
 
-const functionalLogger = {
-    log: (msg) => console.log('FunctionalLogger:', msg)
+/**
+ * Functional Approach - GOOD Example (Following DIP)
+ * The function receives its logger dependency as an argument (dependency injection).
+ */
+function goodReportFunc(logger) {
+    return {
+        generate: () => logger.log('Report generated (good functional)')
+    };
+}
+const customLogger = {
+    log: (msg) => console.log('CustomLogger:', msg)
 };
-
-const reportFunc = createReport(functionalLogger);
-reportFunc.generate();
+const goodReport = goodReportFunc(customLogger);
+goodReport.generate();
 
 /**
  * Benefits:
