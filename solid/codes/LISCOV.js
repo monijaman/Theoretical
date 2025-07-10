@@ -100,11 +100,54 @@ shapes.forEach(shape => {
 
 
 //#endregion  Functional-based approach for LSP
+ 
 
-//#region  Functional-based approach for LSP
-// Functional approach for Liskov Substitution Principle (LSP)
-// Both rectangle and square are created by factory functions that return an object with a getArea method.
-// This ensures both shapes can be used interchangeably, following LSP.
+//#region Simple BAD Functional Example - Violating Liskov Substitution Principle
+
+/**
+ * BAD: The "square" implementation does not follow the same contract as rectangle.
+ * It ignores the height parameter, so substituting it where a rectangle is expected
+ *  breaks expectations.
+ */
+
+function createBadRectangle(width, height) {
+    return {
+        setWidth: w => { width = w; },
+        setHeight: h => { height = h; },
+        getArea: () => width * height
+    };
+}
+
+function createBadSquare(side) {
+    let size = side;
+    return {
+        setWidth: w => { size = w; },      // Ignores height, always sets both sides
+        setHeight: h => { size = h; },
+        getArea: () => size * size
+    };
+}
+
+// Usage: expects setWidth and setHeight to be independent
+function printBadArea(rect) {
+    rect.setWidth(5);
+    rect.setHeight(4);
+    console.log('Area:', rect.getArea()); // Expected: 20, but for square: 16 (incorrect)
+}
+
+console.log('Bad Rectangle area:');
+printBadArea(createBadRectangle(2, 3)); // 20 (correct)
+console.log('Bad Square area:');
+printBadArea(createBadSquare(2));       // 16 (incorrect, violates LSP)
+
+//#endregion Simple BAD Functional Example - Violating Liskov Substitution Principle
+
+
+//#region Simple Functional Example - Liskov Substitution Principle
+
+/**
+ * Both objects implement the same interface: getArea.
+ * You can substitute one for the other without breaking the code.
+ */
 
 function createRectangle(width, height) {
     return {
@@ -118,15 +161,19 @@ function createSquare(side) {
     };
 }
 
-// Usage: both can be used as shapes
-const functionalShapes = [
-    createRectangle(5, 4),
-    createSquare(4)
+// Usage: both can be used wherever an object with getArea is expected
+const figures = [
+    createRectangle(3, 4), // Area: 12
+    createSquare(5)        // Area: 25
 ];
 
-functionalShapes.forEach(shape => {
-    console.log('Area (functional):', shape.getArea());
+figures.forEach(fig => {
+    console.log('Area:', fig.getArea());
 });
+
+//#endregion Simple Functional Example - Liskov Substitution Principle
+
+
 
 /**
  * Benefits:
