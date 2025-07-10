@@ -89,7 +89,7 @@ Frontend architecture refers to the design and structure of the client-side part
 ## 4. Folder Structure and Project Organization
 
 ### Example Folder Structure
-
+<pre><code>```
 src/
 ├── components/ # Reusable components
 ├── pages/ # Page-level components
@@ -101,7 +101,8 @@ src/
 ├── assets/ # Images, fonts, etc.
 ├── constants/ # Constant values
 └── App.tsx # Root component
-
+```</code></pre>
+ 
 ### Best Practices
 
 - Follow a consistent folder structure.
