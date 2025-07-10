@@ -8,6 +8,7 @@ package postgres
 
 import (
 	"auth-module/internal/domain/entity"
+	"auth-module/internal/infrastructure/database/models"
 	"database/sql"
 )
 
@@ -20,32 +21,54 @@ func NewUserRepo(db *sql.DB) *UserRepo {
 }
 
 func (r *UserRepo) Create(user *entity.User) error {
+	// Convert domain entity to GORM model
+	model := models.FromEntity(user)
+
 	query := `
 		INSERT INTO users (username, email, password, first_name, last_name, phone, address, profile_pic, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
-		RETURNING id`
+		RETURNING id, created_at, updated_at`
 
 	err := r.db.QueryRow(
 		query,
-		user.Username,
-		user.Email,
-		user.Password,
-		user.FirstName,
-		user.LastName,
-		user.Phone,
-		user.Address,
-		user.ProfilePic,
-	).Scan(&user.ID)
+		model.Username,
+		model.Email,
+		model.Password,
+		model.FirstName,
+		model.LastName,
+		model.Phone,
+		model.Address,
+		model.ProfilePic,
+	).Scan(&user.ID, &user.CreatedAt, &user.UpdatedAt)
 
 	return err
 }
 
 func (r *UserRepo) FindByEmail(email string) (*entity.User, error) {
-	user := &entity.User{}
-	query := `SELECT id, username, email, password FROM users WHERE email = $1`
-	err := r.db.QueryRow(query, email).Scan(&user.ID, &user.Username, &user.Email, &user.Password)
+	model := &models.UserModel{}
+	query := `SELECT id, username, email, password, first_name, last_name, phone, address, profile_pic, created_at, updated_at 
+			 FROM users WHERE email = $1`
+
+	err := r.db.QueryRow(query, email).Scan(
+		&model.ID,
+		&model.Username,
+		&model.Email,
+		&model.Password,
+		&model.FirstName,
+		&model.LastName,
+		&model.Phone,
+		&model.Address,
+		&model.ProfilePic,
+		&model.CreatedAt,
+		&model.UpdatedAt,
+	)
+
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
-	return user, err
+	if err != nil {
+		return nil, err
+	}
+
+	return model.ToEntity(), nil
 }

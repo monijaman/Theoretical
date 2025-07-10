@@ -11,7 +11,7 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-	"auth-module/internal/domain/entity"
+	"auth-module/internal/infrastructure/database/models"
 	"auth-module/internal/interface/handler"
 	pgRepo "auth-module/internal/interface/repository/postgres"
 )
@@ -39,11 +39,11 @@ func main() {
 	}
 
 	// Drop existing table and recreate
-	if err := db.Migrator().DropTable(&entity.User{}); err != nil {
+	if err := db.Migrator().DropTable(&models.UserModel{}); err != nil {
 		log.Printf("Warning: Could not drop users table: %v", err)
 	}
 
-	if err := db.AutoMigrate(&entity.User{}); err != nil {
+	if err := db.AutoMigrate(&models.UserModel{}); err != nil {
 		log.Fatalf("AutoMigrate failed: %v", err)
 	}
 
