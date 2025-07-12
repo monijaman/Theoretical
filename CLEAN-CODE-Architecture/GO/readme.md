@@ -306,7 +306,7 @@ func LoginHandler(c *gin.Context) {
 }
 ```
 
-### **Exercises for Students**:
+### **Exercises **:
 
 1. **Add a new feature**: Implement password reset functionality following the same patterns
 2. **Switch databases**: Implement the repository interface for a different database
