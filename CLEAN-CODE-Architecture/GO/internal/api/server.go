@@ -86,7 +86,7 @@ func setupRoutes(rh *rest.RestHandler) {
 	// catalog
 	handlers.SetupCatalogRoutes(rh)
 	// user handler
-	handlers.SetupUserRoutes(rh)
+	handlers.SetupUserRoutesImpl(rh)
 	// transactions
 	handlers.SetupTransactionRoutes(rh)
 }
