@@ -75,3 +75,19 @@ auth-system/
 - Gin web framework
 - GORM (Optional)
 - [bcrypt password hashing](https://pkg.go.dev/golang.org/x/crypto/bcrypt)
+
+## Stop the current container:
+
+docker-compose down
+
+## Remove the old Docker volume (optional):
+
+docker volume rm go_db
+
+## Start with new configuration:
+
+docker-compose up -d
+
+## Check the created folder:
+
+dir postgres-data
