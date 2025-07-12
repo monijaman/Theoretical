@@ -11,13 +11,14 @@ import (
 	"auth-module/internal/domain/entity"
 	"auth-module/internal/domain/repository"
 	"auth-module/pkg/hash"
+	"context"
 	"errors"
 	"time"
 )
 
-func Register(repo repository.UserRepository, user *entity.User) error {
+func Register(ctx context.Context, repo repository.UserRepository, user *entity.User) error {
 	// Check if user already exists
-	existing, _ := repo.FindByEmail(user.Email)
+	existing, _ := repo.GetByEmail(ctx, user.Email)
 	if existing != nil {
 		return errors.New("user already exists")
 	}
@@ -30,6 +31,6 @@ func Register(repo repository.UserRepository, user *entity.User) error {
 	user.CreatedAt = time.Now()
 	user.UpdatedAt = time.Now()
 	
-	_, err = repo.Create(user)
+	_, err = repo.Create(ctx, user)
 	return err
 }

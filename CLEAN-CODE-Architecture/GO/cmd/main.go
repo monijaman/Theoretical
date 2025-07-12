@@ -39,7 +39,7 @@ func killProcessOnPort(port int) {
 	// On Windows, you can use netstat + taskkill, but for now we'll just log
 	fmt.Printf("⚠️  Port %d appears to be in use. You may need to manually kill the process.\n", port)
 	fmt.Printf("💡 Run this command to find the process: netstat -ano | findstr :%d\n", port)
-	fmt.Printf("💡 Then kill it with: taskkill /PID <PID> /F\n", port)
+	fmt.Printf("💡 Then kill it with: taskkill /PID <PID> /F\n")
 }
 
 func main() {

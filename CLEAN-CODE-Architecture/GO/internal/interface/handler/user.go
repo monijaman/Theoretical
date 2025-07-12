@@ -86,7 +86,7 @@ func ListUsersHandler(w http.ResponseWriter, r *http.Request, userRepo repositor
 	uc := userUseCase.NewUserUseCase(userRepo)
 
 	// Get users
-	users, err := uc.ListUsers(limit, offset)
+	users, err := uc.ListUsers(r.Context(), limit, offset)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
@@ -94,7 +94,7 @@ func ListUsersHandler(w http.ResponseWriter, r *http.Request, userRepo repositor
 	}
 
 	// Get total count
-	total, err := uc.GetUserCount()
+	total, err := uc.GetUserCount(r.Context())
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to get user count"})
@@ -137,7 +137,7 @@ func GetAllUsersHandler(w http.ResponseWriter, r *http.Request, userRepo reposit
 	uc := userUseCase.NewUserUseCase(userRepo)
 
 	// Get all users
-	users, err := uc.GetAllUsers(limit)
+	users, err := uc.GetAllUsers(r.Context(), limit)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
@@ -192,7 +192,7 @@ func SearchUsersHandler(w http.ResponseWriter, r *http.Request, userRepo reposit
 	uc := userUseCase.NewUserUseCase(userRepo)
 
 	// Search users
-	users, err := uc.SearchUsers(query, limit, offset)
+	users, err := uc.SearchUsers(r.Context(), query, limit, offset)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
@@ -223,7 +223,7 @@ func GetUserCountHandler(w http.ResponseWriter, r *http.Request, userRepo reposi
 	uc := userUseCase.NewUserUseCase(userRepo)
 
 	// Get user count
-	count, err := uc.GetUserCount()
+	count, err := uc.GetUserCount(r.Context())
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
@@ -254,7 +254,7 @@ func GetUserByIDHandler(w http.ResponseWriter, r *http.Request, userRepo reposit
 	uc := userUseCase.NewUserUseCase(userRepo)
 
 	// Get user
-	user, err := uc.GetUserByID(userID)
+	user, err := uc.GetUserByID(r.Context(), userID)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})

@@ -48,7 +48,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	repo := &postgres.UserRepo{}
 
 	// Call register use case
-	err := auth.Register(repo, user)
+	err := auth.Register(r.Context(), repo, user)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
@@ -76,7 +76,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	repo := &postgres.UserRepo{}
 
 	// Call login use case
-	success, err := auth.Login(repo, req.Email, req.Password)
+	success, err := auth.Login(r.Context(), repo, req.Email, req.Password)
 	if err != nil {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
@@ -112,7 +112,7 @@ func RegisterHandlerWithRepo(w http.ResponseWriter, r *http.Request, repo *pgRep
 		Password: req.Password,
 	}
 
-	err := auth.Register(repo, user)
+	err := auth.Register(r.Context(), repo, user)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
@@ -136,7 +136,7 @@ func LoginHandlerWithRepo(w http.ResponseWriter, r *http.Request, repo *pgRepo.U
 		return
 	}
 
-	success, err := auth.Login(repo, req.Email, req.Password)
+	success, err := auth.Login(r.Context(), repo, req.Email, req.Password)
 	if err != nil {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})

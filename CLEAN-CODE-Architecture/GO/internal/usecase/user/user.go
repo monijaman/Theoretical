@@ -3,6 +3,7 @@ package usecase
 import (
 	"auth-module/internal/domain/entity"
 	"auth-module/internal/domain/repository"
+	"context"
 	"errors"
 )
 
@@ -20,9 +21,9 @@ func NewUserUseCase(userRepo repository.UserRepository) *UserUseCase {
 }
 
 // CreateUser creates a new user with validation
-func (uc *UserUseCase) CreateUser(username, email, password string) (*entity.User, error) {
+func (uc *UserUseCase) CreateUser(ctx context.Context, username, email, password string) (*entity.User, error) {
 	// Check if user already exists.
-	existingUser, err := uc.userRepo.FindByEmail(email)
+	existingUser, err := uc.userRepo.GetByEmail(ctx, email)
 	if err != nil {
 		return nil, err
 	}
@@ -31,7 +32,7 @@ func (uc *UserUseCase) CreateUser(username, email, password string) (*entity.Use
 	}
 
 	// Check if username is taken
-	existingUser, err = uc.userRepo.FindByUsername(username)
+	existingUser, err = uc.userRepo.GetByUsername(ctx, username)
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +47,7 @@ func (uc *UserUseCase) CreateUser(username, email, password string) (*entity.Use
 	}
 
 	// Save user to repository
-	createdUser, err := uc.userRepo.Create(user)
+	createdUser, err := uc.userRepo.Create(ctx, user)
 	if err != nil {
 		return nil, err
 	}
@@ -55,18 +56,18 @@ func (uc *UserUseCase) CreateUser(username, email, password string) (*entity.Use
 }
 
 // GetUserByEmail retrieves a user by email
-func (uc *UserUseCase) GetUserByEmail(email string) (*entity.User, error) {
-	return uc.userRepo.FindByEmail(email)
+func (uc *UserUseCase) GetUserByEmail(ctx context.Context, email string) (*entity.User, error) {
+	return uc.userRepo.GetByEmail(ctx, email)
 }
 
 // GetUserByID retrieves a user by ID
-func (uc *UserUseCase) GetUserByID(id entity.UserID) (*entity.User, error) {
-	return uc.userRepo.FindByID(id)
+func (uc *UserUseCase) GetUserByID(ctx context.Context, id entity.UserID) (*entity.User, error) {
+	return uc.userRepo.GetByID(ctx, id)
 }
 
 // UpdateUserProfile updates user profile information
-func (uc *UserUseCase) UpdateUserProfile(id entity.UserID, firstName, lastName, phone, address string) error {
-	user, err := uc.userRepo.FindByID(id)
+func (uc *UserUseCase) UpdateUserProfile(ctx context.Context, id entity.UserID, firstName, lastName, phone, address string) error {
+	user, err := uc.userRepo.GetByID(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -77,12 +78,12 @@ func (uc *UserUseCase) UpdateUserProfile(id entity.UserID, firstName, lastName, 
 	// Use domain method to update profile
 	user.UpdateProfile(firstName, lastName, phone, address)
 
-	return uc.userRepo.Update(user)
+	return uc.userRepo.Update(ctx, user)
 }
 
 // ChangeUserPassword changes user password
-func (uc *UserUseCase) ChangeUserPassword(id entity.UserID, newPassword string) error {
-	user, err := uc.userRepo.FindByID(id)
+func (uc *UserUseCase) ChangeUserPassword(ctx context.Context, id entity.UserID, newPassword string) error {
+	user, err := uc.userRepo.GetByID(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -95,11 +96,11 @@ func (uc *UserUseCase) ChangeUserPassword(id entity.UserID, newPassword string) 
 		return err
 	}
 
-	return uc.userRepo.Update(user)
+	return uc.userRepo.Update(ctx, user)
 }
 
 // ListUsers retrieves a list of users with pagination
-func (uc *UserUseCase) ListUsers(limit, offset int) ([]*entity.User, error) {
+func (uc *UserUseCase) ListUsers(ctx context.Context, limit, offset int) ([]*entity.User, error) {
 	// Validate pagination parameters
 	if limit <= 0 {
 		limit = 10 // Default limit
@@ -111,11 +112,11 @@ func (uc *UserUseCase) ListUsers(limit, offset int) ([]*entity.User, error) {
 		offset = 0
 	}
 	
-	return uc.userRepo.List(limit, offset)
+	return uc.userRepo.List(ctx, limit, offset)
 }
 
 // GetAllUsers retrieves all users with a reasonable limit
-func (uc *UserUseCase) GetAllUsers(limit int) ([]*entity.User, error) {
+func (uc *UserUseCase) GetAllUsers(ctx context.Context, limit int) ([]*entity.User, error) {
 	// Validate limit
 	if limit <= 0 {
 		limit = 50 // Default limit
@@ -124,11 +125,11 @@ func (uc *UserUseCase) GetAllUsers(limit int) ([]*entity.User, error) {
 		limit = 1000 // Maximum limit to prevent memory issues
 	}
 	
-	return uc.userRepo.List(limit, 0)
+	return uc.userRepo.List(ctx, limit, 0)
 }
 
 // SearchUsers searches for users by username, email, first name, or last name
-func (uc *UserUseCase) SearchUsers(query string, limit, offset int) ([]*entity.User, error) {
+func (uc *UserUseCase) SearchUsers(ctx context.Context, query string, limit, offset int) ([]*entity.User, error) {
 	// Validate inputs
 	if query == "" {
 		return nil, errors.New("search query cannot be empty")
@@ -145,10 +146,10 @@ func (uc *UserUseCase) SearchUsers(query string, limit, offset int) ([]*entity.U
 	}
 	
 	// Use the Search method from repository
-	return uc.userRepo.Search(query, limit, offset)
+	return uc.userRepo.Search(ctx, query, limit, offset)
 }
 
 // GetUserCount returns the total number of users
-func (uc *UserUseCase) GetUserCount() (int64, error) {
-	return uc.userRepo.Count()
+func (uc *UserUseCase) GetUserCount(ctx context.Context) (int64, error) {
+	return uc.userRepo.Count(ctx)
 }

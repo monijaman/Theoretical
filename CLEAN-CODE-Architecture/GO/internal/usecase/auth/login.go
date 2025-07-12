@@ -10,11 +10,12 @@ package auth
 import (
 	"auth-module/internal/domain/repository"
 	"auth-module/pkg/hash"
+	"context"
 	"errors"
 )
 
-func Login(repo repository.UserRepository, email, password string) (bool, error) {
-	user, err := repo.FindByEmail(email)
+func Login(ctx context.Context, repo repository.UserRepository, email, password string) (bool, error) {
+	user, err := repo.GetByEmail(ctx, email)
 	if err != nil || user == nil {
 		return false, errors.New("user not found")
 	}

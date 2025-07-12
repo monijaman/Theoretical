@@ -9,25 +9,26 @@ package postgres
 import (
 	"auth-module/internal/domain/entity"
 	"auth-module/internal/infrastructure/database/models"
+	"context"
 	"errors"
 
 	"gorm.io/gorm"
 )
 
-type UserRepo struct {
+type PostgresUserRepo struct {
 	db *gorm.DB
 }
 
-func NewUserRepo(db *gorm.DB) *UserRepo {
-	return &UserRepo{db: db}
+func NewPostgresUserRepo(db *gorm.DB) *PostgresUserRepo {
+	return &PostgresUserRepo{db: db}
 }
 
-func (r *UserRepo) Create(user *entity.User) (*entity.User, error) {
+func (r *PostgresUserRepo) Create(ctx context.Context, user *entity.User) (*entity.User, error) {
 	// Convert domain entity to GORM model
 	model := models.FromEntity(user)
 
 	// Create record in database
-	if err := r.db.Create(model).Error; err != nil {
+	if err := r.db.WithContext(ctx).Create(model).Error; err != nil {
 		return nil, err
 	}
 
@@ -35,7 +36,7 @@ func (r *UserRepo) Create(user *entity.User) (*entity.User, error) {
 	return model.ToEntity(), nil
 }
 
-func (r *UserRepo) FindByID(id entity.UserID) (*entity.User, error) {
+func (r *PostgresUserRepo) GetByID(ctx context.Context, id entity.UserID) (*entity.User, error) {
 	var model models.UserModel
 	
 	// Parse UserID to uint for GORM query
@@ -44,7 +45,7 @@ func (r *UserRepo) FindByID(id entity.UserID) (*entity.User, error) {
 		return nil, err
 	}
 
-	if err := r.db.First(&model, parsedID).Error; err != nil {
+	if err := r.db.WithContext(ctx).First(&model, parsedID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}
@@ -54,10 +55,10 @@ func (r *UserRepo) FindByID(id entity.UserID) (*entity.User, error) {
 	return model.ToEntity(), nil
 }
 
-func (r *UserRepo) FindByEmail(email string) (*entity.User, error) {
+func (r *PostgresUserRepo) GetByEmail(ctx context.Context, email string) (*entity.User, error) {
 	var model models.UserModel
 
-	if err := r.db.Where("email = ?", email).First(&model).Error; err != nil {
+	if err := r.db.WithContext(ctx).Where("email = ?", email).First(&model).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}
@@ -67,10 +68,10 @@ func (r *UserRepo) FindByEmail(email string) (*entity.User, error) {
 	return model.ToEntity(), nil
 }
 
-func (r *UserRepo) FindByUsername(username string) (*entity.User, error) {
+func (r *PostgresUserRepo) GetByUsername(ctx context.Context, username string) (*entity.User, error) {
 	var model models.UserModel
 
-	if err := r.db.Where("username = ?", username).First(&model).Error; err != nil {
+	if err := r.db.WithContext(ctx).Where("username = ?", username).First(&model).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}
@@ -80,28 +81,28 @@ func (r *UserRepo) FindByUsername(username string) (*entity.User, error) {
 	return model.ToEntity(), nil
 }
 
-func (r *UserRepo) Update(user *entity.User) error {
+func (r *PostgresUserRepo) Update(ctx context.Context, user *entity.User) error {
 	// Convert domain entity to GORM model
 	model := models.FromEntity(user)
 
 	// Update record in database
-	return r.db.Save(model).Error
+	return r.db.WithContext(ctx).Save(model).Error
 }
 
-func (r *UserRepo) Delete(id entity.UserID) error {
+func (r *PostgresUserRepo) Delete(ctx context.Context, id entity.UserID) error {
 	// Parse UserID to uint for GORM query
 	parsedID, err := entity.ParseUserIDToUint(id)
 	if err != nil {
 		return err
 	}
 
-	return r.db.Delete(&models.UserModel{}, parsedID).Error
+	return r.db.WithContext(ctx).Delete(&models.UserModel{}, parsedID).Error
 }
 
-func (r *UserRepo) List(limit, offset int) ([]*entity.User, error) {
+func (r *PostgresUserRepo) List(ctx context.Context, limit, offset int) ([]*entity.User, error) {
 	var models []models.UserModel
 
-	if err := r.db.Limit(limit).Offset(offset).Find(&models).Error; err != nil {
+	if err := r.db.WithContext(ctx).Limit(limit).Offset(offset).Find(&models).Error; err != nil {
 		return nil, err
 	}
 
@@ -114,20 +115,20 @@ func (r *UserRepo) List(limit, offset int) ([]*entity.User, error) {
 	return users, nil
 }
 
-func (r *UserRepo) Count() (int64, error) {
+func (r *PostgresUserRepo) Count(ctx context.Context) (int64, error) {
 	var count int64
-	if err := r.db.Model(&models.UserModel{}).Count(&count).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&models.UserModel{}).Count(&count).Error; err != nil {
 		return 0, err
 	}
 	return count, nil
 }
 
-func (r *UserRepo) Search(query string, limit, offset int) ([]*entity.User, error) {
+func (r *PostgresUserRepo) Search(ctx context.Context, query string, limit, offset int) ([]*entity.User, error) {
 	var models []models.UserModel
 
 	// Search in username, email, first_name, or last_name
 	searchPattern := "%" + query + "%"
-	if err := r.db.Where(
+	if err := r.db.WithContext(ctx).Where(
 		"username ILIKE ? OR email ILIKE ? OR first_name ILIKE ? OR last_name ILIKE ?",
 		searchPattern, searchPattern, searchPattern, searchPattern,
 	).Limit(limit).Offset(offset).Find(&models).Error; err != nil {
@@ -143,10 +144,10 @@ func (r *UserRepo) Search(query string, limit, offset int) ([]*entity.User, erro
 	return users, nil
 }
 
-func (r *UserRepo) FindByEmailOrUsername(emailOrUsername string) (*entity.User, error) {
+func (r *PostgresUserRepo) GetByEmailOrUsername(ctx context.Context, emailOrUsername string) (*entity.User, error) {
 	var model models.UserModel
 
-	if err := r.db.Where("email = ? OR username = ?", emailOrUsername, emailOrUsername).First(&model).Error; err != nil {
+	if err := r.db.WithContext(ctx).Where("email = ? OR username = ?", emailOrUsername, emailOrUsername).First(&model).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}

@@ -1,7 +1,6 @@
 package database
 
 import (
-	"auth-module/internal/infrastructure/database/models"
 	"fmt"
 	"log"
 	"os"
@@ -11,28 +10,40 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-// Connect establishes a connection to the PostgreSQL database using GORM
-func Connect() (*gorm.DB, error) {
-	// Build DSN from environment variables
-	dsn := fmt.Sprintf(
-		"host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=UTC",
-		getEnv("DB_HOST", "localhost"),
-		getEnv("DB_USER", "root"),
-		getEnv("DB_PASSWORD", "root"),
-		getEnv("DB_NAME", "authdb"),
-		getEnv("DB_PORT", "5428"),
-	)
+// DatabaseConfig holds database configuration
+type DatabaseConfig struct {
+	Host     string
+	User     string
+	Password string
+	DBName   string
+	Port     string
+	SSLMode  string
+	TimeZone string
+}
 
-	// Configure GORM logger
-	gormLogger := logger.Default.LogMode(logger.Info)
-	if getEnv("GO_ENV", "development") == "production" {
-		gormLogger = logger.Default.LogMode(logger.Error)
+// NewDatabaseConfig creates database configuration from environment
+func NewDatabaseConfig() *DatabaseConfig {
+	return &DatabaseConfig{
+		Host:     getEnv("DB_HOST", "localhost"),
+		User:     getEnv("DB_USER", "root"),
+		Password: getEnv("DB_PASSWORD", "root"),
+		DBName:   getEnv("DB_NAME", "authdb"),
+		Port:     getEnv("DB_PORT", "5428"),
+		SSLMode:  getEnv("DB_SSLMODE", "disable"),
+		TimeZone: getEnv("DB_TIMEZONE", "UTC"),
+	}
+}
+
+// Connect establishes a connection to the PostgreSQL database using GORM
+// This is pure infrastructure concern - no business logic here
+func Connect(config *DatabaseConfig) (*gorm.DB, error) {
+	dsn := buildDSN(config)
+
+	gormConfig := &gorm.Config{
+		Logger: getGormLogger(),
 	}
 
-	// Connect to database
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		Logger: gormLogger,
-	})
+	db, err := gorm.Open(postgres.Open(dsn), gormConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
@@ -41,21 +52,26 @@ func Connect() (*gorm.DB, error) {
 	return db, nil
 }
 
-// Migrate runs database migrations
-func Migrate(db *gorm.DB) error {
-	log.Println("Running database migrations...")
-	
-	err := db.AutoMigrate(
-		&models.UserModel{},
-		// Add other models here as you create them
+// buildDSN constructs the database connection string
+func buildDSN(config *DatabaseConfig) string {
+	return fmt.Sprintf(
+		"host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=%s",
+		config.Host,
+		config.User,
+		config.Password,
+		config.DBName,
+		config.Port,
+		config.SSLMode,
+		config.TimeZone,
 	)
-	
-	if err != nil {
-		return fmt.Errorf("failed to run migrations: %w", err)
+}
+
+// getGormLogger configures GORM logger based on environment
+func getGormLogger() logger.Interface {
+	if getEnv("GO_ENV", "development") == "production" {
+		return logger.Default.LogMode(logger.Error)
 	}
-	
-	log.Println("Database migrations completed successfully")
-	return nil
+	return logger.Default.LogMode(logger.Info)
 }
 
 // getEnv gets environment variable with fallback
