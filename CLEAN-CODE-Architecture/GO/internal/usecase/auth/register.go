@@ -29,5 +29,7 @@ func Register(repo repository.UserRepository, user *entity.User) error {
 	user.Password = hashed
 	user.CreatedAt = time.Now()
 	user.UpdatedAt = time.Now()
-	return repo.Create(user)
+	
+	_, err = repo.Create(user)
+	return err
 }

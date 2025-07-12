@@ -1,0 +1,24 @@
+
+services:
+  postgres:
+    image: postgres:latest
+    restart: always
+    environment:
+      - POSTGRES_USER=root
+      - POSTGRES_PASSWORD=root
+      - POSTGRES_DB=authdb
+      - POSTGRES_INITDB_ARGS=--auth-host=md5
+    ports:
+      - "5428:5432"
+    volumes:
+      - db:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d authdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  db:
+    driver: local

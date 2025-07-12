@@ -50,6 +50,156 @@
           "path": ["login"]
         }
       }
+    },
+    {
+      "name": "List Users",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "description": "JWT token from login"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8080/api/users?limit=10&offset=0",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "users"],
+          "query": [
+            {
+              "key": "limit",
+              "value": "10",
+              "description": "Number of users to fetch (max 1000)"
+            },
+            {
+              "key": "offset",
+              "value": "0",
+              "description": "Number of users to skip"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get All Users",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "description": "JWT token from login"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8080/api/users/all?limit=50",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "users", "all"],
+          "query": [
+            {
+              "key": "limit",
+              "value": "50",
+              "description": "Number of users to fetch (default: 50, max: 1000)"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Search Users",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "description": "JWT token from login"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8080/api/users/search?q=alice&limit=10&offset=0",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "users", "search"],
+          "query": [
+            {
+              "key": "q",
+              "value": "alice",
+              "description": "Search query (username, email, first name, or last name)"
+            },
+            {
+              "key": "limit",
+              "value": "10",
+              "description": "Number of users to fetch"
+            },
+            {
+              "key": "offset",
+              "value": "0",
+              "description": "Number of users to skip"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get User Count",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "description": "JWT token from login"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8080/api/users/count",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "users", "count"]
+        }
+      }
+    },
+    {
+      "name": "Get User by ID",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "description": "JWT token from login"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8080/api/users/1",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "users", "1"]
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "token",
+      "value": "",
+      "type": "string",
+      "description": "JWT token obtained from login"
+    },
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string",
+      "description": "Base URL for the API"
     }
   ]
 }

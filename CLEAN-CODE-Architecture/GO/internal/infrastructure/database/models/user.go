@@ -4,6 +4,7 @@ package models
 
 import (
 	"auth-module/internal/domain/entity"
+	"strconv"
 	"time"
 )
 
@@ -14,7 +15,7 @@ import (
 // - Keeps infrastructure concerns isolated from domain logic
 type UserModel struct {
 	ID         uint      `gorm:"primaryKey;autoIncrement"`
-	Username   string    `gorm:"type:varchar(100);not null"`
+	Username   string    `gorm:"type:varchar(100);not null;uniqueIndex"`
 	FirstName  string    `gorm:"type:varchar(100)"`
 	LastName   string    `gorm:"type:varchar(100)"`
 	Email      string    `gorm:"type:varchar(100);unique;not null"`
@@ -26,12 +27,17 @@ type UserModel struct {
 	UpdatedAt  time.Time `gorm:"autoUpdateTime"`
 }
 
+// TableName returns the table name for GORM
+func (UserModel) TableName() string {
+	return "users"
+}
+
 // ToEntity converts the GORM model to a domain entity.
 // This method ensures that infrastructure details don't leak into the domain layer.
 // The domain layer remains clean and unaware of how the data is stored.
 func (m *UserModel) ToEntity() *entity.User {
 	return &entity.User{
-		ID:         m.ID,
+		ID:         entity.UserID(strconv.FormatUint(uint64(m.ID), 10)),
 		Username:   m.Username,
 		FirstName:  m.FirstName,
 		LastName:   m.LastName,
@@ -49,8 +55,15 @@ func (m *UserModel) ToEntity() *entity.User {
 // This function handles the infrastructure concern of preparing
 // domain data for database storage, keeping the domain entity clean.
 func FromEntity(u *entity.User) *UserModel {
+	var id uint
+	if u.ID != "" {
+		if parsedID, err := strconv.ParseUint(string(u.ID), 10, 32); err == nil {
+			id = uint(parsedID)
+		}
+	}
+	
 	return &UserModel{
-		ID:         u.ID,
+		ID:         id,
 		Username:   u.Username,
 		FirstName:  u.FirstName,
 		LastName:   u.LastName,
