@@ -127,3 +127,13 @@ func ParseUserIDToUint(id UserID) (uint, error) {
 	
 	return uint(parsedID), nil
 }
+
+// Comments about the User entity:
+// - The User entity adheres to clean code principles by encapsulating domain logic and validation.
+// - It is independent of frameworks and infrastructure, focusing purely on business rules.
+// - The constructor (NewUser) ensures that all business rules are followed during creation.
+// - Methods like UpdateProfile and ChangePassword encapsulate specific behaviors, making the entity easier to use.
+// - Validation functions ensure that the entity's data is always valid.
+// - Audit fields (CreatedAt, UpdatedAt) are included for tracking changes, which is common in domain entities.
+// - The UserID abstraction allows flexibility in storage implementations.
+// - Overall, the entity is well-designed and adheres to domain-driven design principles.

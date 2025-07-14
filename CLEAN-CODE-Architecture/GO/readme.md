@@ -12,31 +12,60 @@ The system follows the **Clean Architecture** pattern, which enforces a strict d
 📁 Project Structure
 auth-system/
 ├── cmd/
-│   └── main.go           # 🚀 Application entry point & dependency injection
+│   └── main.go           # 🚀 Application entry point
+│                         # - Initializes all dependencies
+│                         # - Sets up middleware and routes
+│                         # - Configures environment
 ├── internal/
 │   ├── domain/           # 🎯 Enterprise business rules (CORE)
 │   │   ├── entity/
-│   │   │   └── user.go   # User business entity with validation
+│   │   │   └── user.go   # User business entity
+│   │   │                 # - Contains core business logic
+│   │   │                 # - Implements data validation
+│   │   │                 # - Defines business constraints
 │   │   └── repository/
 │   │       └── user.go   # Repository interface (contract)
+│   │                     # - Defines data access methods
+│   │                     # - Ensures persistence abstraction
 │   ├── usecase/         # 📋 Application business rules
 │   │   └── auth/
 │   │       ├── login.go  # Login business logic
+│   │       │             # - Handles user authentication
+│   │       │             # - Manages session tokens
+│   │       │             # - Implements security checks
 │   │       └── register.go # Registration business logic
+│   │                     # - Handles user creation
+│   │                     # - Validates registration data
+│   │                     # - Manages password hashing
 │   ├── interface/       # 🔌 Interface adapters
 │   │   ├── repository/
 │   │   │   └── postgres/
 │   │   │       └── user.go # Database implementation
+│   │   │                   # - Implements repository interface
+│   │   │                   # - Handles data persistence
+│   │   │                   # - Manages database transactions
 │   │   └── handler/
 │   │       └── auth.go   # HTTP handlers
+│   │                     # - Processes HTTP requests
+│   │                     # - Handles input validation
+│   │                     # - Manages response formatting
 │   └── infrastructure/  # 🛠️ Frameworks and drivers
 │       ├── database/
 │       │   └── postgres.go # Database connection
+│       │                   # - Manages connection pool
+│       │                   # - Handles connection lifecycle
+│       │                   # - Implements retry mechanisms
 │       └── token/
 │           └── jwt.go    # JWT token management
+│                        # - Handles token generation
+│                        # - Implements token validation
+│                        # - Manages token expiration
 └── pkg/                 # 📦 Shared utilities
     └── hash/
         └── bcrypt.go     # Password hashing utility
+                         # - Implements secure hashing
+                         # - Provides password verification
+                         # - Manages salt generation
 ```
 
 ## 🎯 Clean Architecture Layers Explained

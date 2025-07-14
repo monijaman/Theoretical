@@ -1,3 +1,16 @@
+// --- UserRepo Implementation ---
+//
+// This file provides the implementation of the UserRepository interface for Postgres using GORM.
+//
+// Key Features:
+// 1. Encapsulates database operations for the User entity.
+// 2. Implements methods like Create, GetByID, Update, Delete, and Search.
+// 3. Uses context.Context to manage request lifecycles, cancellations, and timeouts.
+// 4. Adheres to the Repository Pattern, abstracting data storage details from business logic.
+// 5. Enables Dependency Injection for testability and decoupling from infrastructure.
+//
+// This design ensures clean code principles and domain-driven architecture.
+
 package postgres
 
 import (
