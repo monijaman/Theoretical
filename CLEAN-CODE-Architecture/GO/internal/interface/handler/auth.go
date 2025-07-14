@@ -44,7 +44,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Initialize repository
-	repo := postgres.NewUserRepo(nil) // Pass the appropriate DB connection
+	repo := postgres.NewPostgresUserRepo(nil) // Pass the appropriate DB connection
 
 	// Call register use case
 	err := auth.Register(r.Context(), repo, user)
@@ -72,7 +72,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Initialize repository
-	repo := postgres.NewUserRepo(nil) // Pass the appropriate DB connection
+	repo := postgres.NewPostgresUserRepo(nil) // Pass the appropriate DB connection
 
 	// Call login use case
 	success, err := auth.Login(r.Context(), repo, req.Email, req.Password)
@@ -95,7 +95,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func RegisterHandlerWithRepo(w http.ResponseWriter, r *http.Request, repo *postgres.UserRepo) {
+func RegisterHandlerWithRepo(w http.ResponseWriter, r *http.Request, repo *postgres.PostgresUserRepo) {
 	w.Header().Set("Content-Type", "application/json")
 
 	var req RegisterRequest
@@ -125,7 +125,7 @@ func RegisterHandlerWithRepo(w http.ResponseWriter, r *http.Request, repo *postg
 	})
 }
 
-func LoginHandlerWithRepo(w http.ResponseWriter, r *http.Request, repo *postgres.UserRepo) {
+func LoginHandlerWithRepo(w http.ResponseWriter, r *http.Request, repo *postgres.PostgresUserRepo) {
 	w.Header().Set("Content-Type", "application/json")
 
 	var req LoginRequest

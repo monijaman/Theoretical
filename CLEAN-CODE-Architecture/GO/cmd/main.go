@@ -92,7 +92,7 @@ func main() {
 	}
 
 	// Create repository instance with GORM DB
-	userRepo := pgRepo.NewUserRepo(db)
+	userRepo := pgRepo.NewPostgresUserRepo(db)
 
 	fmt.Println("Database migration complete! Setting up HTTP routes...")
 
