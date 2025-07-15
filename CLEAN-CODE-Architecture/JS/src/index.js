@@ -2,10 +2,17 @@
 // This file demonstrates Clean Architecture dependency injection and composition
 
 // Import all layers of Clean Architecture
-const { createUserEntity } = require('./entities/user');        // Domain Layer: Pure business entities
-const { createUserRepository } = require('./gateways/userRepository'); // Interface Layer: Repository factory
-const { createUser } = require('./usecases/createUser');         // Use Case Layer: Business logic orchestration
-const { userController } = require('./delivery/userController'); // Delivery Layer: External interface (HTTP-like)
+// Domain Layer: User entity with validation rules, business methods (getAge, canVote, etc.)
+const { createUserEntity } = require('./entities/user');
+
+// Interface Layer: Data access abstraction with DB mapping, caching, logging
+const { createUserRepository } = require('./gateways/userRepository');
+
+// Use Case Layer: Registration business logic, duplicate checking, entity creation
+const { createUser } = require('./usecases/createUser');
+
+// Delivery Layer: HTTP request/response handling, error formatting, status codes
+const { userController } = require('./delivery/userController');
 
 //#region STEP 1: Create dependencies (Infrastructure Layer)
 // Mock dependencies for demo - in real app, these would be real implementations
