@@ -16,6 +16,9 @@ DATABASE TABLE: users
 */
 
 // FUNCTIONAL DATABASE MODEL - Pure functions instead of classes
+/**
+ * * UserDbModel provides pure functions to map between database models and domain entities
+ */
 const UserDbModel = {
     // MAPPING: Database Model → Domain Entity (Pure Function)
     toDomainEntity(dbUser) {
@@ -60,28 +63,37 @@ const UserDbModel = {
 };
 
 // FUNCTIONAL REPOSITORY IMPLEMENTATION - Pure functions with dependency injection
+/**
+ * 
+ * @param {*} database 
+ * @param {*} logger 
+ * @param {*} cache 
+ * @returns 
+ */
 function createUserRepository(database, logger, cache) {
     // DEPENDENCIES are injected here and captured in closure
     // This makes the repository testable and configurable
 
     return {
         async saveUser(domainUser) {
-            // Use injected logger dependency
+            // STEP 14: Repository uses injected logger to log operations
             logger?.info(`Saving user: ${domainUser.email}`);
 
-            // FUNCTIONAL FLOW: Pure function transformations
+            // STEP 12: Repository converts domain entity to database model
             const dbModel = UserDbModel.fromDomainEntity(domainUser);
 
             try {
-                // Use injected database dependency
+                // STEP 13: Repository uses injected database to save
                 const savedDbModel = await database.insert('users', dbModel);
 
-                // Use injected cache dependency
+                // STEP 15: Repository uses injected cache to cache results
                 if (cache) {
                     await cache.set(`user:${domainUser.email}`, savedDbModel);
                 }
 
                 logger?.info(`User saved successfully: ${domainUser.email}`);
+
+                // STEP 16: Repository converts database result back to domain entity
                 return UserDbModel.toDomainEntity(savedDbModel);
             } catch (error) {
                 logger?.error(`Failed to save user: ${error.message}`);
@@ -158,28 +170,28 @@ function createUserRepository(database, logger, cache) {
 // ✅ Closure - dependencies are captured and available to all methods
 // ✅ Pure functions - repository methods use injected dependencies, no globals
 
-// USAGE EXAMPLES:
+// USAGE EXAMPLES (commented out - these would be in your app setup):
 
 // Production usage with real dependencies
-const productionRepository = createUserRepository(
-    require('./database/postgres'),     // Real database
-    require('./logging/winston'),       // Real logger
-    require('./cache/redis')            // Real cache
-);
+// const productionRepository = createUserRepository(
+//     require('./database/postgres'),     // Real database
+//     require('./logging/winston'),       // Real logger
+//     require('./cache/redis')            // Real cache
+// );
 
 // Test usage with mock dependencies
-const testRepository = createUserRepository(
-    mockDatabase,                       // Mock database
-    mockLogger,                         // Mock logger
-    null                               // No cache in tests
-);
+// const testRepository = createUserRepository(
+//     mockDatabase,                       // Mock database
+//     mockLogger,                         // Mock logger
+//     null                               // No cache in tests
+// );
 
 // Development usage with simple dependencies
-const devRepository = createUserRepository(
-    require('./database/sqlite'),       // SQLite for dev
-    console,                           // Console logging
-    new Map()                          // In-memory cache
-);
+// const devRepository = createUserRepository(
+//     require('./database/sqlite'),       // SQLite for dev
+//     console,                           // Console logging
+//     new Map()                          // In-memory cache
+// );
 
 // Export the factory function, not a pre-configured instance
 module.exports = { createUserRepository };

@@ -10,19 +10,20 @@ function createUser({ userRepository, createUserEntity }) {
     // OUTER FUNCTION: Receives dependencies and stores them in closure scope
     // userRepository and createUserEntity are now "captured" in the closure
 
-    return async function ({ name, email }) {
+    return async function ({ name, email, birthYear }) {
         // INNER FUNCTION: Uses the captured dependencies from closure scope
         // This function "remembers" userRepository and createUserEntity
 
-        // Business Logic: Check if user already exists
+        // STEP 5: Use case checks if user already exists (business rule)
         if (await userRepository.getUserByEmail(email)) {
             throw new Error('User already exists');
         }
 
-        // Business Logic: Create domain entity using captured dependency
-        const user = createUserEntity({ id: Date.now(), name, email });
+        // STEP 6: Use case calls createUserEntity() to validate and create domain object
+        const user = createUserEntity({ id: Date.now(), name, email, birthYear });
 
-        // Business Logic: Save user using captured dependency
+        // STEP 7: Use case calls userRepository.saveUser() to persist the entity
+        // STEP 8: Use case returns the saved user or throws business errors
         return userRepository.saveUser(user);
     };
 }

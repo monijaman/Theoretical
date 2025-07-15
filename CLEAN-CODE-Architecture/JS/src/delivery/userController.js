@@ -14,14 +14,15 @@ function userController({ createUserUseCase }) {
         // This function "remembers" createUserUseCase from when it was created
 
         try {
-            // Controller calls the use case with request data
-            // createUserUseCase is available here thanks to the closure!
+            // STEP 1: Controller receives HTTP-like request object
+            // STEP 2: Controller extracts { name, email, birthYear } from req
+            // STEP 3: Controller calls createUserUseCase({ name, email, birthYear })
             const user = await createUserUseCase(req);
 
-            // Controller formats successful response
+            // STEP 4: Controller handles success and formats response
             return { status: 201, body: user };
         } catch (err) {
-            // Controller formats error response
+            // STEP 4: Controller handles errors and formats response
             return { status: 400, body: { error: err.message } };
         }
     };

@@ -23,7 +23,7 @@ function isAdultUser(birthYear) {
 
 // ENTITY CREATION FUNCTION (Domain Logic Only)
 function createUserEntity({ id, name, email, birthYear }) {
-    // Validate all business rules before creating entity
+    // STEP 9: Entity validates business rules (name length, email format, age)
     if (!isValidName(name)) {
         throw new Error('Name is required and must be 2-50 characters');
     }
@@ -31,10 +31,11 @@ function createUserEntity({ id, name, email, birthYear }) {
         throw new Error('A valid email is required');
     }
     if (birthYear && !isAdultUser(birthYear)) {
+        // STEP 11: Entity throws domain errors if validation fails
         throw new Error('User must be 18 years or older');
     }
 
-    // Create immutable user entity with BUSINESS BEHAVIOR (not DB fields)
+    // STEP 10: Entity creates immutable user object with domain methods
     const user = {
         // IDENTITY (required for entities)
         id,
