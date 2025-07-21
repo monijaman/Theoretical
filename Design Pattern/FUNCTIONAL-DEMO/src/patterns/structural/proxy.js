@@ -6,78 +6,118 @@
 // access control, or lazy loading without changing the original object.
 //
 // WHAT IT'S DOING IN THIS APP:
-// - Controls access to product data with caching and logging
-// - Simulates database access with artificial delays
-// - Implements intelligent caching to improve performance
-// - Provides transparent access control and request logging
-// - Adds security and monitoring without changing product objects
+// - Controls access to bank card data with caching and security logging
+// - Simulates secure banking API access with artificial delays
+// - Implements intelligent caching to improve performance for card lookups
+// - Provides transparent access control and transaction monitoring
+// - Adds security layers and fraud detection without changing card objects
 //
 // FUNCTIONAL APPROACH BENEFITS:
 // - Uses function wrappers and closures instead of proxy classes
-// - Function composition for layering proxy functionality
-// - Controlled access through wrapper functions
-// - Transparent caching that's invisible to the caller
-// - Pure functions that maintain predictable behavior
+// - Function composition for layering security and caching functionality
+// - Controlled access through wrapper functions with role-based permissions
+// - Transparent caching that's invisible to banking operations
+// - Pure functions that maintain predictable and secure behavior
 // ===========================================
 
 // ===========================================
-// FUNCTIONAL PRODUCT PROXY
+// FUNCTIONAL BANK CARD PROXY
 // ===========================================
 
-const createProductProxy = (products = []) => {
-    // Private state (closure)
+const createBankCardProxy = (cards = []) => {
+    // Private state (closure) - Simulates secure bank database
     let proxyState = {
-        products: new Map(),
+        cards: new Map(),
         cache: new Map(),
         accessLog: [],
         securityRules: new Map(),
-        maxCacheSize: 100,
-        cacheStats: { hits: 0, misses: 0 }
+        maxCacheSize: 50, // Smaller cache for security
+        cacheStats: { hits: 0, misses: 0 },
+        fraudAlerts: []
     };
 
-    // Initialize products
-    products.forEach(product => {
-        proxyState.products.set(product.name, product);
+    // Initialize cards in secure storage
+    cards.forEach(card => {
+        proxyState.cards.set(card.cardNumber, card);
     });
 
-    // Helper functions (pure)
+    // Helper functions (pure) - Banking security focused
     const logAccess = (method, resource, details = {}) => {
         const logEntry = {
             timestamp: new Date().toISOString(),
             method,
-            resource,
-            details
+            resource: method.includes('Card') ? maskCardNumber(resource) : resource, // Mask sensitive data
+            details: {
+                ...details,
+                userAgent: details.userAgent || 'BankingApp/1.0',
+                ipAddress: details.ipAddress || '192.168.1.100'
+            }
         };
 
         proxyState = {
             ...proxyState,
-            accessLog: [...proxyState.accessLog.slice(-999), logEntry] // Keep last 1000
+            accessLog: [...proxyState.accessLog.slice(-499), logEntry] // Keep last 500 for security audit
         };
     };
 
-    const simulateDelay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+    // Utility to mask card numbers for logging (security)
+    const maskCardNumber = (cardNumber) => {
+        if (!cardNumber || cardNumber.length < 4) return '****';
+        return '**** **** **** ' + cardNumber.slice(-4);
+    };
+
+    const simulateSecureBankingDelay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
     const hasPermission = (userRole, action) => {
         const permissions = proxyState.securityRules.get(userRole) || ['read'];
         return permissions.includes(action);
     };
 
-    // Cache management functions
-    const getCacheKey = (productName) => `product:${productName}`;
+    const detectSuspiciousActivity = (cardNumber, action) => {
+        // Simple fraud detection: Check for too many requests in short time
+        const recentLogs = proxyState.accessLog.filter(log =>
+            Date.now() - new Date(log.timestamp).getTime() < 60000 && // Last minute
+            log.resource.includes(cardNumber.slice(-4))
+        );
+
+        if (recentLogs.length > 5) {
+            const alert = {
+                timestamp: new Date().toISOString(),
+                cardNumber: maskCardNumber(cardNumber),
+                action,
+                reason: 'Excessive requests detected',
+                severity: 'HIGH'
+            };
+
+            proxyState = {
+                ...proxyState,
+                fraudAlerts: [...proxyState.fraudAlerts.slice(-99), alert]
+            };
+
+            console.log(`[FRAUD ALERT] 🚨 Suspicious activity detected for card ${maskCardNumber(cardNumber)}`);
+            return true;
+        }
+        return false;
+    };
+
+    // Cache management functions - Banking specific
+    const getCacheKey = (cardNumber) => `card:${cardNumber.slice(-4)}`; // Only use last 4 digits for security
 
     const addToCache = (key, value) => {
         const newCache = new Map(proxyState.cache);
 
-        // Enforce cache size limit (LRU-style)
+        // Enforce stricter cache size limit for banking security
         if (newCache.size >= proxyState.maxCacheSize) {
             const firstKey = newCache.keys().next().value;
             newCache.delete(firstKey);
         }
 
+        // Cache with shorter TTL for banking data
         newCache.set(key, {
             value,
             timestamp: Date.now(),
-            accessCount: 1
+            accessCount: 1,
+            ttl: 30000 // 30 seconds TTL for security
         });
 
         proxyState = {
@@ -85,13 +125,22 @@ const createProductProxy = (products = []) => {
             cache: newCache
         };
 
-        console.log(`[PROXY] 💾 Cached: ${key}`);
+        console.log(`[BANK PROXY] 💾 Cached: ${key}`);
     };
 
     const getFromCache = (key) => {
         const cacheEntry = proxyState.cache.get(key);
 
         if (cacheEntry) {
+            // Check if cache entry has expired (banking security)
+            if (Date.now() - cacheEntry.timestamp > cacheEntry.ttl) {
+                const newCache = new Map(proxyState.cache);
+                newCache.delete(key);
+                proxyState = { ...proxyState, cache: newCache };
+                console.log(`[BANK PROXY] ⏰ Cache expired for ${key}`);
+                return null;
+            }
+
             // Update access count
             const newCache = new Map(proxyState.cache);
             newCache.set(key, {
@@ -122,130 +171,200 @@ const createProductProxy = (products = []) => {
         return null;
     };
 
-    // Public interface
+    // Helper function for statistics
+    const getMostAccessedCards = () => {
+        const cardRequests = {};
+        proxyState.accessLog.forEach(log => {
+            if (log.method === 'getCard') {
+                const maskedCard = log.resource;
+                cardRequests[maskedCard] = (cardRequests[maskedCard] || 0) + 1;
+            }
+        });
+
+        return Object.entries(cardRequests)
+            .sort(([, a], [, b]) => b - a)
+            .slice(0, 5)
+            .map(([card, count]) => ({ card, requests: count }));
+    };
+
+    // Public interface - Banking operations
     return {
-        // Get product with caching
-        getProduct: async (productName) => {
-            console.log(`[PROXY] Request for product: ${productName}`);
-            logAccess('getProduct', productName);
+        // Get card details with caching and fraud detection
+        getCard: async (cardNumber) => {
+            console.log(`[BANK PROXY] Request for card: ${maskCardNumber(cardNumber)}`);
+
+            // Fraud detection
+            if (detectSuspiciousActivity(cardNumber, 'getCard')) {
+                throw new Error('Account temporarily locked due to suspicious activity');
+            }
+
+            logAccess('getCard', cardNumber);
 
             // Check cache first
-            const cacheKey = getCacheKey(productName);
+            const cacheKey = getCacheKey(cardNumber);
             const cached = getFromCache(cacheKey);
 
             if (cached) {
-                console.log(`[PROXY] ✅ Cache HIT for ${productName}`);
+                console.log(`[BANK PROXY] ✅ Cache HIT for ${maskCardNumber(cardNumber)}`);
                 return cached;
             }
 
-            console.log(`[PROXY] ❌ Cache MISS for ${productName}`);
+            console.log(`[BANK PROXY] ❌ Cache MISS for ${maskCardNumber(cardNumber)}`);
 
-            // Simulate database/API call delay
-            await simulateDelay(100);
+            // Simulate secure banking API call delay
+            await simulateSecureBankingDelay(150);
 
-            // Check if product exists
-            if (!proxyState.products.has(productName)) {
-                console.log(`[PROXY] ⚠️ Product not found: ${productName}`);
+            // Check if card exists in secure database
+            if (!proxyState.cards.has(cardNumber)) {
+                console.log(`[BANK PROXY] ⚠️ Card not found: ${maskCardNumber(cardNumber)}`);
+                logAccess('cardNotFound', cardNumber, { severity: 'MEDIUM' });
                 return null;
             }
 
-            // Get product from "database"
-            const product = proxyState.products.get(productName);
-            console.log(`[PROXY] 📦 Fetched from database: ${productName}`);
+            // Get card from secure "database"
+            const card = proxyState.cards.get(cardNumber);
+            console.log(`[BANK PROXY] ✅ Fetched from secure database: ${maskCardNumber(cardNumber)}`);
 
-            // Cache the result
-            addToCache(cacheKey, product);
+            // Cache the result with security considerations
+            addToCache(cacheKey, card);
 
-            return product;
+            return card;
         },
 
-        // Add product with access control
-        addProduct: (product, userRole = 'user') => {
-            logAccess('addProduct', product.name, { userRole });
+        // Add new card with strict access control
+        addCard: (card, userRole = 'user') => {
+            logAccess('addCard', card.cardNumber, { userRole });
 
-            // Check permissions
+            // Check permissions - Only admins can add cards
             if (!hasPermission(userRole, 'write')) {
-                console.log(`[PROXY] 🚫 Access denied: ${userRole} cannot add products`);
-                throw new Error('Insufficient permissions to add products');
+                console.log(`[BANK PROXY] 🚫 Access denied: ${userRole} cannot add cards`);
+                throw new Error('Insufficient permissions to add cards');
             }
 
             proxyState = {
                 ...proxyState,
-                products: new Map(proxyState.products).set(product.name, product)
+                cards: new Map(proxyState.cards).set(card.cardNumber, card)
             };
 
-            // Invalidate cache for this product
-            const cacheKey = getCacheKey(product.name);
+            // Invalidate cache for this card
+            const cacheKey = getCacheKey(card.cardNumber);
             const newCache = new Map(proxyState.cache);
             newCache.delete(cacheKey);
             proxyState = { ...proxyState, cache: newCache };
 
-            console.log(`[PROXY] ✅ Product added: ${product.name}`);
+            console.log(`[BANK PROXY] ✅ Card added: ${maskCardNumber(card.cardNumber)}`);
             return true;
         },
 
-        // Remove product with access control
-        removeProduct: (productName, userRole = 'user') => {
-            logAccess('removeProduct', productName, { userRole });
+        // Block/remove card with strict access control
+        blockCard: (cardNumber, userRole = 'user') => {
+            logAccess('blockCard', cardNumber, { userRole });
 
-            // Check permissions
-            if (!hasPermission(userRole, 'delete')) {
-                console.log(`[PROXY] 🚫 Access denied: ${userRole} cannot remove products`);
-                throw new Error('Insufficient permissions to remove products');
+            // Check permissions - Only admins and security can block cards
+            if (!hasPermission(userRole, 'block')) {
+                console.log(`[BANK PROXY] 🚫 Access denied: ${userRole} cannot block cards`);
+                throw new Error('Insufficient permissions to block cards');
             }
 
-            const newProducts = new Map(proxyState.products);
-            const removed = newProducts.delete(productName);
-
-            if (removed) {
-                proxyState = { ...proxyState, products: newProducts };
+            const card = proxyState.cards.get(cardNumber);
+            if (card) {
+                // Instead of deleting, mark as blocked
+                const blockedCard = { ...card, status: 'BLOCKED', blockedAt: new Date().toISOString() };
+                proxyState = {
+                    ...proxyState,
+                    cards: new Map(proxyState.cards).set(cardNumber, blockedCard)
+                };
 
                 // Invalidate cache
-                const cacheKey = getCacheKey(productName);
+                const cacheKey = getCacheKey(cardNumber);
                 const newCache = new Map(proxyState.cache);
                 newCache.delete(cacheKey);
                 proxyState = { ...proxyState, cache: newCache };
 
-                console.log(`[PROXY] ✅ Product removed: ${productName}`);
+                console.log(`[BANK PROXY] 🔒 Card blocked: ${maskCardNumber(cardNumber)}`);
+                return true;
             } else {
-                console.log(`[PROXY] ⚠️ Product not found for removal: ${productName}`);
+                console.log(`[BANK PROXY] ⚠️ Card not found for blocking: ${maskCardNumber(cardNumber)}`);
+                return false;
             }
-
-            return removed;
         },
 
-        // Set permissions for roles
+        // Set permissions for roles (Banking specific)
         setPermissions: (role, permissions) => {
             proxyState = {
                 ...proxyState,
                 securityRules: new Map(proxyState.securityRules).set(role, permissions)
             };
-            console.log(`[PROXY] 🔐 Permissions set for role '${role}': ${permissions.join(', ')}`);
+            console.log(`[BANK PROXY] 🔐 Permissions set for role '${role}': ${permissions.join(', ')}`);
         },
 
-        // Initialize default permissions
-        initializeDefaultPermissions: () => {
-            const defaultRules = new Map([
-                ['user', ['read']],
-                ['admin', ['read', 'write', 'delete']],
-                ['moderator', ['read', 'write']]
+        // Initialize banking security permissions
+        initializeBankingPermissions: () => {
+            const bankingRules = new Map([
+                ['customer', ['read']], // Customers can only view their own cards
+                ['teller', ['read', 'view_balance']], // Tellers can view cards and balances
+                ['admin', ['read', 'write', 'block']], // Admins can manage cards
+                ['security', ['read', 'block', 'audit']] // Security can view and block
             ]);
 
-            proxyState = { ...proxyState, securityRules: defaultRules };
-            console.log('[PROXY] 🔐 Default permissions initialized');
+            proxyState = { ...proxyState, securityRules: bankingRules };
+            console.log('[BANK PROXY] 🔐 Banking security permissions initialized');
         },
 
-        // Get all products
-        getAllProducts: () => {
-            logAccess('getAllProducts', 'all');
-            return Array.from(proxyState.products.values());
+        // Get all cards (masked for security)
+        getAllCards: (userRole = 'user') => {
+            logAccess('getAllCards', 'all', { userRole });
+
+            if (!hasPermission(userRole, 'read')) {
+                throw new Error('Insufficient permissions to view cards');
+            }
+
+            // Return masked version for security
+            return Array.from(proxyState.cards.values()).map(card => ({
+                ...card,
+                cardNumber: maskCardNumber(card.cardNumber),
+                cvv: '***' // Never expose CVV
+            }));
+        },
+
+        // Validate card for transaction
+        validateCard: async (cardNumber, cvv) => {
+            console.log(`[BANK PROXY] Validating card: ${maskCardNumber(cardNumber)}`);
+            logAccess('validateCard', cardNumber);
+
+            // Fraud detection
+            if (detectSuspiciousActivity(cardNumber, 'validateCard')) {
+                throw new Error('Account temporarily locked due to suspicious activity');
+            }
+
+            // Get card directly from secure storage for validation
+            const card = proxyState.cards.get(cardNumber);
+            if (!card) {
+                return { valid: false, reason: 'Card not found' };
+            }
+
+            if (card.status === 'BLOCKED') {
+                return { valid: false, reason: 'Card is blocked' };
+            }
+
+            if (card.cvv !== cvv) {
+                console.log(`[BANK PROXY] 🚫 Invalid CVV for ${maskCardNumber(cardNumber)}`);
+                return { valid: false, reason: 'Invalid CVV' };
+            }
+
+            if (new Date(card.expiryDate) < new Date()) {
+                return { valid: false, reason: 'Card expired' };
+            }
+
+            console.log(`[BANK PROXY] ✅ Card validated: ${maskCardNumber(cardNumber)}`);
+            return { valid: true, reason: 'Card is valid' };
         },
 
         // Clear cache
         clearCache: () => {
             const cacheSize = proxyState.cache.size;
             proxyState = { ...proxyState, cache: new Map() };
-            console.log(`[PROXY] 🗑️ Cache cleared (${cacheSize} items removed)`);
+            console.log(`[BANK PROXY] 🗑️ Security cache cleared (${cacheSize} items removed)`);
         },
 
         // Get cache statistics
@@ -253,6 +372,7 @@ const createProductProxy = (products = []) => {
             const totalRequests = proxyState.cacheStats.hits + proxyState.cacheStats.misses;
             return {
                 cacheSize: proxyState.cache.size,
+                maxCacheSize: proxyState.maxCacheSize,
                 hits: proxyState.cacheStats.hits,
                 misses: proxyState.cacheStats.misses,
                 totalRequests,
@@ -260,13 +380,28 @@ const createProductProxy = (products = []) => {
             };
         },
 
-        // Get access log
-        getAccessLog: (limit = 10) => {
+        // Get fraud alerts
+        getFraudAlerts: (userRole = 'user') => {
+            if (!hasPermission(userRole, 'audit')) {
+                throw new Error('Insufficient permissions to view fraud alerts');
+            }
+            return proxyState.fraudAlerts.slice(-10).reverse(); // Last 10 alerts
+        },
+
+        // Get access log (security audit)
+        getAccessLog: (limit = 10, userRole = 'user') => {
+            if (!hasPermission(userRole, 'audit')) {
+                throw new Error('Insufficient permissions to view access logs');
+            }
             return proxyState.accessLog.slice(-limit).reverse();
         },
 
         // Get access statistics
-        getAccessStats: () => {
+        getAccessStats: (userRole = 'user') => {
+            if (!hasPermission(userRole, 'audit')) {
+                throw new Error('Insufficient permissions to view access statistics');
+            }
+
             const stats = {};
             proxyState.accessLog.forEach(log => {
                 stats[log.method] = (stats[log.method] || 0) + 1;
@@ -275,34 +410,22 @@ const createProductProxy = (products = []) => {
             return {
                 totalRequests: proxyState.accessLog.length,
                 methodBreakdown: stats,
-                mostRequestedProducts: getMostRequestedProducts()
+                mostAccessedCards: getMostAccessedCards(),
+                fraudAlerts: proxyState.fraudAlerts.length
             };
         },
 
-        // Health check
+        // Health check for banking system
         healthCheck: () => ({
-            status: 'healthy',
+            status: 'secure',
             timestamp: new Date().toISOString(),
-            products: proxyState.products.size,
+            cards: proxyState.cards.size,
+            activeCards: Array.from(proxyState.cards.values()).filter(card => card.status !== 'BLOCKED').length,
             cacheSize: proxyState.cache.size,
-            accessLogs: proxyState.accessLog.length
+            accessLogs: proxyState.accessLog.length,
+            fraudAlerts: proxyState.fraudAlerts.length
         })
     };
-
-    // Helper function for statistics
-    function getMostRequestedProducts() {
-        const productRequests = {};
-        proxyState.accessLog.forEach(log => {
-            if (log.method === 'getProduct') {
-                productRequests[log.resource] = (productRequests[log.resource] || 0) + 1;
-            }
-        });
-
-        return Object.entries(productRequests)
-            .sort(([, a], [, b]) => b - a)
-            .slice(0, 5)
-            .map(([product, count]) => ({ product, requests: count }));
-    }
 };
 
 // ===========================================
@@ -409,7 +532,7 @@ const createLazyLoadingProxy = (resourceLoader) => {
 
         // Preload resources
         preload: async (resourceIds) => {
-            const loadPromises = resourceIds.map(id => exports.getResource(id));
+            const loadPromises = resourceIds.map(id => this.getResource(id));
             const results = await Promise.allSettled(loadPromises);
 
             return results.map((result, index) => ({
@@ -531,7 +654,7 @@ const createCachingProxy = (targetFunction, options = {}) => {
 };
 
 module.exports = {
-    createProductProxy,
+    createBankCardProxy,
     createLazyLoadingProxy,
     createCachingProxy
 };

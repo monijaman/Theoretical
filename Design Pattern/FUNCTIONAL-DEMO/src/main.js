@@ -8,7 +8,7 @@ const { createProductBuilder } = require('./patterns/creational/builder');
 const { createConfigManager } = require('./patterns/creational/singleton');
 const { createCartModule } = require('./patterns/creational/module');
 const { createProductDecorator } = require('./patterns/structural/decorator');
-const { createProductProxy } = require('./patterns/structural/proxy');
+const { createBankCardProxy, createLazyLoadingProxy, createCachingProxy } = require('./patterns/structural/proxy');
 const { createEventManager } = require('./patterns/behavioral/observer');
 const { createPaymentProcessor } = require('./patterns/behavioral/strategy');
 const { createCommandManager } = require('./patterns/behavioral/command');
@@ -176,21 +176,64 @@ async function runFunctionalDemo() {
     console.log(`Final enhanced product: ${enhancedLaptop.getInfo()}\n`);
 
     // ===========================================
-    // 7. PROXY PATTERN (FUNCTIONAL) - Function Wrappers
+    // 7. PROXY PATTERN (FUNCTIONAL) - Banking Security Proxy
     // ===========================================
-    console.log('🛡️ 7. FUNCTIONAL PROXY - Access Control & Caching');
+    console.log('🛡️ 7. FUNCTIONAL PROXY - Banking Security & Caching');
 
-    const productProxy = createProductProxy([laptop, tshirt, book]);
+    // Create sample bank cards
+    const bankCards = [
+        {
+            cardNumber: '1234567812345678',
+            holderName: 'John Doe',
+            expiryDate: '2026-12-31',
+            cvv: '123',
+            balance: 5000.00,
+            status: 'ACTIVE'
+        },
+        {
+            cardNumber: '9876543298765432',
+            holderName: 'Jane Smith',
+            expiryDate: '2025-08-15',
+            cvv: '456',
+            balance: 12500.50,
+            status: 'ACTIVE'
+        }
+    ];
 
-    // First access - will fetch from "database"
-    console.log('First access (fetching from database):');
-    const product1 = await productProxy.getProduct('Gaming Laptop');
-    console.log(`Retrieved: ${product1.getInfo()}`);
+    // Create bank card proxy with security features
+    const bankProxy = createBankCardProxy(bankCards);
 
-    // Second access - will use cache
-    console.log('Second access (using cache):');
-    const product2 = await productProxy.getProduct('Gaming Laptop');
-    console.log(`Retrieved: ${product2.getInfo()}`);
+    // Initialize banking permissions
+    bankProxy.initializeBankingPermissions();
+
+    console.log('Banking proxy initialized with security permissions');
+
+    // First access - will fetch from secure database
+    console.log('\nFirst access (fetching from secure database):');
+    const card1 = await bankProxy.getCard('1234567812345678');
+    if (card1) {
+        console.log(`Retrieved card for: ${card1.holderName}, Balance: $${card1.balance}`);
+    }
+
+    // Second access - will use secure cache
+    console.log('\nSecond access (using secure cache):');
+    const card2 = await bankProxy.getCard('1234567812345678');
+    if (card2) {
+        console.log(`Retrieved card for: ${card2.holderName}, Balance: $${card2.balance}`);
+    }
+
+    // Card validation example
+    console.log('\nCard validation example:');
+    const validation = await bankProxy.validateCard('1234567812345678', '123');
+    console.log(`Card validation result: ${validation.valid ? 'VALID' : 'INVALID'} - ${validation.reason}`);
+
+    // Show cache statistics
+    console.log('\nCache Statistics:');
+    console.log(JSON.stringify(bankProxy.getCacheStats(), null, 2));
+
+    // Health check
+    console.log('\nBanking system health check:');
+    console.log(JSON.stringify(bankProxy.healthCheck(), null, 2));
     console.log('');
 
     // ===========================================
