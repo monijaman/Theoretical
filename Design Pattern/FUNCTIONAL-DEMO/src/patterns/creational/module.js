@@ -1,6 +1,24 @@
 // FUNCTIONAL MODULE PATTERN
-// Encapsulation using closures and pure functions
-// Benefits: Private state, controlled access, immutable operations
+// ===========================================
+// WHAT IT IS:
+// The Module pattern provides a way to organize and encapsulate code by creating
+// modules with private and public methods. It uses closures to maintain private
+// state while exposing only necessary functionality.
+//
+// WHAT IT'S DOING IN THIS APP:
+// - Creates a shopping cart module with private state management
+// - Manages cart items, quantities, totals, and operations
+// - Provides public interface for adding/removing items and getting cart state
+// - Maintains cart history and provides undo functionality
+// - Ensures data consistency and validates operations
+//
+// FUNCTIONAL APPROACH BENEFITS:
+// - Encapsulation using closures and pure functions
+// - Private state protection - no external access to internal data
+// - Controlled access through public interface methods
+// - Immutable operations that don't mutate external state
+// - Predictable behavior with clear separation of concerns
+// ===========================================
 
 // ===========================================
 // FUNCTIONAL SHOPPING CART MODULE

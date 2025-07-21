@@ -1,6 +1,24 @@
 // FUNCTIONAL OBSERVER PATTERN
-// Using pure functions and closures instead of observer classes
-// Benefits: No inheritance, functional composition, immutable event handling
+// ===========================================
+// WHAT IT IS:
+// The Observer pattern defines a one-to-many dependency between objects so that
+// when one object changes state, all its dependents are notified and updated
+// automatically. It's useful for implementing distributed event handling systems.
+//
+// WHAT IT'S DOING IN THIS APP:
+// - Manages event subscriptions and notifications (user login, product purchases)
+// - Allows multiple observers to react to the same events (email, analytics, inventory)
+// - Provides decoupled communication between different parts of the application
+// - Handles event broadcasting to all subscribed functions
+// - Maintains observer lists and manages subscription lifecycle
+//
+// FUNCTIONAL APPROACH BENEFITS:
+// - Uses pure functions and closures instead of observer classes
+// - No inheritance or complex class hierarchies
+// - Functional composition for combining multiple observers
+// - Immutable event handling with predictable side effects
+// - Easy to test individual observer functions in isolation
+// ===========================================
 
 // ===========================================
 // FUNCTIONAL EVENT MANAGER

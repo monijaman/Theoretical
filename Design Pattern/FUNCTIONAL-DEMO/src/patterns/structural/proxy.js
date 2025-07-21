@@ -1,6 +1,24 @@
 // FUNCTIONAL PROXY PATTERN
-// Using function wrappers and closures instead of proxy classes
-// Benefits: Function composition, controlled access, transparent caching
+// ===========================================
+// WHAT IT IS:
+// The Proxy pattern provides a placeholder or surrogate for another object
+// to control access to it. It can add functionality like caching, logging,
+// access control, or lazy loading without changing the original object.
+//
+// WHAT IT'S DOING IN THIS APP:
+// - Controls access to product data with caching and logging
+// - Simulates database access with artificial delays
+// - Implements intelligent caching to improve performance
+// - Provides transparent access control and request logging
+// - Adds security and monitoring without changing product objects
+//
+// FUNCTIONAL APPROACH BENEFITS:
+// - Uses function wrappers and closures instead of proxy classes
+// - Function composition for layering proxy functionality
+// - Controlled access through wrapper functions
+// - Transparent caching that's invisible to the caller
+// - Pure functions that maintain predictable behavior
+// ===========================================
 
 // ===========================================
 // FUNCTIONAL PRODUCT PROXY

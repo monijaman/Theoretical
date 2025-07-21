@@ -1,6 +1,24 @@
 // FUNCTIONAL DECORATOR PATTERN
-// Using higher-order functions instead of class decorators
-// Benefits: Function composition, immutability, no inheritance chains
+// ===========================================
+// WHAT IT IS:
+// The Decorator pattern allows behavior to be added to objects dynamically
+// without altering their structure. It provides a flexible alternative to
+// subclassing for extending functionality.
+//
+// WHAT IT'S DOING IN THIS APP:
+// - Adds extra features to products (extended warranty, gift wrap, express shipping)
+// - Enhances product objects with additional properties and modified behavior
+// - Composes multiple decorations to create enhanced product variants
+// - Calculates cumulative pricing for all applied enhancements
+// - Maintains original product data while adding new functionality
+//
+// FUNCTIONAL APPROACH BENEFITS:
+// - Uses higher-order functions instead of class decorators
+// - Function composition for chaining multiple enhancements
+// - Immutability - creates new objects instead of modifying existing ones
+// - No inheritance chains or complex class hierarchies
+// - Pure functions that are predictable and easy to test
+// ===========================================
 
 // ===========================================
 // PRODUCT DECORATOR FUNCTIONS

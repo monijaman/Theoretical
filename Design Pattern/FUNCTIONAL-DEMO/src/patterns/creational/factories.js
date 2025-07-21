@@ -1,6 +1,24 @@
 // FUNCTIONAL FACTORY PATTERNS
-// Pure functions for creating objects without classes
-// Benefits: No 'this' context, pure functions, composable, testable
+// ===========================================
+// WHAT IT IS:
+// The Factory pattern provides an interface for creating objects without specifying
+// their exact classes. It encapsulates object creation logic and provides a way to
+// create families of related objects.
+//
+// WHAT IT'S DOING IN THIS APP:
+// - Creates different types of products (electronics, clothing, books) using dedicated factory functions
+// - Creates different types of users (customers, admins, guests) with specific properties and methods
+// - Encapsulates the complex object creation logic in pure functions
+// - Provides consistent interfaces for creating related object families
+// - Returns objects with methods and properties specific to their type
+//
+// FUNCTIONAL APPROACH BENEFITS:
+// - Pure functions for creating objects without classes
+// - No 'this' context - just functions returning objects with methods
+// - Composable and testable factory functions
+// - Immutable object creation with consistent interfaces
+// - Easy to extend with new product types without changing existing code
+// ===========================================
 
 // ===========================================
 // PRODUCT CREATION FUNCTIONS
@@ -201,156 +219,10 @@ const createUserFactory = () => {
     };
 };
 
-// ===========================================
-// FUNCTIONAL BUILDER PATTERN
-// ===========================================
-
-const createProductBuilder = () => {
-    // Builder state (will be immutable)
-    let state = {};
-
-    // Chain of builder functions
-    const builder = {
-        setName: (name) => {
-            state = { ...state, name };
-            return builder;
-        },
-
-        setPrice: (price) => {
-            state = { ...state, price };
-            return builder;
-        },
-
-        setCategory: (category) => {
-            state = { ...state, category };
-            return builder;
-        },
-
-        setBrand: (brand) => {
-            state = { ...state, brand };
-            return builder;
-        },
-
-        setWarranty: (warranty) => {
-            state = { ...state, warranty };
-            return builder;
-        },
-
-        setSize: (size) => {
-            state = { ...state, size };
-            return builder;
-        },
-
-        setColor: (color) => {
-            state = { ...state, color };
-            return builder;
-        },
-
-        setAuthor: (author) => {
-            state = { ...state, author };
-            return builder;
-        },
-
-        setPages: (pages) => {
-            state = { ...state, pages };
-            return builder;
-        },
-
-        build: () => {
-            const { category, ...options } = state;
-
-            switch (category) {
-                case 'electronics':
-                    return createElectronicsProduct(options);
-                case 'clothing':
-                    return createClothingProduct(options);
-                case 'book':
-                    return createBookProduct(options);
-                default:
-                    throw new Error(`Unknown category: ${category}`);
-            }
-        },
-
-        reset: () => {
-            state = {};
-            return builder;
-        },
-
-        getState: () => ({ ...state }) // Return copy of current state
-    };
-
-    return builder;
-};
-
-// ===========================================
-// FUNCTIONAL PROTOTYPE PATTERN
-// ===========================================
-
-const createPrototypeManager = () => {
-    // Prototype registry (closure)
-    const prototypes = new Map();
-
-    // Initialize with default prototypes
-    prototypes.set('laptop', createElectronicsProduct({
-        name: 'Laptop Template',
-        price: 999.99,
-        brand: 'TechCorp',
-        warranty: '2 years'
-    }));
-
-    prototypes.set('shirt', createClothingProduct({
-        name: 'Shirt Template',
-        price: 29.99,
-        size: 'M',
-        color: 'Blue'
-    }));
-
-    prototypes.set('book', createBookProduct({
-        name: 'Book Template',
-        price: 19.99,
-        author: 'Author',
-        pages: 300
-    }));
-
-    return {
-        // Clone prototype with customizations (pure function)
-        clone: (prototypeKey, customizations = {}) => {
-            const prototype = prototypes.get(prototypeKey);
-            if (!prototype) {
-                throw new Error(`Prototype '${prototypeKey}' not found`);
-            }
-
-            // Create new object with prototype properties and customizations
-            const cloned = {
-                ...prototype,
-                ...customizations,
-                id: Math.random().toString(36).substr(2, 9), // New ID
-                createdAt: new Date().toISOString() // New timestamp
-            };
-
-            console.log(`[PROTOTYPE] Cloned ${prototypeKey} with customizations`);
-            return cloned;
-        },
-
-        // Add new prototype
-        addPrototype: (key, prototype) => {
-            prototypes.set(key, prototype);
-        },
-
-        // List available prototypes
-        listPrototypes: () => Array.from(prototypes.keys()),
-
-        // Get prototype (without cloning)
-        getPrototype: (key) => prototypes.get(key)
-    };
-};
-
 // Export all factory functions
 module.exports = {
     createProductFactory,
     createUserFactory,
-    createProductBuilder,
-    createPrototypeManager,
     // Individual creators for direct use
     createElectronicsProduct,
     createClothingProduct,

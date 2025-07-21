@@ -1,6 +1,24 @@
 // FUNCTIONAL SINGLETON PATTERN
-// Using closures and module pattern instead of classes
-// Benefits: No global state, controlled access, immutable configuration
+// ===========================================
+// WHAT IT IS:
+// The Singleton pattern ensures only one instance of a class exists and provides
+// global access to that instance. It's useful for managing shared resources like
+// configuration, logging, or database connections.
+//
+// WHAT IT'S DOING IN THIS APP:
+// - Creates a single configuration manager instance using closures
+// - Manages application configuration (app name, version, debug mode)
+// - Provides controlled access to configuration settings
+// - Ensures consistent configuration state across the entire application
+// - Logs configuration changes for debugging and monitoring
+//
+// FUNCTIONAL APPROACH BENEFITS:
+// - Uses closures and module pattern instead of classes
+// - No global state pollution - encapsulated in closure
+// - Controlled access through returned interface
+// - Immutable configuration management
+// - Pure functions for getting/setting configuration values
+// ===========================================
 
 // ===========================================
 // FUNCTIONAL CONFIGURATION MANAGER

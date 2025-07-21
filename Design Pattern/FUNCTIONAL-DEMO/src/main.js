@@ -3,7 +3,8 @@
 // Benefits: Pure functions, immutability, composability, predictability
 
 // ===== IMPORT ALL FUNCTIONAL PATTERN IMPLEMENTATIONS =====
-const { createProductFactory, createUserFactory, createProductBuilder } = require('./patterns/creational/factories');
+const { createProductFactory, createUserFactory } = require('./patterns/creational/factories');
+const { createProductBuilder } = require('./patterns/creational/builder');
 const { createConfigManager } = require('./patterns/creational/singleton');
 const { createCartModule } = require('./patterns/creational/module');
 const { createProductDecorator } = require('./patterns/structural/decorator');

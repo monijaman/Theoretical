@@ -1,6 +1,24 @@
 // FUNCTIONAL COMMAND PATTERN
-// Using pure functions and closures instead of command classes
-// Benefits: Immutable commands, functional composition, pure undo/redo
+// ===========================================
+// WHAT IT IS:
+// The Command pattern encapsulates a request as an object, allowing you to
+// parameterize clients with different requests, queue operations, log requests,
+// and support undoable operations.
+//
+// WHAT IT'S DOING IN THIS APP:
+// - Encapsulates user actions (add to cart, remove from cart) as command functions
+// - Provides undo/redo functionality for shopping cart operations
+// - Maintains command history for tracking and reversing operations
+// - Allows queuing and batching of multiple operations
+// - Implements macro commands for executing multiple actions together
+//
+// FUNCTIONAL APPROACH BENEFITS:
+// - Uses pure functions and closures instead of command classes
+// - Immutable commands that don't modify external state directly
+// - Functional composition for combining multiple commands
+// - Pure undo/redo operations that are predictable and safe
+// - Easy to test individual commands in isolation
+// ===========================================
 
 // ===========================================
 // COMMAND FUNCTION DEFINITIONS

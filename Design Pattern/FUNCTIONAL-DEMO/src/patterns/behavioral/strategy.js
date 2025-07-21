@@ -1,6 +1,24 @@
 // FUNCTIONAL STRATEGY PATTERN
-// Using function maps and higher-order functions instead of strategy classes
-// Benefits: Pure functions, easy strategy swapping, functional composition
+// ===========================================
+// WHAT IT IS:
+// The Strategy pattern defines a family of algorithms, encapsulates each one,
+// and makes them interchangeable. It lets the algorithm vary independently
+// from clients that use it, enabling runtime algorithm selection.
+//
+// WHAT IT'S DOING IN THIS APP:
+// - Implements different payment processing strategies (credit card, PayPal, crypto)
+// - Allows runtime selection of payment methods based on user choice
+// - Encapsulates payment logic for each provider in separate functions
+// - Provides consistent interface for all payment processing strategies
+// - Handles validation and processing logic specific to each payment type
+//
+// FUNCTIONAL APPROACH BENEFITS:
+// - Uses function maps and higher-order functions instead of strategy classes
+// - Pure functions for each strategy - predictable and testable
+// - Easy strategy swapping at runtime without complex inheritance
+// - Functional composition for combining strategies
+// - No 'this' context or class dependencies
+// ===========================================
 
 // ===========================================
 // PAYMENT STRATEGY FUNCTIONS
