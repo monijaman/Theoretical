@@ -1,0 +1,27 @@
+{
+  "name": "functional-design-patterns-demo",
+  "version": "1.0.0",
+  "description": "Comprehensive demonstration of design patterns using Functional Programming in JavaScript",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "node src/main.js",
+    "demo": "node src/main.js",
+    "test": "node test.js",
+    "quick-test": "node test.js"
+  },
+  "keywords": [
+    "functional-programming",
+    "design-patterns",
+    "javascript",
+    "pure-functions",
+    "immutability",
+    "closures",
+    "higher-order-functions",
+    "educational"
+  ],
+  "author": "Functional Design Patterns Demo",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
