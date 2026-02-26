@@ -460,6 +460,185 @@ Instead of manually managing:
 - abort logic
 - race conditions
 
+# 📘 Understanding Common Data Fetching Concerns in React
+
+When fetching data manually using `useEffect`, you often need to manage several things yourself.
+
+Below is a breakdown of the most important concepts:
+
+---
+
+## 1️⃣ useEffect
+
+`useEffect` is used to perform side effects in React components.
+
+In data fetching:
+
+```tsx
+useEffect(() => {
+  fetchData();
+}, [dependency]);
+```
+
+### What It Does
+
+- Runs after component render
+- Re-runs when dependencies change
+- Used for API calls, subscriptions, timers, etc.
+
+### Common Mistake
+
+Wrong dependency array:
+
+```tsx
+useEffect(() => {
+  setState(...);
+}, [state]); // ❌ Causes infinite loop
+```
+
+Because updating state triggers re-render → effect runs again.
+
+---
+
+## 2️⃣ Loading State
+
+When fetching data, the request takes time.
+
+Without loading state:
+
+- UI may appear frozen
+- User doesn’t know what’s happening
+
+Example:
+
+```tsx
+const [loading, setLoading] = useState(false);
+
+setLoading(true);
+// fetch
+setLoading(false);
+```
+
+Why it matters:
+
+- Improves UX
+- Prevents double clicks
+- Allows spinners or skeleton loaders
+
+---
+
+## 3️⃣ Error Handling
+
+APIs can fail because of:
+
+- Network issues
+- Server errors (500)
+- Unauthorized access (401)
+- Bad request (400)
+
+Without error handling:
+
+- App silently fails
+- Users see broken UI
+
+Example:
+
+```tsx
+try {
+  const res = await fetch(...);
+  if (!res.ok) throw new Error("Failed to fetch");
+} catch (err) {
+  setError(err.message);
+}
+```
+
+Why it matters:
+
+- Displays meaningful message
+- Improves reliability
+- Prevents silent crashes
+
+---
+
+## 4️⃣ Abort Logic (Cleanup)
+
+If a component unmounts while a request is in progress:
+
+- The request may still resolve
+- React may try to update unmounted component
+- Memory leaks can occur
+
+Solution: `AbortController`
+
+```tsx
+const controller = new AbortController();
+
+fetch(url, { signal: controller.signal });
+
+return () => controller.abort();
+```
+
+Why it matters:
+
+- Prevents memory leaks
+- Cancels outdated requests
+- Required for safe async handling
+
+---
+
+## 5️⃣ Race Conditions
+
+Race condition happens when:
+
+User clicks:
+Page 1 → Page 2 → Page 3 (quickly)
+
+If Page 1 finishes last:
+It overwrites Page 3 data ❌
+
+UI shows wrong content.
+
+Why it happens:
+Multiple async requests resolve in unpredictable order.
+
+How to prevent:
+
+- Abort previous requests
+- Track request IDs
+- Use data-fetching libraries (React Query / SWR)
+
+---
+
+# 🧠 Why This Becomes Complex
+
+When manually fetching data, you must manage:
+
+- Side effects (`useEffect`)
+- Loading state
+- Error state
+- Cleanup logic
+- Race conditions
+- Caching
+- Deduplication
+
+This is why modern React apps prefer:
+
+- TanStack Query
+- SWR
+
+They solve these problems automatically.
+
+---
+
+# 🏆 Conclusion
+
+Manual fetching works for small apps.
+
+But for scalable, production-grade applications:
+Use a dedicated data-fetching library.
+
+It reduces bugs, improves performance, and simplifies code.
+
 Use a data-fetching library like:
 
 - TanStack Query (React Query)
