@@ -267,3 +267,252 @@ Use debounce and throttle for optimizing performance in event handlers.
 ### 11. Migrate to React Hooks
 
 ### 12. Use Memoization
+
+# 🐛 React Pagination Issue – What’s Wrong & Better Solutions
+
+## ❌ Original Code
+
+```tsx
+import React, { useState, useEffect } from 'react';
+
+const PostList: React.FC = () => {
+  const [posts, setPosts] = useState<{ id: number; title: string }[]>([]);
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    fetch(`/api/posts?page=${page}`)
+      .then(r => r.json())
+      .then(d => setPosts(d.items))
+      .catch(err => console.error(err));
+  }, [posts]); // ❌ WRONG
+
+  return (
+    <div>
+      <ul>
+        {posts.map(p => (
+          <li>{p.id}: {p.title}</li>  {/* ❌ Missing key */}
+        ))}
+      </ul>
+
+      <button onClick={() => setPage(page + 1)}>Next</button>
+    </div>
+  );
+};
+```
+
+---
+
+# ❌ What Is Wrong?
+
+## 1️⃣ Wrong Dependency in useEffect
+
+```tsx
+}, [posts]); // ❌
+```
+
+### Why This Is a Problem
+
+- `useEffect` depends on `posts`
+- Inside effect → `setPosts()` updates state
+- State update triggers re-render
+- Effect runs again
+- Infinite loop 🔁
+
+### What Happens Internally
+
+```
+Render
+→ useEffect runs
+→ setPosts()
+→ posts changes
+→ useEffect runs again
+→ infinite loop
+```
+
+---
+
+## 2️⃣ Missing `key` in List
+
+```tsx
+<li>
+  {p.id}: {p.title}
+</li>
+```
+
+React requires a `key` for list items.
+
+---
+
+# ✅ Correct Minimal Fix
+
+```tsx
+import React, { useState, useEffect } from "react";
+
+const PostList = () => {
+  const [posts, setPosts] = useState<{ id: number; title: string }[]>([]);
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    fetch(`/api/posts?page=${page}`)
+      .then((r) => r.json())
+      .then((d) => setPosts(d.items))
+      .catch((err) => console.error(err));
+  }, [page]); // ✅ Correct dependency
+
+  return (
+    <div>
+      <ul>
+        {posts.map((p) => (
+          <li key={p.id}>
+            {p.id}: {p.title}
+          </li>
+        ))}
+      </ul>
+
+      <button onClick={() => setPage((prev) => prev + 1)}>Next</button>
+    </div>
+  );
+};
+
+export default PostList;
+```
+
+---
+
+# 🚀 Better Production Version (With Loading + Error + Cleanup)
+
+```tsx
+import React, { useState, useEffect } from "react";
+
+type Post = {
+  id: number;
+  title: string;
+};
+
+const PostList = () => {
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const fetchPosts = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const res = await fetch(`/api/posts?page=${page}`, {
+          signal: controller.signal,
+        });
+
+        if (!res.ok) {
+          throw new Error("Failed to fetch posts");
+        }
+
+        const data = await res.json();
+        setPosts(data.items);
+      } catch (err: any) {
+        if (err.name !== "AbortError") {
+          setError(err.message);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPosts();
+
+    return () => controller.abort();
+  }, [page]);
+
+  return (
+    <div>
+      {loading && <p>Loading...</p>}
+      {error && <p style={{ color: "red" }}>{error}</p>}
+
+      <ul>
+        {posts.map((p) => (
+          <li key={p.id}>{p.title}</li>
+        ))}
+      </ul>
+
+      <button disabled={loading} onClick={() => setPage((p) => p + 1)}>
+        Next
+      </button>
+    </div>
+  );
+};
+
+export default PostList;
+```
+
+---
+
+# 🏆 Best Practice (Enterprise-Level)
+
+Instead of manually managing:
+
+- useEffect
+- loading
+- error
+- abort logic
+- race conditions
+
+Use a data-fetching library like:
+
+- TanStack Query (React Query)
+- SWR
+
+Example using React Query:
+
+```tsx
+import { useQuery } from "@tanstack/react-query";
+
+const fetchPosts = async (page: number) => {
+  const res = await fetch(`/api/posts?page=${page}`);
+  if (!res.ok) throw new Error("Failed to fetch");
+  return res.json();
+};
+
+const PostList = () => {
+  const [page, setPage] = React.useState(1);
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["posts", page],
+    queryFn: () => fetchPosts(page),
+    keepPreviousData: true,
+  });
+
+  if (isLoading) return <p>Loading...</p>;
+  if (error) return <p>Error loading posts</p>;
+
+  return (
+    <div>
+      {data?.items.map((p: any) => (
+        <p key={p.id}>{p.title}</p>
+      ))}
+      <button onClick={() => setPage((p) => p + 1)}>Next</button>
+    </div>
+  );
+};
+```
+
+---
+
+# 📌 Summary
+
+| Problem           | Fix                                         |
+| ----------------- | ------------------------------------------- |
+| Infinite loop     | Change dependency from `[posts]` → `[page]` |
+| Missing key       | Add `key={p.id}`                            |
+| No loading state  | Add `loading`                               |
+| No cleanup        | Use `AbortController`                       |
+| Manual complexity | Use React Query / SWR                       |
+
+---
+
+✅ Minimal fix works  
+🚀 Production version is safer  
+🏆 React Query is best for real-world apps
