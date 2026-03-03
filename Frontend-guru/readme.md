@@ -8,7 +8,7 @@ Welcome to the comprehensive frontend engineering curriculum. This is your roadm
 
 ### Foundation & Advanced Concepts
 
-#### [React Internals + Performance Mastery](../React%20Internals%20+%20Performance%20Mastery/readme.md)
+#### [React Internals + Performance Mastery](./React%20Internals%20+%20Performance%20Mastery/readme.md)
 
 Master the React engine. Understand reconciliation, Fiber architecture, and why components re-render.
 
@@ -25,7 +25,7 @@ Master the React engine. Understand reconciliation, Fiber architecture, and why 
 
 ---
 
-#### [Advanced TypeScript for Frontend](../Advanced%20TypeScript%20for%20Frontend/readme.md)
+#### [Advanced TypeScript for Frontend](./Advanced%20TypeScript%20for%20Frontend/readme.md)
 
 Build type-safe applications that catch bugs at compile-time, not runtime.
 
@@ -40,9 +40,26 @@ Build type-safe applications that catch bugs at compile-time, not runtime.
 
 ---
 
+#### [Frontend Performance Engineering](./Frontend%20Performance%20Engineering/readme.md)
+
+Optimize every millisecond. Master Core Web Vitals and performance optimization.
+
+- Core Web Vitals (LCP, FID, CLS)
+- Performance profiling & analysis
+- Code splitting & lazy loading
+- Image optimization
+- Bundle size optimization
+- Rendering performance
+- Memory management
+- Performance monitoring
+
+**Time Commitment:** 2-3 weeks | **Difficulty:** ⭐⭐⭐⭐
+
+---
+
 ### Architecture & System Design
 
-#### [Architecture & Scalable Frontend Systems](../Architecture%20%26%20Scalable%20Frontend%20Systems/readme.md)
+#### [Architecture & Scalable Frontend Systems](./Architecture%20%26%20Scalable%20Frontend%20Systems/readme.md)
 
 Design systems that scale to thousands of users and hundreds of features.
 
@@ -58,7 +75,7 @@ Design systems that scale to thousands of users and hundreds of features.
 
 ---
 
-#### [Design Systems & Component Libraries](../Design%20Systems%20%26%20Component%20Libraries/readme.md)
+#### [Design Systems & Component Libraries](./Design%20Systems%20%26%20Component%20Libraries/readme.md)
 
 Build the foundations that entire teams build on.
 
@@ -76,7 +93,7 @@ Build the foundations that entire teams build on.
 
 ### Security, Reliability & Testing
 
-#### [Frontend Security & Reliability](../Frontend%20Security%20%26%20Reliability/readme.md)
+#### [Frontend Security & Reliability](./Frontend%20Security%20%26%20Reliability/readme.md)
 
 Build secure, bulletproof applications that users can trust.
 
@@ -110,7 +127,7 @@ Senior frontend without tests = mid-level. Master the testing pyramid.
 
 ### Advanced Deployment & Infrastructure
 
-#### [Edge, Platform Engineering & Testing](../Edge%2C%20Platform%20Engineering%20%26%20Testing/readme.md)
+#### [Edge, Platform Engineering & Testing](./Edge%2C%20Platform%20Engineering%20%26%20Testing/readme.md)
 
 Deploy like a platform engineer. Master edge computing and modern deployment.
 
@@ -129,7 +146,7 @@ Deploy like a platform engineer. Master edge computing and modern deployment.
 
 ### Capstone Project
 
-#### [Build a "Staff-Level" Portfolio Project](../Build%20a%20%22Staff-Level%22%20Portfolio%20Project/readme.md)
+#### [Build a "Staff-Level" Portfolio Project](./Build%20a%20%22Staff-Level%22%20Portfolio%20Project/readme.md)
 
 This is your gateway to senior-level interviews. Build ONE exceptional project that proves mastery.
 
