@@ -955,7 +955,27 @@ function expensiveSearch(term) {
 
 ### Suspense & Streaming
 
+**What is Suspense?**
+
+Suspense is a React feature that lets you handle asynchronous operations (like code splitting, data fetching) gracefully. It allows components to "suspend" rendering while waiting for something (usually code or data), and shows a fallback UI during that time.
+
+---
+
 **Code Splitting with Suspense:**
+
+**What it does:**
+
+- Automatically splits your bundle into smaller chunks
+- Loads components only when they're needed (lazy loading)
+- Reduces initial bundle size significantly
+- Shows loading UI while component is being downloaded
+
+**Why it matters:**
+
+- Smaller initial JavaScript = faster page load
+- Only downloaded code that's actually used
+- Fallback UI shows users something is loading
+- Each chunk can load independently
 
 ```javascript
 import { Suspense, lazy } from "react";
@@ -987,7 +1007,46 @@ function Dashboard() {
 // 3. Components load on-demand
 ```
 
+**Example Flow:**
+
+```
+1. User visits dashboard (only Dashboard component loaded)
+2. Dashboard renders with Suspense wrappers
+3. HeavyComponent chunk starts downloading in background
+4. User sees "Loading dashboard..." fallback
+5. Chunk downloads and component renders
+6. ChartComponent chunk downloads separately
+7. User sees "Loading chart..." fallback
+8. Chart renders when ready
+
+Result: User sees content progressively, not stuck on blank page
+```
+
+---
+
 **Error Boundaries with Suspense:**
+
+**What it does:**
+
+- Catches errors thrown by suspended components
+- Provides error UI when code splitting fails
+- Combines loading state (Suspense) + error state (ErrorBoundary)
+- Allows graceful degradation when components fail to load
+
+**Why it matters:**
+
+- Network failures happen (timeouts, 404s, etc.)
+- Users need to know what went wrong
+- Can retry loading failed components
+- Better UX than blank screen or console errors
+
+**When it catches errors:**
+
+- Failed lazy component imports (network error, 404)
+- Errors during render phase
+- Errors in lifecycle methods
+
+⚠️ **Important:** ErrorBoundary only catches errors during render, not in event handlers or async code
 
 ```javascript
 import { Suspense } from "react";
@@ -1027,7 +1086,40 @@ function App() {
 // Handles both loading AND error states gracefully
 ```
 
+---
+
 **Server-Side Rendering with Suspense:**
+
+**What it does:**
+
+- Renders React components on the server
+- Streams HTML to the client in chunks (not all at once)
+- Shows a shell/skeleton UI immediately while data loads
+- Gradually hydrates components as they become ready
+- Suspense boundaries control what gets streamed when
+
+**Why it matters:**
+
+- **Faster First Paint:** User sees something immediately (shell HTML)
+- **Better SEO:** Server-rendered HTML is crawlable
+- **Progressive Enhancement:** Content appears as it loads
+- **Reduced Blocking:** High-priority content loads first
+- **No blank page:** Users see skeleton UI while waiting
+
+**Traditional SSR (without Suspense):**
+
+```
+Server renders entire app → waits for ALL data → sends HTML
+User waits for slowest component before seeing anything
+```
+
+**With Streaming SSR + Suspense:**
+
+```
+Server renders shell → sends HTML immediately → shows skeleton
+Slow components load → stream HTML chunks to client
+User sees fast shell first, content fills in progressively
+```
 
 ```javascript
 // Server (Node.js with renderToPipeableStream)
