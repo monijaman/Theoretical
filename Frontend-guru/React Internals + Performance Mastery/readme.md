@@ -63,7 +63,7 @@
 
 ---
 
-## Deep Dive: Reconciliation Algorithm {#reconciliation-algorithm}
+## Reconciliation Algorithm
 
 **What is Reconciliation?**
 
@@ -160,7 +160,7 @@ function diffNode(oldNode, newNode) {
 
 ---
 
-## Deep Dive: React Fiber Architecture {#react-fiber-architecture}
+## React Fiber Architecture
 
 **What is Fiber?**
 
@@ -345,7 +345,7 @@ const listFiber = {
 
 ---
 
-## Deep Dive: Rendering Phases {#rendering-phases}
+## Rendering Phases
 
 **Overview:**
 
@@ -608,7 +608,7 @@ function ExpensiveList({ items }) {
 
 ---
 
-## Deep Dive: Re-rendering & Optimization {#re-rendering--optimization}
+## Re-rendering & Optimization
 
 ### Why Components Re-render
 
@@ -847,7 +847,7 @@ const handleClick = () => {
 
 ---
 
-## Deep Dive: Advanced Features {#advanced-features}
+## Advanced Features
 
 ### Concurrent Rendering
 
