@@ -773,12 +773,15 @@ const sorted = useMemo(() => {
 ```javascript
 // ❌ WITHOUT useCallback - new function every render
 function SearchBox({ onSearch }) {
+  console.log("SearchBox rendered");
   const handleChange = (e) => {
     onSearch(e.target.value);
   };
 
   return <input onChange={handleChange} />;
 }
+
+const MemoSearchBox = React.memo(SearchBox); // Memoized version
 
 // Parent passes memoized child but gets new function every time
 function Parent() {
@@ -794,15 +797,16 @@ function Parent() {
 }
 
 // ✅ WITH useCallback - stable function reference
-function Parent() {
+function ParentOptimized() {
   const [results, setResults] = useState([]);
 
+  // stabilize the callback function with useCallback
   const handleSearch = useCallback((term) => {
     setResults(term);
-  }, []); // Function reference never changes
+  }, []); // Function reference never changes across renders
 
   return <MemoSearchBox onSearch={handleSearch} />;
-  // Now MemoSearchBox truly skips re-renders
+  // Now MemoSearchBox truly skips re-renders!
 }
 ```
 
