@@ -3,8 +3,10 @@
 ## � Table of Contents
 
 1. [Reconciliation Algorithm](#reconciliation-algorithm)
-2. [Re-rendering & Optimization](#re-rendering--optimization)
-3. [Advanced Features](#advanced-features)
+2. [React Fiber Architecture](#react-fiber-architecture)
+3. [Rendering Phases](#rendering-phases)
+4. [Re-rendering & Optimization](#re-rendering--optimization)
+5. [Advanced Features](#advanced-features)
 
 ---
 
@@ -155,6 +157,454 @@ function diffNode(oldNode, newNode) {
    // Shallow comparison:
    { a: 1, b: 2 } === { a: 1, b: 2 }  // FALSE (different objects)
    ```
+
+---
+
+## Deep Dive: React Fiber Architecture {#react-fiber-architecture}
+
+**What is Fiber?**
+
+Fiber is React's reconciliation engine introduced in React 16. It's a complete rewrite of how React schedules and manages component rendering. Instead of rendering the entire component tree synchronously (one big blocking operation), Fiber breaks rendering into small units of work that can be paused, prioritized, and resumed.
+
+**Pre-Fiber (React 15) Problem:**
+
+```javascript
+// React 15: Stack Reconciler
+// Rendering was synchronous and blocking
+function render(component) {
+  // Render entire tree from top to bottom
+  // If this takes 50ms, the browser is blocked for 50ms
+  // User input, animations are delayed
+
+  processComponent(component);
+  for (let child of component.children) {
+    render(child); // Recursive - can't pause
+  }
+}
+
+// Problem: Large apps could cause janky UI (16ms frame budget violated)
+```
+
+**Fiber Solution:**
+
+```javascript
+// React 16+: Fiber Architecture
+// Rendering is asynchronous and interruptible
+
+class Fiber {
+  constructor(component, props) {
+    this.component = component;
+    this.props = props;
+    this.parent = null;
+    this.child = null;
+    this.sibling = null;
+    this.alternate = null; // Previous version of this fiber
+    this.effects = []; // Side effects to run later
+    this.hooks = []; // Hooks state
+  }
+}
+
+// Instead of recursion, React walks a linked list
+// Can pause at any time and resume later
+function performWork(deadline) {
+  while (hasMoreWork() && deadline.timeRemaining() > 1) {
+    // Do some work (render one component)
+    processWorkUnit();
+  }
+
+  if (hasMoreWork()) {
+    // More work? Schedule another batch
+    scheduleCallback(performWork);
+  } else {
+    // All render work done? Commit changes to DOM
+    commitRoot();
+  }
+}
+```
+
+**Key Concepts:**
+
+1. **Work Scheduling & Priority Levels**
+
+```javascript
+// React has 5 priority levels:
+// 1. IMMEDIATE       (Sync, like user input)
+// 2. USER_BLOCKING   (100-250ms, like clicking a button)
+// 3. NORMAL          (250-5000ms, data fetching)
+// 4. LOW             (5-10s, analytics)
+// 5. IDLE            (whenever browser is free)
+
+import { startTransition, useTransition } from "react";
+
+function SearchApp() {
+  const [input, setInput] = useState("");
+  const [results, setResults] = useState([]);
+  const [isPending, startTransition] = useTransition();
+
+  const handleChange = (e) => {
+    // User typing = IMMEDIATE priority (urgent)
+    setInput(e.target.value);
+
+    // Search results = NORMAL priority (can be interrupted)
+    startTransition(() => {
+      setResults(expensiveSearch(e.target.value));
+    });
+  };
+
+  return (
+    <>
+      <input value={input} onChange={handleChange} />
+      {isPending && <Spinner />}
+      <ResultsList results={results} />
+    </>
+  );
+}
+
+// Network request comes in while searching?
+// React pauses search, handles network, resumes search
+```
+
+2. **Time-Slicing (Concurrent Features)**
+
+```javascript
+// React has ~5ms per frame to do work
+// (60fps = 16.67ms total, minus browser overhead)
+
+function timeSlice() {
+  const frameDeadline = performance.now() + 5; // 5ms budget
+
+  while (hasMoreWork() && performance.now() < frameDeadline) {
+    // Render one component
+    processOneComponent();
+  }
+
+  if (hasMoreWork()) {
+    // Request next frame
+    requestIdleCallback(timeSlice, { timeout: 250 });
+  } else {
+    // Commit phase
+    commit();
+  }
+}
+
+// Result: 60fps animations + responsive UI
+// Before: 1000-item list render = janky
+// After: 1000-item list render = smooth (split across frames)
+```
+
+3. **The Fiber Tree Structure**
+
+```javascript
+// Component tree:
+// <App>
+//   <Header />
+//   <List>
+//     <Item />
+//     <Item />
+//   </List>
+// </App>
+
+// Becomes a Fiber tree (linked list):
+const appFiber = {
+  component: App,
+  child: headerFiber, // First child
+  sibling: null, // No siblings (is root)
+  parent: null,
+  alternate: previousAppFiber, // Previous render
+};
+
+const headerFiber = {
+  component: Header,
+  parent: appFiber,
+  sibling: listFiber, // Next sibling
+  child: null, // No children
+  alternate: previousHeaderFiber,
+};
+
+const listFiber = {
+  component: List,
+  parent: appFiber,
+  sibling: null,
+  child: itemFiber1, // First item child
+  alternate: previousListFiber,
+};
+
+// Traversal order: App → Header → List → Item1 → Item2
+// Can pause at any step and resume later
+```
+
+**Benefits:**
+
+| Feature          | Old (Stack)            | New (Fiber)                  |
+| ---------------- | ---------------------- | ---------------------------- |
+| Rendering        | Synchronous (blocking) | Asynchronous (interruptible) |
+| Pause/Resume     | ❌ No                  | ✅ Yes                       |
+| Priority         | ❌ All same            | ✅ 5 levels                  |
+| Browser feedback | ❌ Blocked             | ✅ Responsive                |
+| Large trees      | 🐢 Janky               | 🚀 Smooth                    |
+
+---
+
+## Deep Dive: Rendering Phases {#rendering-phases}
+
+**Overview:**
+
+React's rendering is split into two distinct phases:
+
+1. **Render Phase** - Determines what changed (can be paused)
+2. **Commit Phase** - Applies changes to DOM (synchronous, no pausing)
+
+**Why They're Separated:**
+
+Render phase is **pure and idempotent** (no side effects), so React can:
+
+- Pause and resume it
+- Discard work if higher-priority updates come in
+- Run it multiple times
+
+Commit phase **must be synchronous** because side effects are involved:
+
+- DOM mutations
+- Lifecycle methods
+- User-visible changes
+
+---
+
+### 1. Render Phase
+
+**What happens:**
+
+- React visits each fiber
+- Calls component function (or class render method)
+- Compares old and new Virtual DOM
+- Marks what needs updating (no actual changes yet)
+- **NO side effects allowed**
+
+```javascript
+// EXAMPLE: Render Phase
+function Parent() {
+  const [count, setCount] = useState(0);
+
+  // ✅ This is fine - pure function
+  const doubled = count * 2;
+
+  // ❌ NOT ALLOWED - side effect
+  // fetch('/api/data');  // Will break!
+
+  return <Child value={doubled} />;
+}
+
+function Child({ value }) {
+  // Component function is called during render phase
+  // Should be pure - same inputs → same output
+  // Can run multiple times
+
+  console.log("Child render"); // Can run 0, 1, or 2+ times
+  return <div>{value}</div>;
+}
+
+// If higher-priority update comes in during render:
+// React discards Child's work and starts over
+// That's why Child rendered 2x but only showed once
+```
+
+**Render Phase Timeline:**
+
+```javascript
+Render Phase:
+├─ Visit Parent fiber
+│  ├─ Call Parent() function
+│  ├─ Reconcile old vs new Virtual DOM
+│  └─ Mark changes needed
+├─ Visit Child fiber
+│  ├─ Call Child() function
+│  ├─ Reconcile props
+│  └─ Mark changes needed
+└─ (Can be interrupted by higher-priority work)
+
+// At any point, if urgent update arrives:
+// React discards current progress and starts render phase over
+```
+
+**Idempotency Requirement:**
+
+```javascript
+// ✅ GOOD - Pure render function
+function Counter({ count }) {
+  // Same input (count=5) → always returns same JSX
+  return <div>{count}</div>;
+}
+
+// ❌ BAD - Impure render function
+function Counter() {
+  // Side effect in render (bad!)
+  fetch("/api/count").then((c) => setCount(c));
+
+  // May run multiple times during render
+  // Triggers multiple API calls
+  return <div>...</div>;
+}
+
+// Rule: Render phase must be idempotent
+// f(x) called 1x or 100x = same result
+```
+
+---
+
+### 2. Commit Phase
+
+**What happens:**
+
+- **Synchronous** - cannot be interrupted
+- Actually updates the DOM
+- Runs lifecycle methods
+- Runs effects from useEffect, useLayoutEffect
+- **Side effects are allowed here**
+
+```javascript
+Commit Phase Flow:
+├─ Run useLayoutEffect cleanup (if deps changed)
+├─ Apply DOM mutations (insert, update, remove nodes)
+├─ Run useLayoutEffect
+├─ Browser paints
+├─ Run useEffect cleanup (if deps changed)
+└─ Run useEffect
+
+// All of this is BLOCKING - browser can't do anything else
+// But it's usually very fast (few milliseconds)
+```
+
+**Complete Example:**
+
+```javascript
+function DataComponent({ id }) {
+  const [data, setData] = useState(null);
+
+  // Render phase - pure, may run multiple times
+  const displayData = data?.toUpperCase(); // ✅ Pure
+
+  // useLayoutEffect - commit phase, runs AFTER DOM
+  useLayoutEffect(() => {
+    // ✅ Allowed - side effect
+    element.style.color = "blue";
+
+    return () => {
+      // Cleanup before next effect
+      element.style.color = "black";
+    };
+  }, []); // Only runs once (no id in deps)
+
+  // useEffect - commit phase, runs AFTER paint
+  useEffect(() => {
+    // ✅ Allowed - side effect
+    fetch(`/api/data/${id}`)
+      .then((r) => r.json())
+      .then(setData);
+
+    return () => {
+      // Cleanup
+      // (if id changes before fetch completes, cleanup runs)
+    };
+  }, [id]); // Runs when id changes
+
+  return <div>{displayData || "Loading..."}</div>;
+}
+
+// Timeline for id=1 → id=2 change:
+// 1. Render phase: Call DataComponent with id=2
+// 2. Commit phase:
+//    a. useLayoutEffect cleanup from id=1
+//    b. DOM updated
+//    c. useLayoutEffect with id=2
+//    d. Browser paints
+//    e. useEffect cleanup from id=1
+//    f. useEffect with id=2
+//    g. (fetch fires off)
+```
+
+**useLayoutEffect vs useEffect:**
+
+```javascript
+// ❌ useEffect (runs AFTER paint)
+function BrokenFlash() {
+  const [height, setHeight] = useState(0);
+
+  useEffect(() => {
+    // User sees element jump:
+    // 1. Paint: element height=0
+    // 2. useEffect runs: setHeight(200)
+    // 3. Paint: element height=200
+    // Flashes!
+    setHeight(element.offsetHeight);
+  }, []);
+
+  return <div>Content</div>;
+}
+
+// ✅ useLayoutEffect (runs BEFORE paint)
+function SmoothMeasure() {
+  const [height, setHeight] = useState(0);
+
+  useLayoutEffect(() => {
+    // No flash:
+    // 1. Measure: height=200
+    // 2. Paint: element height=200 (correct!)
+    setHeight(element.offsetHeight);
+  }, []);
+
+  return <div>Content</div>;
+}
+```
+
+---
+
+### Visual Timeline
+
+```
+User clicks button / State changes
+    ↓
+┌─ RENDER PHASE ──────────────────┐
+│ • Call component functions      │ 🔄 Can be interrupted
+│ • Create new Virtual DOM        │ 🔄 Can run multiple times
+│ • Compare with old Virtual DOM  │ ✅ Must be pure
+│ • Plan DOM changes              │
+└─────────────────────────────────┘
+    ↓
+┌─ COMMIT PHASE ──────────────────┐
+│ 1. useLayoutEffect cleanup      │ 🚫 Cannot interrupt
+│ 2. Update DOM                   │ ⚡ Synchronous
+│ 3. Run useLayoutEffect          │ ✅ Side effects OK
+│ 4. Browser paints (user sees)  │
+│ 5. useEffect cleanup            │
+│ 6. Run useEffect                │
+└─────────────────────────────────┘
+    ↓
+ User sees result
+```
+
+**Real-world Impact:**
+
+```javascript
+// Scenario: Expensive render + many state updates
+
+function ExpensiveList({ items }) {
+  // This component is slow (100ms to render)
+  const sorted = slowSort(items); // Takes 100ms
+
+  return sorted.map((item) => <Item key={item.id} item={item} />);
+}
+
+// With Fiber:
+// User clicks → urgent update (input) comes in
+// React pauses slow render, shows input immediately ✅
+// Resumes slow render when browser idle
+
+// Render phase was interrupted:
+// - Render phase: Discarded
+// - Commit phase: Waits (input is more important)
+// - Input renders: Commit phase runs (synchronous with DOM)
+// - Back to slow render: Render phase starts fresh
+```
 
 ---
 
