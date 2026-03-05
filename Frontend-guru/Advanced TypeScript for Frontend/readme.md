@@ -498,72 +498,98 @@ handleResponse("/users", [{ id: 1, title: "Hello" }]); // ❌ ERROR
 
 ## Discriminated Unions
 
-**What are they?**
-Discriminated unions are a pattern where you have multiple types that share a common property (the discriminant). TypeScript uses this to narrow the type automatically.
+**Simple Idea: Use a "tag" to tell TypeScript which type you have**
+
+Imagine you're driving a car app. You need to show:
+- **Loading state**: Show spinner, no data
+- **Success state**: Show the data
+- **Error state**: Show the error message
 
 ```typescript
-// ❌ Regular union (TypeScript can't narrow well)
-type Result =
-  | { success: boolean; data: string }
-  | { success: boolean; error: string };
+// ❌ BAD: TypeScript gets confused
+type ApiResponse = {
+  status: string; // Is it loading? success? error?
+  data?: string;
+  error?: string;
+};
 
-const result: Result = { success: true, data: "hello" };
-if (result.success) {
-  // Still can't tell if result.data or result.error exists
-  // result.data  // ERROR - property might not exist
+const response: ApiResponse = { status: "success", data: "hello" };
+
+// Problem: Which one exists - data or error?
+if (response.status === "success") {
+  console.log(response.data); // ❌ TypeScript says might not exist!
+  console.log(response.error); // ❌ TypeScript says might not exist!
 }
 
-// ✅ Discriminated union (much better!)
-type Success = { status: "success"; data: string };
-type Error = { status: "error"; error: string };
-type Result = Success | Error;
+// ✅ GOOD: Use a "tag" (the status field) to identify the type
+type LoadingState = {
+  status: "loading"; // Only one option
+};
 
-const result: Result = { status: "success", data: "hello" };
-if (result.status === "success") {
-  // Now TypeScript knows this is Success type!
-  console.log(result.data); // ✅ OK
-  // result.error;  // ❌ ERROR - doesn't exist on Success
+type SuccessState = {
+  status: "success"; // Only one option
+  data: string; // This ALWAYS exists here
+};
+
+type ErrorState = {
+  status: "error"; // Only one option
+  error: string; // This ALWAYS exists here
+};
+
+type ApiResponse = LoadingState | SuccessState | ErrorState;
+
+const response: ApiResponse = { status: "success", data: "hello" };
+
+// Now TypeScript is smart!
+if (response.status === "success") {
+  console.log(response.data); // ✅ OK! TypeScript knows it exists
+  // console.log(response.error); // ❌ ERROR - doesn't exist on success!
 }
 ```
 
-**Real-world API Response:**
+**Real-World Example - User Permissions:**
 
 ```typescript
-type ApiResponse =
-  | { status: 'loading'; data: null }
-  | { status: 'success'; data: any; error: null }
-  | { status: 'error'; data: null; error: string };
+// Different users have different permissions
+type AdminUser = {
+  role: "admin";
+  canDeleteUsers: boolean;
+  canEditSettings: boolean;
+};
 
-function handleResponse(response: ApiResponse) {
-  switch (response.status) {
-    case 'loading':
-      return <Spinner />;
-    case 'success':
-      return <Data data={response.data} />;  // data exists!
-    case 'error':
-      return <Error error={response.error} />;  // error exists!
+type RegularUser = {
+  role: "user";
+  canEditProfile: boolean;
+};
+
+type Guest = {
+  role: "guest";
+  // Guests have no permissions
+};
+
+type User = AdminUser | RegularUser | Guest;
+
+// When you check the role, TypeScript knows what properties exist!
+function deleteUser(user: User) {
+  if (user.role === "admin") {
+    // TypeScript knows: user IS AdminUser here
+    if (user.canDeleteUsers) {
+      // Delete the user
+    }
   }
 }
 
-// Exhaustiveness checking - TypeScript warns if you forget a case!
-```
-
-**Type Guards for Union Types:**
-
-```typescript
-type User =
-  | { type: 'admin'; adminLevel: number }
-  | { type: 'user'; userId: number }
-  | { type: 'guest' };
-
-// Type guard function
-function isAdmin(user: User): user is Extract<User, { type: 'admin' }> {
-  return user.type === 'admin';
-}
-
-const user: User = /* ... */;
-if (isAdmin(user)) {
-  console.log(user.adminLevel);  // ✅ TypeScript knows this is admin
+// React Example: Show different UI based on role
+function renderUser(user: User) {
+  switch (user.role) {
+    case "admin":
+      return <AdminDashboard deletable={user.canDeleteUsers} />; // ✅ Exists!
+    case "user":
+      return <UserProfile editable={user.canEditProfile} />; // ✅ Exists!
+    case "guest":
+      return <GuestPage />; // ✅ No extra properties
+    // 💡 TypeScript WARNS if you forget a case!
+  }
 }
 ```
 
@@ -571,94 +597,109 @@ if (isAdmin(user)) {
 
 ## Type-Safe API Layer
 
-**What it does:**
-A type-safe API layer ensures that:
+**The Problem:**
 
-- Endpoints are strictly typed
-- Request parameters are validated
-- Response data is properly typed
-- Error handling is type-aware
+When you fetch data from an API, bad things happen:
 
 ```typescript
-// 1. Define your API schema upfront
-type ApiSchema = {
-  "/users": {
-    GET: { response: User[] };
-    POST: { body: { name: string; email: string }; response: User };
-  };
-  "/users/:id": {
-    GET: { params: { id: string }; response: User };
-    PUT: { params: { id: string }; body: Partial<User>; response: User };
-    DELETE: { params: { id: string }; response: void };
-  };
-};
+// ❌ BAD: No type safety
+const response = await fetch("/api/users/1");
+const user = await response.json();
 
-// 2. Create a generic API client
-type Endpoint = keyof ApiSchema;
+console.log(user.email); // ❌ Runtime error if email doesn't exist
+console.log(user.fullName); // ❌ Did you mean 'name' or 'full_name'?
 
-function apiCall<E extends Endpoint, M extends keyof ApiSchema[E]>(
-  endpoint: E,
-  method: M,
-  options: ApiSchema[E][M] extends { body: any }
-    ? { body: ApiSchema[E][M]["body"] }
-    : {},
-): Promise<
-  ApiSchema[E][M] extends { response: any }
-    ? ApiSchema[E][M]["response"]
-    : never
-> {
-  // Implementation
-  return fetch(endpoint, { method, ...options }).then((r) => r.json());
-}
-
-// 3. Usage - fully type-safe!
-const user = await apiCall("/users", "GET"); // ✅ Returns User[]
-const newUser = await apiCall("/users", "POST", {
-  body: { name: "John", email: "john@example.com" }, // ✅ Typed params
-}); // ✅ Returns User
-
-// Type errors caught at compile time!
-// await apiCall('/users', 'POST', { body: { invalid: 'field' } });  // ❌ ERROR
+// Plus: Do you remember if it's /users or /api/users? /api/user or /api/users?
 ```
 
-**Error Handling Types:**
+**The Solution:**
+
+Define what each API call returns, ONCE, in a central place. Then TypeScript helps you everywhere.
 
 ```typescript
-type ApiError =
-  | { type: "validation"; errors: Record<string, string[]> }
-  | { type: "unauthorized"; message: string }
-  | { type: "not_found"; resource: string }
-  | { type: "server"; message: string };
+// Step 1: Define what each endpoint returns
+type ApiEndpoints = {
+  "/users": User[]; // GET /users returns array of users
+  "/users/:id": User; // GET /users/123 returns ONE user
+  "/login": { token: string; user: User }; // POST /login returns token + user
+  "/posts": Post[]; // GET /posts returns posts
+};
 
-async function apiCallSafe<T>(
-  endpoint: string,
-  options: any,
-): Promise<{ data: T; error: null } | { data: null; error: ApiError }> {
+// Step 2: Create a helper that's type-safe
+async function apiGet<T extends keyof ApiEndpoints>(
+  endpoint: T,
+): Promise<ApiEndpoints[T]> {
+  const response = await fetch(endpoint);
+  return response.json();
+}
+
+// Step 3: Use it - TypeScript autocompletes and validates!
+const users = await apiGet("/users"); // ✅ Returns User[]
+const user = await apiGet("/users/:id"); // ✅ Returns User
+const loginResult = await apiGet("/login"); // ✅ Returns { token, user }
+
+// TypeScript prevents typos!
+// const bad = await apiGet("/userz"); // ❌ ERROR - endpoint doesn't exist
+// const bad = await apiGet("/users/123/invalid"); // ❌ ERROR - not defined
+
+// You get autocomplete suggestions for all endpoints!
+```
+
+**Real Example - Shopping App:**
+
+```typescript
+type ShoppingApiEndpoints = {
+  "/products": { id: number; name: string; price: number }[];
+  "/cart": { items: number[]; total: number };
+  "/checkout": { orderId: string; status: "success" | "pending" };
+};
+
+async function api<E extends keyof ShoppingApiEndpoints>(
+  endpoint: E,
+): Promise<ShoppingApiEndpoints[E]> {
+  const response = await fetch(endpoint);
+  return response.json();
+}
+
+// In your component:
+const products = await api("/products"); // ✅ You know it's a list of products
+const cart = await api("/cart"); // ✅ You know it has items and total
+
+// Instead of guessing!
+// products[0].price // ✅ Works, you KNOW price exists
+// products[0].cost // ❌ ERROR - property doesn't exist
+```
+
+**Error Handling - Be Prepared:**
+
+```typescript
+// Show different errors to users
+type ApiResponse<T> =
+  | { status: "success"; data: T }
+  | { status: "error"; error: string }
+  | { status: "loading" };
+
+async function apiWithError<E extends keyof ShoppingApiEndpoints>(
+  endpoint: E,
+): Promise<ApiResponse<ShoppingApiEndpoints[E]>> {
   try {
-    const response = await fetch(endpoint, options);
+    const response = await fetch(endpoint);
     const data = await response.json();
-
-    if (!response.ok) {
-      return { data: null, error: data }; // Typed error
-    }
-
-    return { data, error: null };
-  } catch (err) {
-    return {
-      data: null,
-      error: { type: "server", message: String(err) },
-    };
+    return { status: "success", data };
+  } catch (error) {
+    return { status: "error", error: String(error) };
   }
 }
 
-// Usage with discriminated union
-const result = await apiCallSafe<User>("/users/1", {});
-if (result.error) {
-  switch (result.error.type) {
-    case "validation":
-      // result.error.errors exists
-      break;
-  }
+// Usage:
+const result = await apiWithError("/products");
+
+if (result.status === "success") {
+  console.log(result.data); // ✅ data exists here
+  showProducts(result.data);
+} else if (result.status === "error") {
+  console.log(result.error); // ✅ error exists here
+  showErrorMessage(result.error);
 }
 ```
 
@@ -666,205 +707,305 @@ if (result.error) {
 
 ## Zod Schema Validation
 
-**What is it?**
-Zod is a TypeScript-first schema validation library that validates data at runtime AND infers TypeScript types from the schema.
+**The Problem:**
+
+You fetch data from the backend. But what if it's different than expected?
+
+```typescript
+// Backend sends: { name: "John", age: 30 }
+const user = await fetch("/api/users/1").then(r => r.json());
+
+console.log(user.name); // ✅ Works
+console.log(user.age); // ✅ Works
+
+// But what if backend returns: { fullName: "John", years: 30 } ?
+// Your code breaks at RUNTIME! 😱
+```
+
+**The Solution - Zod:**
+
+Zod "checks" data from the API before you use it.
 
 ```typescript
 import { z } from "zod";
 
-// 1. Define schema
+// Step 1: Define what shape the data should have
 const UserSchema = z.object({
   id: z.number(),
-  name: z.string().min(2),
-  email: z.string().email(),
-  age: z.number().optional(),
+  name: z.string(),
+  email: z.string().email(), // Must be valid email
+  age: z.number().min(0).max(150), // Age between 0-150
 });
 
-// 2. Infer TypeScript type from schema
+// Step 2: Get TypeScript type from the schema (one source of truth!)
 type User = z.infer<typeof UserSchema>;
-// type User = {
+// Automatically: {
 //   id: number;
 //   name: string;
 //   email: string;
-//   age?: number | undefined;
+//   age: number;
 // }
 
-// 3. Validate at runtime
-const data = { id: 1, name: "John", email: "john@example.com" };
-const result = UserSchema.parse(data); // ✅ Valid
-// If invalid: throws ZodError
+// Step 3: Validate data
+const apiResponse = { id: 1, name: "John", email: "john@example.com", age: 30 };
 
-// Better: Use .safeParse() to get error info
-const parsed = UserSchema.safeParse(data);
-if (parsed.success) {
-  console.log(parsed.data); // User
+const user = UserSchema.parse(apiResponse); // ✅ All fields are correct!
+
+// What if data is wrong?
+const badResponse = { id: 1, name: "John", email: "not-an-email", age: -5 };
+try {
+  UserSchema.parse(badResponse); // ❌ Throws error with details
+} catch (error) {
+  console.log(error.issues);
+  // [
+  //   { message: "Invalid email", path: ["email"] },
+  //   { message: "Must be at least 0", path: ["age"] }
+  // ]
+}
+```
+
+**Better Approach - Don't Throw:**
+
+```typescript
+// Use .safeParse() to get error messages, not exceptions
+const result = UserSchema.safeParse(apiResponse);
+
+if (result.success) {
+  // ✅ Data is valid!
+  console.log(result.data); // Safely use it
 } else {
-  console.log(parsed.error.issues); // Array of validation errors
+  // ❌ Data is invalid
+  console.log(result.error.issues); // Show user what's wrong
+  // [
+  //   { code: "invalid_string", message: "Invalid email", path: ["email"] },
+  //   { code: "too_small", message: "Must be at least 0", path: ["age"] }
+  // ]
 }
 ```
 
-**Advanced Patterns:**
+**Real Example - Form Validation:**
 
 ```typescript
-// Discriminated unions with Zod
-const SuccessResponse = z.object({
-  status: z.literal("success"),
-  data: z.any(),
+const SignupSchema = z.object({
+  username: z.string()
+    .min(3, "Username too short")
+    .max(20, "Username too long"),
+  password: z.string()
+    .min(8, "Password must be 8+ characters")
+    .regex(/[A-Z]/, "Need uppercase letter")
+    .regex(/[0-9]/, "Need a number"),
+  confirmPassword: z.string(),
+}).refine(data => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"]
 });
 
-const ErrorResponse = z.object({
-  status: z.literal("error"),
-  error: z.string(),
-});
-
-const ApiResponse = z.discriminatedUnion("status", [
-  SuccessResponse,
-  ErrorResponse,
-]);
-
-type ApiResponse = z.infer<typeof ApiResponse>;
-
-// Custom validation
-const PasswordSchema = z
-  .string()
-  .min(8, "Must be 8+ characters")
-  .regex(/[A-Z]/, "Must have uppercase")
-  .regex(/[0-9]/, "Must have number");
-
-// Refining types
-const UpdateUserSchema = UserSchema.partial(); // All fields optional
-const StrictUserSchema = UserSchema.strict(); // No extra properties
+// In your form handler:
+function handleSignup(formData: unknown) {
+  const result = SignupSchema.safeParse(formData);
+  
+  if (!result.success) {
+    // Show errors to user
+    result.error.issues.forEach(issue => {
+      showError(issue.path[0], issue.message);
+    });
+    return;
+  }
+  
+  // ✅ Data is 100% valid
+  await signup(result.data);
+}
 ```
 
-**Combining with API layer:**
+**Validate Optional Fields:**
 
 ```typescript
-// Type-safe API client with Zod validation
-type ApiEndpoint<T> = {
-  url: string;
-  method: "GET" | "POST" | "PUT" | "DELETE";
-  responseSchema: z.ZodType<T>;
-  bodySchema?: z.ZodType<any>;
-};
+const UpdateUserSchema = z.object({
+  username: z.string().optional(), // Can be missing
+  email: z.string().email().optional(),
+  phone: z.string().optional(),
+});
 
-const endpoints = {
-  getUsers: {
-    url: "/users",
-    method: "GET",
-    responseSchema: z.array(UserSchema),
-  },
-  createUser: {
-    url: "/users",
-    method: "POST",
-    responseSchema: UserSchema,
-    bodySchema: UserSchema.pick({ name: true, email: true }),
-  },
-} satisfies Record<string, ApiEndpoint<any>>;
+type UpdateUser = z.infer<typeof UpdateUserSchema>;
+// {
+//   username?: string;
+//   email?: string;
+//   phone?: string;
+// }
 
-async function apiCall<T>(endpoint: ApiEndpoint<T>, body?: any): Promise<T> {
-  const response = await fetch(endpoint.url, {
-    method: endpoint.method,
-    body: body && JSON.stringify(endpoint.bodySchema?.parse(body)),
-  });
-
-  const data = await response.json();
-  return endpoint.responseSchema.parse(data); // ✅ Validated!
-}
-
-// Usage
-const users = await apiCall(endpoints.getUsers); // User[]
+// Update only some fields
+const updates = { email: "newemail@example.com" };
+const validated = UpdateUserSchema.parse(updates); // ✅ OK
 ```
 
 ---
 
 ## Build a Type-Safe API Client
 
-**Complete example:** Full-featured type-safe REST client
+**The Goal:** ONE place to define your API, then use it everywhere with type safety.
+
+**Step-by-Step Example - E-commerce App:**
 
 ```typescript
-import axios from "axios";
 import { z } from "zod";
 
-// 1. Define all endpoints with their types
-const endpoints = {
-  "GET /users": {
-    params: z.object({ page: z.number().optional() }),
-    response: z.array(z.object({ id: z.number(), name: z.string() })),
-  },
-  "POST /users": {
-    body: z.object({ name: z.string(), email: z.string().email() }),
-    response: z.object({ id: z.number(), name: z.string(), email: z.string() }),
-  },
-  "GET /users/:id": {
-    params: z.object({ id: z.string() }),
-    response: z.object({ id: z.number(), name: z.string(), email: z.string() }),
-  },
-  "DELETE /users/:id": {
-    params: z.object({ id: z.string() }),
-    response: z.null(),
-  },
-} as const;
+// Step 1: Define all the data shapes
+const Product = z.object({
+  id: z.number(),
+  name: z.string(),
+  price: z.number(),
+  inStock: z.boolean(),
+});
 
-type Endpoints = typeof endpoints;
+const User = z.object({
+  id: z.number(),
+  email: z.string().email(),
+  name: z.string(),
+});
 
-// 2. Create type-safe client
+const Order = z.object({
+  id: z.string(),
+  userId: z.number(),
+  products: z.array(Product),
+  total: z.number(),
+  status: z.enum(["pending", "shipped", "delivered"]),
+});
+
+// Step 2: List all your API endpoints
+const apiEndpoints = {
+  // GET /api/products -> returns list of products
+  getProducts: {
+    method: "GET" as const,
+    url: "/api/products",
+    response: z.array(Product),
+  },
+  
+  // GET /api/products/123 -> returns ONE product
+  getProduct: {
+    method: "GET" as const,
+    url: "/api/products/:id",
+    params: z.object({ id: z.number() }),
+    response: Product,
+  },
+  
+  // POST /api/orders -> create order, send products
+  createOrder: {
+    method: "POST" as const,
+    url: "/api/orders",
+    body: z.object({
+      userId: z.number(),
+      productIds: z.array(z.number()),
+    }),
+    response: Order,
+  },
+  
+  // GET /api/users/me -> get current user
+  getCurrentUser: {
+    method: "GET" as const,
+    url: "/api/users/me",
+    response: User,
+  },
+};
+
+// Step 3: Create the API client
 class ApiClient {
-  private baseUrl: string;
+  constructor(private baseUrl: string) {}
 
-  constructor(baseUrl: string) {
-    this.baseUrl = baseUrl;
-  }
-
-  async call<K extends keyof Endpoints>(
-    endpoint: K,
-    {
-      params,
-      body,
-    }: {
-      params?: any;
-      body?: any;
-    } = {},
-  ): Promise<z.infer<Endpoints[K]["response"]>> {
-    const schema = endpoints[endpoint];
-
-    // Validate input
-    if ("params" in schema && params) {
-      schema.params.parse(params);
-    }
-    if ("body" in schema && body) {
-      schema.body.parse(body);
+  async request<T>(
+    endpoint: (typeof apiEndpoints)[keyof typeof apiEndpoints],
+    options?: { params?: any; body?: any },
+  ): Promise<T> {
+    let url = endpoint.url;
+    
+    // Replace URL params (e.g., :id with actual id)
+    if (options?.params) {
+      Object.entries(options.params).forEach(([key, value]) => {
+        url = url.replace(`:${key}`, String(value));
+      });
     }
 
-    // Make request
-    const [method, path] = (endpoint as string).split(" ");
-    const fullPath = path.replace(/:(\w+)/g, (_, key) => params[key]);
-
-    const response = await axios({
-      method,
-      url: `${this.baseUrl}${fullPath}`,
-      params: method === "GET" ? params : undefined,
-      data: body,
+    // Make fetch call
+    const response = await fetch(this.baseUrl + url, {
+      method: endpoint.method,
+      headers: { "Content-Type": "application/json" },
+      body: options?.body ? JSON.stringify(options.body) : undefined,
     });
 
-    // Validate and return response
-    return schema.response.parse(response.data);
+    const data = await response.json();
+    
+    // Validate response matches schema
+    return endpoint.response.parse(data);
   }
 }
 
-// 3. Usage - fully type-safe!
-const client = new ApiClient("https://api.example.com");
+// Step 4: Use it!
+const client = new ApiClient("http://localhost:3000");
 
-const users = await client.call("GET /users"); // User[]
-const newUser = await client.call("POST /users", {
-  body: { name: "John", email: "john@example.com" }, // Typed params!
-});
-const user = await client.call("GET /users/:id", {
-  params: { id: "123" },
-});
+// All TypeScript-safe!
+const products = await client.request(apiEndpoints.getProducts);
+// ✅ products is Product[], you KNOW the structure
 
-// Type errors caught at compile time!
-// await client.call('GET /users', { params: { invalid: 123 } });  // ❌ ERROR
-// await client.call('POST /users', { body: { name: 'John' } });  // ❌ ERROR (missing email)
+const product = await client.request(apiEndpoints.getProduct, {
+  params: { id: 123 },
+});
+// ✅ product is Product
+
+const order = await client.request(apiEndpoints.createOrder, {
+  body: { userId: 1, productIds: [1, 2, 3] },
+});
+// ✅ order is Order, status is one of pending|shipped|delivered
+
+const user = await client.request(apiEndpoints.getCurrentUser);
+// ✅ user is User, you know all fields exist
+```
+
+**What This Gives You:**
+
+✅ **One source of truth** - Define API once, use everywhere  
+✅ **IDE autocomplete** - See all endpoints and their requirements  
+✅ **Type safety** - TypeScript catches mistakes before runtime  
+✅ **Auto-validation** - Response data is checked against schema  
+✅ **Better error messages** - Know exactly what's wrong if validation fails  
+
+**Real-World Pattern:**
+
+```typescript
+// In your React component
+function ProductList() {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [products, setProducts] = useState<z.infer<typeof Product>[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const result = await client.request(apiEndpoints.getProducts);
+        setProducts(result); // ✅ result is already Product[]
+        setError(null);
+      } catch (err) {
+        setError("Failed to load products");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  if (loading) return <Spinner />;
+  if (error) return <Error message={error} />;
+  
+  return (
+    <div>
+      {products.map(p => (
+        <ProductCard
+          key={p.id}
+          name={p.name} // ✅ TypeScript knows name exists
+          price={p.price} // ✅ TypeScript knows price exists
+          inStock={p.inStock} // ✅ TypeScript knows inStock exists
+        />
+      ))}
+    </div>
+  );
+}
 ```
 
 ---
