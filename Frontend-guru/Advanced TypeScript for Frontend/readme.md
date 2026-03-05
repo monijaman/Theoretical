@@ -238,6 +238,265 @@ const user = container.create<User>("user", "John");
 const product = container.create<Product>("product", "Laptop");
 ```
 
+**Functional Examples - Real-World Use Cases:**
+
+**Example 1: Database Model Factory**
+
+```typescript
+// Real use case: Auto-convert database rows to typed objects
+class User {
+  id: number;
+  name: string;
+  email: string;
+
+  constructor(data: { id: number; name: string; email: string }) {
+    this.id = data.id;
+    this.name = data.name;
+    this.email = data.email;
+  }
+
+  getDisplayName() {
+    return `${this.name} (${this.email})`;
+  }
+}
+
+class Post {
+  id: number;
+  title: string;
+  authorId: number;
+
+  constructor(data: { id: number; title: string; authorId: number }) {
+    this.id = data.id;
+    this.title = data.title;
+    this.authorId = authorId;
+  }
+}
+
+// Generic factory: Convert DB row to typed object
+function dbModel<T>(
+  Model: new (data: any) => T,
+  rawData: any,
+): T {
+  return new Model(rawData);
+}
+
+// Usage - fetch from database and convert
+const dbRow = { id: 1, name: "John", email: "john@example.com" };
+const user = dbModel(User, dbRow); // ✅ Type is User
+console.log(user.getDisplayName()); // ✅ Can call User methods
+
+const postRow = { id: 1, title: "Hello", authorId: 1 };
+const post = dbModel(Post, postRow); // ✅ Type is Post
+```
+
+**Example 2: API Response Factory**
+
+```typescript
+// Real use case: Convert API response to typed objects with validation
+type ApiResponse<T> = {
+  status: number;
+  data: T;
+};
+
+class ApiResponseHandler {
+  static handle<T>(
+    Model: new (data: any) => T,
+    response: ApiResponse<any>,
+  ): T {
+    if (response.status !== 200) {
+      throw new Error(`API Error: ${response.status}`);
+    }
+    return new Model(response.data); // ✅ Type-safe conversion
+  }
+}
+
+// Usage
+const apiResponse = { status: 200, data: { id: 1, name: "John", email: "john@example.com" } };
+const user = ApiResponseHandler.handle(User, apiResponse);
+// ✅ Automatically validates and converts
+```
+
+**Example 3: Service Factory Pattern**
+
+```typescript
+// Real use case: Inject dependencies into services
+interface Logger {
+  log(msg: string): void;
+}
+
+interface Database {
+  query(sql: string): Promise<any[]>;
+}
+
+class UserService {
+  constructor(public logger: Logger, public db: Database) {}
+
+  async getUser(id: number) {
+    this.logger.log(`Fetching user ${id}`);
+    const users = await this.db.query(`SELECT * FROM users WHERE id = ${id}`);
+    return users[0];
+  }
+}
+
+class PostService {
+  constructor(public logger: Logger, public db: Database) {}
+
+  async getPost(id: number) {
+    this.logger.log(`Fetching post ${id}`);
+    const posts = await this.db.query(`SELECT * FROM posts WHERE id = ${id}`);
+    return posts[0];
+  }
+}
+
+// Generic service factory with dependency injection
+type ServiceConstructor<T> = new (logger: Logger, db: Database) => T;
+
+function createService<T>(
+  Service: ServiceConstructor<T>,
+  logger: Logger,
+  db: Database,
+): T {
+  return new Service(logger, db); // ✅ Inject dependencies
+}
+
+// Usage
+const logger = { log: console.log };
+const db = { query: async (sql) => [] };
+
+const userService = createService(UserService, logger, db);
+// ✅ UserService has logger and db injected automatically
+const users = await userService.getUser(1);
+
+const postService = createService(PostService, logger, db);
+const post = await postService.getPost(1);
+```
+
+**Example 4: Higher-Order Factory Function**
+
+```typescript
+// Real use case: Create multiple instances with shared configuration
+class ConfigurableCache {
+  maxSize: number;
+  ttl: number;
+
+  constructor(config: { maxSize: number; ttl: number }) {
+    this.maxSize = config.maxSize;
+    this.ttl = config.ttl;
+  }
+
+  set(key: string, value: any) {
+    // Store with TTL
+  }
+
+  get(key: string) {
+    // Retrieve from cache
+  }
+}
+
+class ConfigurableQueue {
+  maxSize: number;
+  ttl: number;
+
+  constructor(config: { maxSize: number; ttl: number }) {
+    this.maxSize = config.maxSize;
+    this.ttl = config.ttl;
+  }
+}
+
+// Higher-order factory: Create factories with preset config
+function withConfig<T>(
+  Model: new (config: { maxSize: number; ttl: number }) => T,
+  defaultConfig: { maxSize: number; ttl: number },
+) {
+  return (...overrides: Partial<{ maxSize: number; ttl: number }>[]) => {
+    const config = { ...defaultConfig, ...overrides[0] };
+    return new Model(config);
+  };
+}
+
+// Usage - different services with different configs
+const createProductCache = withConfig(ConfigurableCache, {
+  maxSize: 1000,
+  ttl: 3600,
+});
+
+const createUserCache = withConfig(ConfigurableCache, {
+  maxSize: 500,
+  ttl: 1800,
+});
+
+const productCache = createProductCache(); // ✅ Uses preset config
+const userCache = createUserCache({ maxSize: 2000 }); // ✅ Override maxSize
+```
+
+**Example 5: Plugin Factory System**
+
+```typescript
+// Real use case: Register and instantiate plugins dynamically
+interface Plugin {
+  name: string;
+  init(): void;
+}
+
+class LoggerPlugin implements Plugin {
+  name = "Logger";
+  init() {
+    console.log("Logger initialized");
+  }
+}
+
+class AnalyticsPlugin implements Plugin {
+  name = "Analytics";
+  init() {
+    console.log("Analytics initialized");
+  }
+}
+
+class StoragePlugin implements Plugin {
+  name = "Storage";
+  init() {
+    console.log("Storage initialized");
+  }
+}
+
+// Plugin registry and factory
+class PluginManager {
+  private plugins = new Map<string, new () => Plugin>();
+
+  register<T extends Plugin>(name: string, Plugin: new () => T) {
+    this.plugins.set(name, Plugin);
+  }
+
+  createPlugin<T extends Plugin>(name: string): T {
+    const PluginClass = this.plugins.get(name);
+    if (!PluginClass) {
+      throw new Error(`Plugin "${name}" not registered`);
+    }
+    return new PluginClass() as T;
+  }
+
+  initializeAll() {
+    this.plugins.forEach((PluginClass) => {
+      const instance = new PluginClass();
+      instance.init();
+    });
+  }
+}
+
+// Usage
+const manager = new PluginManager();
+manager.register("logger", LoggerPlugin);
+manager.register("analytics", AnalyticsPlugin);
+manager.register("storage", StoragePlugin);
+
+// Create specific plugins
+const logger = manager.createPlugin<LoggerPlugin>("logger");
+const analytics = manager.createPlugin<AnalyticsPlugin>("analytics");
+
+// Initialize all
+manager.initializeAll();
+```
+
 ---
 
 ### 🔀 3. Conditional Types - Choose Type Based on Condition
@@ -501,6 +760,7 @@ handleResponse("/users", [{ id: 1, title: "Hello" }]); // ❌ ERROR
 **Simple Idea: Use a "tag" to tell TypeScript which type you have**
 
 Imagine you're driving a car app. You need to show:
+
 - **Loading state**: Show spinner, no data
 - **Success state**: Show the data
 - **Error state**: Show the error message
@@ -713,7 +973,7 @@ You fetch data from the backend. But what if it's different than expected?
 
 ```typescript
 // Backend sends: { name: "John", age: 30 }
-const user = await fetch("/api/users/1").then(r => r.json());
+const user = await fetch("/api/users/1").then((r) => r.json());
 
 console.log(user.name); // ✅ Works
 console.log(user.age); // ✅ Works
@@ -786,32 +1046,36 @@ if (result.success) {
 **Real Example - Form Validation:**
 
 ```typescript
-const SignupSchema = z.object({
-  username: z.string()
-    .min(3, "Username too short")
-    .max(20, "Username too long"),
-  password: z.string()
-    .min(8, "Password must be 8+ characters")
-    .regex(/[A-Z]/, "Need uppercase letter")
-    .regex(/[0-9]/, "Need a number"),
-  confirmPassword: z.string(),
-}).refine(data => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"]
-});
+const SignupSchema = z
+  .object({
+    username: z
+      .string()
+      .min(3, "Username too short")
+      .max(20, "Username too long"),
+    password: z
+      .string()
+      .min(8, "Password must be 8+ characters")
+      .regex(/[A-Z]/, "Need uppercase letter")
+      .regex(/[0-9]/, "Need a number"),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords don't match",
+    path: ["confirmPassword"],
+  });
 
 // In your form handler:
 function handleSignup(formData: unknown) {
   const result = SignupSchema.safeParse(formData);
-  
+
   if (!result.success) {
     // Show errors to user
-    result.error.issues.forEach(issue => {
+    result.error.issues.forEach((issue) => {
       showError(issue.path[0], issue.message);
     });
     return;
   }
-  
+
   // ✅ Data is 100% valid
   await signup(result.data);
 }
@@ -879,7 +1143,7 @@ const apiEndpoints = {
     url: "/api/products",
     response: z.array(Product),
   },
-  
+
   // GET /api/products/123 -> returns ONE product
   getProduct: {
     method: "GET" as const,
@@ -887,7 +1151,7 @@ const apiEndpoints = {
     params: z.object({ id: z.number() }),
     response: Product,
   },
-  
+
   // POST /api/orders -> create order, send products
   createOrder: {
     method: "POST" as const,
@@ -898,7 +1162,7 @@ const apiEndpoints = {
     }),
     response: Order,
   },
-  
+
   // GET /api/users/me -> get current user
   getCurrentUser: {
     method: "GET" as const,
@@ -916,7 +1180,7 @@ class ApiClient {
     options?: { params?: any; body?: any },
   ): Promise<T> {
     let url = endpoint.url;
-    
+
     // Replace URL params (e.g., :id with actual id)
     if (options?.params) {
       Object.entries(options.params).forEach(([key, value]) => {
@@ -932,7 +1196,7 @@ class ApiClient {
     });
 
     const data = await response.json();
-    
+
     // Validate response matches schema
     return endpoint.response.parse(data);
   }
@@ -965,7 +1229,7 @@ const user = await client.request(apiEndpoints.getCurrentUser);
 ✅ **IDE autocomplete** - See all endpoints and their requirements  
 ✅ **Type safety** - TypeScript catches mistakes before runtime  
 ✅ **Auto-validation** - Response data is checked against schema  
-✅ **Better error messages** - Know exactly what's wrong if validation fails  
+✅ **Better error messages** - Know exactly what's wrong if validation fails
 
 **Real-World Pattern:**
 
@@ -992,7 +1256,7 @@ function ProductList() {
 
   if (loading) return <Spinner />;
   if (error) return <Error message={error} />;
-  
+
   return (
     <div>
       {products.map(p => (
