@@ -970,6 +970,27 @@ import { rideService } from "../services"; // ✅ Same feature - OK
 
 Choose ONE case study above and extend it. Document:
 
+#### What does "extend it" mean?
+
+Extending means:
+
+1. Take the core architecture pattern shown in the case study
+2. Add 2-3 realistic features that would naturally exist in that system
+3. Show how your new features interact with the existing architecture
+4. Identify potential bottlenecks and how to handle them
+5. Plan for real-world constraints (permissions, caching, performance)
+
+**Bad extension:** Just copying the example code without thinking about integration
+
+**Good extension:**
+
+- Adding a feature that challenges the architecture (forces you to reconsider design)
+- Showing conflict resolution (what if two things want different state?)
+- Considering real-world constraints (offline users, slow networks, permissions)
+- Documenting why you made specific choices
+
+---
+
 **1. Extension Implementation (Add 2-3 new components/features)**
 
 Example: Multi-tenant SaaS - Add "Custom Branding"
@@ -1038,6 +1059,19 @@ Phase 3 (10M+ users)
 ---
 
 ## 🎯 What You Should Know
+
+### Understanding Architecture Decisions
+
+Every architecture decision involves trade-offs. The goal isn't to find the "perfect" solution—it's to understand the trade-offs and make a deliberate choice that fits YOUR constraints.
+
+**Key questions to ask:**
+
+- What are we optimizing for? (performance, scalability, maintainability, time-to-market?)
+- What are the constraints? (team size, budget, time, user scale?)
+- What will break first if we grow 10x? (database, API, UI, team coordination?)
+- Can we change this later? (Can we refactor from Redux to React Query? Can we split a monolith?)
+
+---
 
 ### Design Trade-offs (Real Examples)
 
@@ -1137,37 +1171,95 @@ Twitter chose: AP (Availability + Partition tolerance)
 
 #### 1. **Architect for 10x Growth**
 
+**What this means:** When you're building something TODAY, you should think about what breaks when you go from 100K → 1M → 10M users. The key is NOT to build for 10M users now (that's overengineering), but to build in a way that CAN scale to 10M without complete rewrite.
+
 **Example: Building a video platform (like YouTube)**
 
 ```
-Start (1M videos)
+Start (1M videos) - 3 months old startup
 └── Single PostgreSQL server
-    └── Indexes on user_id, created_at
-    └── Redis cache layer
+    ├── All data in one table
+    ├── Basic indexes on user_id, created_at
+    └── Redis cache for Hot videos
+Problem at scale: Queries slow down, disk space becomes issue
 
-Growth to 10M videos
-└── Shard by user_id
-    ├── Partition 1: users 0-100k
-    ├── Partition 2: users 100k-200k
-    └── ...
-    └── New queries now scan less data
+Growth to 10M videos - 12 months in
+└── Database sharding by user_id
+    ├── Shard 1: users 0-100k → videos uploaded by them
+    ├── Shard 2: users 100k-200k → videos uploaded by them
+    ├── Each shard 1/50 of data now
+    └── Queries 50x faster on same hardware
+Solution: Changes frontend little (still query same API)
+Problem at scale: Joining data across shards is complex
 
-Growth to 100M videos
-└── Sharding no longer enough
-    ├── Implement ElasticSearch for full-text search
-    ├── Kafka for events (new video = notify subscribers)
-    ├── S3 for video storage (not database!)
-    └── CDN for video delivery
+Growth to 100M videos - 3 years in
+└── Full polyglot architecture
+    ├── Write path: Videos → Kafka → S3 + ElasticSearch
+    ├── Read path: Highly optimized queries, cached results
+    ├── ElasticSearch for search (PostgreSQL can't do relevance)
+    ├── S3 for actual video files (not database!)
+    └── CDN for delivery (content served globally)
+Solution: Specific tools for specific jobs
+Problem at scale: Coordinating across many services
 
-Growth to 1B videos
-└── Full microservices
-    ├── Search service (ElasticSearch)
-    ├── Recommendation service (ML model)
+Growth to 1B videos - 10 years in
+└── Full microservices + event-driven
+    ├── Metadata service (database info)
+    ├── Search service (ElasticSearch cluster)
+    ├── Recommendation service (ML, separate team)
     ├── Transcoding service (convert video formats)
-    └── Notification service (event-driven)
+    ├── Notification service (event-driven pipeline)
+    ├── Analytics service (tracking user behavior)
+    └── Each team owns its service independently
+Solution: Teams can scale independently, deploy independently
+Problem at scale: Coordinating between teams, debugging becomes complex
 ```
 
+**Key insight:** At the start, you don't need sharding. But if you build WITHOUT thinking about sharding, you'll need a complete rewrite. The trick is to:
+
+1. Build simple systems first (PostgreSQL)
+2. But structure code so sharding is "just" a configuration change later
+3. Example: Instead of `fetchUserVideos(userId)`, build with abstraction layer that can route to correct shard
+
+**Frontend implications of backend scaling:**
+
+From frontend perspective, most of this is invisible—you call `/api/videos/{videoId}` whether it's on shard 1 or shard 100. The backend handles routing. But smart frontend developers:
+
+- Cache aggressively (if backend is distributed, requests are slow)
+- Use pagination (don't load 1B videos at once)
+- Preload next page (user won't see loading spinners)
+- Track which videos are coming from which region (serve from nearest CDN)
+
 #### 2. **Making Informed Trade-off Decisions**
+
+**What this means:** You can't optimize for everything. Cache could be faster but uses more memory. Microservices add flexibility but increase complexity. The senior skill is: know what you're optimizing for, measure impact, and explain it to leadership.
+
+**Real example: Shopify's decision on real-time inventory**
+
+```
+Option A: Real-time inventory (WebSocket)
+✅ User never sees overbooking
+❌ Infrastructure costs: $2M/year for global WebSocket servers
+❌ If WebSocket connection drops, user is stuck
+❌ Complex failover logic
+
+Option B: Eventual consistency (checks every 5 seconds)
+✅ Simpler code, cheaper infrastructure (~$100K/year)
+✅ Fallback if connection error: just refresh page
+❌ Small window where backend sold item but frontend shows available
+    → 0.1% of transactions have overstock, manual refund
+
+Option C: Hybrid (WebSocket with fallback)
+✅ Real-time for power users (stored data)
+✅ 5-sec polling for mobile users (saves bandwidth)
+✅ Costs: $500K/year (middle ground)
+
+Shopify chose: Option C
+Why? Analysis showed:
+- Power users (stored items in checkout) worth optimizing for (5% of traffic, 30% of revenue)
+- Mobile users don't need real-time (they're browsing, not seriously buying)
+- Extra $400K/year cost < loss from 0.1% overstock refunds (which damage trust)
+```
 
 **Framework: Weighing impact**
 
@@ -1178,122 +1270,247 @@ function evaluateArchitecture(decision) {
     performanceGain: measure("latency reduction"),
     complexityIncrease: measure("lines of code"),
     developmentTime: estimate("weeks"),
+    infrastructureCost: estimate("$/year"),
 
     // 2. Calculate ROI
-    ROI = performanceGain / (complexityIncrease + developmentTime),
+    estimatedRevenueImpact: performanceGain * userConversionRate,
+    totalCost = infrastructureCost + (developmentTime * engSalary/year),
+    ROI = estimatedRevenueImpact / totalCost,
 
     // 3. Consider team size
     if (teamSize < 5) {
       // Simpler is better - you'll maintain it forever
+      // Bugs compound with small teams
       return simpleApproach;
     }
 
     // 4. Consider scale
     if (usersPerMonth > 10M) {
-      // Must optimize for performance
+      // Must optimize for performance or costs explode
+      // Fixed overhead becomes smaller per user
       return optimizedApproach;
     }
 
     // 5. Consider company stage
     if (startup) {
-      // Shipping matters more than optimization
+      // Shipping speed matters most - can refactor later
+      // Get to product-market fit first
       return fastToShip;
     } else {
-      // Legacy matters - think long-term
+      // Mature company - technical debt is expensive long-term
+      // Think architectural stability
       return maintainable;
     }
-  }
+
+    // 6. Consider customer expectations
+    if (isMarketplaceBusiness) {
+      // Real-time matters - drives user trust (Amazon, Uber)
+      return realTime;
+    } else if (isCMS || B2B) {
+      // Eventual consistency fine - users expect refreshing page
+      return eventual;
 }
 ```
 
 #### 3. **Design for Team Scaling**
 
-**Problem: 3 engineers → 50 engineers on same codebase**
+**What this means:** Code isn't just for computers—it's for humans to collaborate on. Bad architecture doesn't just hurt performance, it prevents teams from scaling. Two experienced engineers on same monolith might fight over code ownership constantly. Get architecture right, and 50 engineers can work in parallel.
+
+**Real scenario: Scaling from 5 to 50 engineers**
 
 ```
-Without proper architecture:
-- Merge conflicts daily
-- Circular dependency nightmares
-- Step on each other's toes
-- Launch slows from daily to weekly
+WITHOUT proper architecture (Monolithic team):
+Week 1-4: 5 engineers, no coordination issues
+  ├── Can all understand the 20K lines of code
+  ├── Can deploy together
+  └── Fast: launch features in 2 weeks
 
-With feature-based architecture:
-Team Structure:
-├── Auth team (4 engineers)
-│   └── Owns features/auth/* exclusively
-├── Payment team (5 engineers)
-│   └── Owns features/payments/* exclusively
-├── Recommendations team (6 engineers)
-│   └── Owns features/recommendations/* exclusively
-└── Platform team (3 engineers)
-    └── Maintains shared/core/*
+Week 5-12: Hire 10 more (15 engineers total)
+  ├── Code reviews take 3 days (fewer people understand each section)
+  ├── Merge conflicts daily in shared files
+  ├── Launch speed: 4 weeks (need team consensus)
+  └── Bugs increase: "Where does X touch Y?")
 
-Benefits:
-✅ Teams work in parallel (no merge conflicts)
-✅ Can have different tech stacks per feature
-✅ Can deploy independently
-✅ Can increase to 100 engineers without chaos
+Week 13-26: Hire 20 more (35 engineers total)
+  ├── Code reviews take week (bottleneck on seniors)
+  ├── Merge conflicts paralyze team
+  ├── Launch speed: 2 months (need buy-in from multiple teams)
+  ├── Bugs spike 50% (spaghetti code, unexpected interactions)
+  └── Team morale down (engineers step on each other constantly)
+
+Week 27+: Try to hire more (stop hiring, too chaotic)
+  ├── Core issue: The ARCHITECTURE is the bottleneck, not people
+  └── Refactoring takes 6+ months
+
+WITH proper feature-based architecture:
+Week 1-4: 5 engineers
+  ├── Each engineer owns a feature folder
+  ├── Can ship independently
+  └── Launch speed: 2 weeks
+
+Week 5-12: Hire 10 more (15 engineers)
+  ├── Form feature teams (Auth team: 3 people, Payment: 3 people, etc)
+  ├── No merge conflicts (each team owns their folder)
+  ├── Teams can deploy independently (Auth launches, Payment launches)
+  ├── Launch speed: still 2 weeks (teams launch in parallel)
+  └── Onboarding new person: 2 days (one feature, not whole system)
+
+Week 13-26: Hire 20 more (35 engineers)
+  ├── Teams grow: Auth: 5 people, Payment: 5 people, etc.
+  ├── Teams rarely see other teams' code
+  ├── Deployment: each team owns their deploy (Auth launches without needing Payment approval)
+  ├── Launch speed: still 2 weeks (parallel progress)
+  ├── Bugs down (isolation = fewer side effects)
+  └── Team morale: engineers feel ownership (this is MY feature, not "we broke something somewhere")
+
+Week 27+: Scaling to 100+ engineers
+  ├── Platform becomes service-oriented
+  ├── Auth service, Payment service, Recommendations service (each 5+ engineers)
+  ├── Zero merge conflicts (different services)
+  ├── If Auth breaks, payments still work
+  ├── Can fire/hire engineers without affecting other teams
+  └── Business can add new products without full rewrite
 ```
 
-**Communication through contracts:**
+**Problem: How to prevent chaos as teams grow?**
 
 ```jsx
-// Payment team defines their public API
-// payments/index.ts
-export { usePaymentMethods } from './hooks';
-export { PaymentForm } from './components';
-export type { Payment, PaymentMethod } from './types';
+// The "public contract" pattern - prevents breaking changes
 
-// Other teams can only use this,
-// Implementation changes won't break them
-// Checkout team using it
-import { usePaymentMethods, PaymentForm } from 'features/payments';
+// ✅ payments/index.ts - what other features can use
+export { usePaymentMethods } from "./hooks";
+export { PaymentForm } from "./components";
+export type { Payment, PaymentMethod } from "./types";
+
+// ❌ payments/services/paymentService.ts - PRIVATE!
+// Other features cannot import this directly
+// If you change implementation, no one breaks
+
+// Enforcement: ESLint rules
+// "error": "No imports from feature internals"
+// import { paymentService } from 'features/payments/services'; // ❌ FAILS
+// import { usePaymentMethods } from 'features/payments'; // ✅ OK
+```
+
+**How communication happens between teams:**
+
+```
+Before (Monolithic):
+Payment Team wants to notify Commerce Team about failed payment
+→ They message Slack, discuss 30 min
+→ Agree on shared types in shared/types.ts
+→ Code a function in shared/
+→ Both teams depend on this function now
+→ Changing it becomes nightmare (affects both teams)
+
+After (Feature-based):
+Payment Team publishes an EVENT when payment fails
+→ Commerce Team LISTENS to that event
+→ No shared code, just contracts
+→ Payment Team can change implementation without telling Commerce
+→ If Commerce Team doesn't care about event, no impact
+→ Teams scale independently
 ```
 
 #### 4. **Why Architecture Matters (Real Business Impact)**
 
-**Netflix case study:**
+**Netflix case study: Impact of moving to microfrontends**
 
 ```
-Before (Monolithic frontend):
-- Deploy time: 2 hours
-- Risk per deploy: 7+ teams affected
-- Failed deploys per week: 2-3
-- Can add features: 1-2 per week
+Before (Monolithic frontend) - Shared codebase:
+├── Deploy time: 2 hours (had to test with all teams' features together)
+├── Risk per deploy: 7+ teams affected (payment change breaks recommendations?)
+├── Failed deploys per week: 2-3 (needed rollbacks, hotfixes)
+├── Mean Time To Recover: 45+ minutes (debugging shared code is hard)
+├── Can add features: 1-2 per week (slow iteration, blocked on teams)
+├── Engineering time on deployment: 2 days/week/team (so much coordination!)
+└── Bugs shipped to production: 5-10 per day
 
-After (Microfrontends):
-- Deploy time: 8 minutes
-- Risk per deploy: 1 team only
-- Failed deploys per week: 0.1
-- Can add features: 10-15 per week
-- Time to market: 10x faster
+After (Microfrontends) - Independent deployments:
+├── Deploy time: 8 minutes (just your team's features tested)
+├── Risk per deploy: 1 team only (recommendations broken? Payment team doesn't care)
+├── Failed deploys per week: 0.1 (fewer things to break)
+├── Mean Time To Recover: 5 minutes (roll back just your service)
+├── Can add features: 10-15 per week (parallel development)
+├── Engineering time on deployment: 2 hours/week/team (mostly automated)
+└── Bugs shipped to production: 1-2 per day
 
-Business impact:
-- Launch 100+ new features/year (vs 50)
-- Revenue from personalization: +15%
-- Reduced bugs by 70%
-- Team satisfaction increased
+Financial impact over 1 year:
+├── New features launched: +60 features (100 vs 50) × $500K value = +$30M
+├── Bugs reduced: -60% bugs × $50K cost/bug = +$3M savings
+├── Faster time-to-market: Personalization features 6 months earlier = +$5M from engagement
+├── Team efficiency: 1 engineer-year saved per team (7 teams) = +$1.4M
+├── User experience: 20% faster page loads (less code) = +5% retention = +$50M
+└── Total business impact: ~+$90M in first year
+
+Cost of refactoring:
+├── Engineering time (3 engineers × 6 months): $500K
+├── Infrastructure setup (new CDN, module federation): $100K
+├── Training teams on new pattern: $50K
+└── Total cost: $650K
+
+ROI: $90M value / $650K cost = 138x return
+```
+
+**Why the impact is so large:**
+
+1. **Speed to market** - Launch 2x as many features (personalization matters)
+2. **Reliability** - Fewer bugs means better user experience
+3. **Team scaling** - Can hire 50 engineers instead of 7 (more features faster)
+4. **Compounding effect** - More features → more user engagement → more revenue
+
+**Small companies:** "Should I do this?"
+
+- Probably not yet. If you have < 10 engineers, overhead of architecture isn't worth it
+- When you hit 20+ engineers, the pain becomes worth it
+
+**Scaling companies:** "How do I plan for this?"
+
+- Don't do it at day 1, but build so you CAN do it later
+- Example: Use feature-based folder structure from start (low overhead, huge payoff when scaling)
+- Avoid: Monolithic index.tsx that imports everything (can't split later without rewrite)
+
 ```
 
 ---
 
 ## 💡 Real-world Implementation Checklist
 
-- [ ] Choose your architecture pattern (state management / feature structure)
-- [ ] Build 3 real components using that pattern
-- [ ] Document trade-offs made vs alternatives
-- [ ] Plan for 10x growth
-- [ ] Design for a team of 20+ (not just yourself)
-- [ ] Implement error boundaries and loading states
-- [ ] Add comprehensive error handling
-- [ ] Write integration tests between features
-- [ ] Profile performance (use Chrome DevTools)
-- [ ] Plan monitoring and analytics strategy
-- [ ] Document onboarding for new team members
+Follow this when building your project:
+
+**Phase 1: Foundation (Week 1-2)**
+- [ ] Choose your architecture pattern (TanStack Query + feature-based folders)
+- [ ] Create folder structure (don't put everything in `src/`)
+- [ ] Set up ESLint rules to enforce boundaries (no cross-feature imports of internals)
+- [ ] Document public API for each feature (what can other features import?)
+
+**Phase 2: Core Implementation (Week 3-4)**
+- [ ] Build 3-5 core components using the pattern
+- [ ] Implement optimistic updates for mutations (make UI feel fast)
+- [ ] Set up error boundaries (one component error doesn't crash app)
+- [ ] Add loading states everywhere (don't show blank screen)
+
+**Phase 3: Advanced Features (Week 5-6)**
+- [ ] Implement cache invalidation strategy (when to re-fetch data)
+- [ ] Add offline support (use IndexedDB for persistence)
+- [ ] Profile performance with Chrome DevTools (find bottlenecks)
+- [ ] Write integration tests between features (features shouldn't break each other)
+
+**Phase 4: Production Readiness (Week 7-8)**
+- [ ] Add comprehensive error handling (what happens on network error? Server error?)
+- [ ] Set up monitoring (track errors in production)
+- [ ] Plan analytics strategy (how to measure feature success)
+- [ ] Document onboarding for new team members (how to add a feature?)
+
+**Phase 5: Scaling (Week 9+)**
+- [ ] Plan for 10x growth (what breaks at 1M users?)
+- [ ] Consider permission system (different features for different users)
+- [ ] Measure bundle size (delete unused code)
+- [ ] Plan feature flags (how to gradually roll out features)
 
 ---
 
-## 🔍 Self-Assessment
+## 🔍 Self-Assessment: Where Are You?
 
 **Junior (0-1 year)**
 
@@ -1328,3 +1545,4 @@ Business impact:
 ---
 
 **Build systems that scale with your team and users! 🚀**
+```
