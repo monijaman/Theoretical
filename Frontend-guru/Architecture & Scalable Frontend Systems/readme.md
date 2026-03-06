@@ -593,6 +593,8 @@ function HomePage() {
 
 ## 🎨 Design Exercise
 
+**What this section is for:** Real architecture decisions come from real constraints, not theory. Here we show how FAANG companies architect their systems. Study these patterns, understand WHY they made these choices, then apply them to your projects.
+
 ### Real-world Case Studies
 
 #### Case Study 1: Multi-tenant SaaS Dashboard (Figma's Architecture)
@@ -1440,7 +1442,7 @@ Payment Team publishes an EVENT when payment fails
 
 #### 4. **Why Architecture Matters (Real Business Impact)**
 
-**Netflix case study: Impact of moving to microfrontends**
+**What this means:** Architecture isn't theoretical—it directly impacts business metrics (revenue, speed to market, team size, reliability). Good architecture costs more upfront but pays dividends. Bad architecture feels cheap at first but compounds into a nightmare. Let's look at real numbers.\n\n**Netflix case study: Impact of moving to microfrontends**
 
 ```
 Before (Monolithic frontend) - Shared codebase:
