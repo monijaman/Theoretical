@@ -273,10 +273,7 @@ class Post {
 }
 
 // Generic factory: Convert DB row to typed object
-function dbModel<T>(
-  Model: new (data: any) => T,
-  rawData: any,
-): T {
+function dbModel<T>(Model: new (data: any) => T, rawData: any): T {
   return new Model(rawData);
 }
 
@@ -299,10 +296,7 @@ type ApiResponse<T> = {
 };
 
 class ApiResponseHandler {
-  static handle<T>(
-    Model: new (data: any) => T,
-    response: ApiResponse<any>,
-  ): T {
+  static handle<T>(Model: new (data: any) => T, response: ApiResponse<any>): T {
     if (response.status !== 200) {
       throw new Error(`API Error: ${response.status}`);
     }
@@ -311,7 +305,10 @@ class ApiResponseHandler {
 }
 
 // Usage
-const apiResponse = { status: 200, data: { id: 1, name: "John", email: "john@example.com" } };
+const apiResponse = {
+  status: 200,
+  data: { id: 1, name: "John", email: "john@example.com" },
+};
 const user = ApiResponseHandler.handle(User, apiResponse);
 // ✅ Automatically validates and converts
 ```
@@ -329,7 +326,10 @@ interface Database {
 }
 
 class UserService {
-  constructor(public logger: Logger, public db: Database) {}
+  constructor(
+    public logger: Logger,
+    public db: Database,
+  ) {}
 
   async getUser(id: number) {
     this.logger.log(`Fetching user ${id}`);
@@ -339,7 +339,10 @@ class UserService {
 }
 
 class PostService {
-  constructor(public logger: Logger, public db: Database) {}
+  constructor(
+    public logger: Logger,
+    public db: Database,
+  ) {}
 
   async getPost(id: number) {
     this.logger.log(`Fetching post ${id}`);
