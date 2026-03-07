@@ -1,9 +1,8 @@
-// Shared types across all features
 export enum Role {
-  ADMIN = 'admin',
-  MANAGER = 'manager',
-  MEMBER = 'member',
-  VIEWER = 'viewer',
+  ADMIN = "admin",
+  MANAGER = "manager",
+  MEMBER = "member",
+  VIEWER = "viewer",
 }
 
 export interface User {
@@ -21,13 +20,6 @@ export interface Workspace {
   slug: string;
   ownerId: string;
   createdAt: string;
-  members: WorkspaceMember[];
-}
-
-export interface WorkspaceMember {
-  userId: string;
-  role: Role;
-  joinedAt: string;
 }
 
 export interface ApiError {
@@ -35,19 +27,4 @@ export interface ApiError {
   message: string;
   statusCode: number;
   details?: Record<string, any>;
-}
-
-export interface PaginationParams {
-  page: number;
-  limit: number;
-  sortBy?: string;
-  sortOrder?: 'asc' | 'desc';
-}
-
-export interface PaginatedResponse<T> {
-  data: T[];
-  total: number;
-  page: number;
-  limit: number;
-  pages: number;
 }

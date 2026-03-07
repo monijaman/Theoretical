@@ -1,4 +1,4 @@
-import React, { ReactNode } from 'react';
+import React, { ReactNode } from "react";
 
 interface Props {
   children: ReactNode;
@@ -21,24 +21,21 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error) {
-    console.error('Error caught by boundary:', error);
+    console.error("Error caught by boundary:", error);
   }
 
   render() {
     if (this.state.hasError) {
       return (
         this.props.fallback || (
-          <div style={{ padding: '24px', textAlign: 'center', color: '#EF4444' }}>
+          <div style={{ padding: "24px", textAlign: "center" }}>
             <h2>Something went wrong</h2>
             <p>{this.state.error?.message}</p>
-            <button onClick={() => window.location.reload()}>
-              Reload page
-            </button>
+            <button onClick={() => window.location.reload()}>Reload</button>
           </div>
         )
       );
     }
-
     return this.props.children;
   }
 }

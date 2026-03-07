@@ -1,56 +1,49 @@
 import { apiBaseUrl } from '../utils/env';
-import type { ApiError } from '../types';
 
-export interface RequestConfig {
+export interface RequestConfig extends RequestInit {
   workspaceId?: string;
-  [key: string]: any;
 }
 
 export class ApiClient {
-  private baseUrl = apiBaseUrl;
+  private readonly baseUrl: string;
 
-  async request<T>(
-    endpoint: string,
-    options: RequestInit & RequestConfig = {}
-  ): Promise<T> {
+  constructor(baseUrl: string = apiBaseUrl) {
+    this.baseUrl = baseUrl;
+  }
+
+  async request<T>(endpoint: string, options: RequestConfig = {}): Promise<T> {
     const { workspaceId, ...init } = options;
-    const headers = new Headers(init.headers || {});
+    const headers = new Headers(init.headers);
     
-    // Add workspace header for multi-tenancy
     if (workspaceId) {
       headers.set('X-Workspace-ID', workspaceId);
     }
     
     headers.set('Content-Type', 'application/json');
-    
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+
+    const url = this.baseUrl + endpoint;
+    const response = await fetch(url, {
       ...init,
       headers,
     });
-    
-      throw await this.handleError(response);
+
+    if (!response.ok) {
+      throw new Error(`API Error: ${response.status} ${response.statusText}`);
     }
-    
+
     return response.json();
   }
 
-  private async handleError(response: Response): Promise<ApiError> {
-    const error: ApiError = {
-      code: 'UNKNOWN_ERROR',
-      message: response.statusText,
-      statusCode: response.status,
-    };
-    
-    try {
-      const data = await response.json();
-      error.code = data.code || error.code;
-      error.message = data.message || error.message;
-      error.details = data.details;
-    } catch (e) {
-      // Response wasn't JSON
-    }
-    
-    throw error;
+  get<T>(endpoint: string, config?: RequestConfig): Promise<T> {
+    return this.request<T>(endpoint, { ...config, method: 'GET' });
+  }
+
+  post<T>(endpoint: string, data: unknown, config?: RequestConfig): Promise<T> {
+    return this.request<T>(endpoint, {
+      ...config,
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   }
 }
 
