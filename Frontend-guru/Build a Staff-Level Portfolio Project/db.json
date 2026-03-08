@@ -1,0 +1,119 @@
+{
+  "rides": [
+    {
+      "id": "ride-001",
+      "userId": "user-123",
+      "workspaceId": "workspace-abc",
+      "pickupLocation": "123 Main St, Downtown",
+      "dropoffLocation": "456 Oak Ave, Uptown",
+      "status": "completed",
+      "fare": 24.50,
+      "createdAt": "2026-03-07T10:30:00Z",
+      "completedAt": "2026-03-07T10:55:00Z"
+    },
+    {
+      "id": "ride-002",
+      "userId": "user-456",
+      "workspaceId": "workspace-abc",
+      "pickupLocation": "789 Elm St, Midtown",
+      "dropoffLocation": "321 Pine Rd, Suburb",
+      "status": "in-progress",
+      "fare": 18.75,
+      "createdAt": "2026-03-07T11:00:00Z"
+    },
+    {
+      "id": "ride-003",
+      "userId": "user-789",
+      "workspaceId": "workspace-abc",
+      "pickupLocation": "555 Broadway, Theater District",
+      "dropoffLocation": "888 Park Ave, Central",
+      "status": "completed",
+      "fare": 32.00,
+      "createdAt": "2026-03-07T09:15:00Z",
+      "completedAt": "2026-03-07T09:45:00Z"
+    },
+    {
+      "id": "ride-004",
+      "userId": "user-321",
+      "workspaceId": "workspace-abc",
+      "pickupLocation": "999 Airport Rd, Terminal 1",
+      "dropoffLocation": "111 Hotel Blvd, Downtown",
+      "status": "pending",
+      "fare": 45.25,
+      "createdAt": "2026-03-07T12:00:00Z"
+    },
+    {
+      "id": "ride-005",
+      "userId": "user-654",
+      "workspaceId": "workspace-abc",
+      "pickupLocation": "222 University Ave, Campus",
+      "dropoffLocation": "333 Market St, Shopping District",
+      "status": "completed",
+      "fare": 15.50,
+      "createdAt": "2026-03-07T08:30:00Z",
+      "completedAt": "2026-03-07T08:50:00Z"
+    },
+    {
+      "id": "ride-006",
+      "userId": "user-111",
+      "workspaceId": "workspace-xyz",
+      "pickupLocation": "444 Beach Rd, Coastal",
+      "dropoffLocation": "666 Mountain View, Highlands",
+      "status": "completed",
+      "fare": 55.00,
+      "createdAt": "2026-03-07T07:00:00Z",
+      "completedAt": "2026-03-07T07:40:00Z"
+    },
+    {
+      "id": "ride-007",
+      "userId": "user-222",
+      "workspaceId": "workspace-xyz",
+      "pickupLocation": "777 Tech Hub, Silicon Valley",
+      "dropoffLocation": "999 Innovation Dr, Research Park",
+      "status": "in-progress",
+      "fare": 28.00,
+      "createdAt": "2026-03-07T11:30:00Z"
+    },
+    {
+      "id": "ride-008",
+      "userId": "user-333",
+      "workspaceId": "workspace-abc",
+      "pickupLocation": "101 Coffee Shop, Cafe District",
+      "dropoffLocation": "202 Office Plaza, Business Park",
+      "status": "completed",
+      "fare": 12.25,
+      "createdAt": "2026-03-07T06:45:00Z",
+      "completedAt": "2026-03-07T07:00:00Z"
+    }
+  ],
+  "users": [
+    {
+      "id": "user-123",
+      "name": "John Doe",
+      "email": "john@example.com",
+      "workspaceId": "workspace-abc",
+      "role": "admin"
+    },
+    {
+      "id": "user-456",
+      "name": "Jane Smith",
+      "email": "jane@example.com",
+      "workspaceId": "workspace-abc",
+      "role": "manager"
+    }
+  ],
+  "workspaces": [
+    {
+      "id": "workspace-abc",
+      "name": "Acme Corporation",
+      "plan": "enterprise",
+      "createdAt": "2025-01-15T00:00:00Z"
+    },
+    {
+      "id": "workspace-xyz",
+      "name": "StartupXYZ",
+      "plan": "pro",
+      "createdAt": "2025-06-01T00:00:00Z"
+    }
+  ]
+}
