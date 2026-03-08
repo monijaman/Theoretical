@@ -280,7 +280,7 @@ export function HomePage() {
 
     // Example 3: Mark something as the current page
     <a href="/products" aria-current="page">Products</a>
-    // Screen reader announces: "Link: Products, current page"
+    // Screen reader announces: "Link: Products, current page."
     ```
 
   - **Real-world impact:** Without these, a blind person using a screen reader would hear:
