@@ -602,4 +602,4 @@ Key topics covered:
 - Working with DynamoDB from Go
 - Creating REST APIs with API Gateway
 - Container applications on ECS
-- Practical projects and exercises
+- Practical projects and exercises.
