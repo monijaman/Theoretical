@@ -5,6 +5,7 @@
     "@babel/node": "^7.26.0",
     "@babel/preset-react": "^7.25.9",
     "express": "^5.1.0",
+    "pdf-parse": "^2.4.5",
     "react-router-dom": "^7.13.1"
   }
 }

@@ -49,6 +49,14 @@ A comprehensive collection of PDF resources for interview preparation covering J
 - **Backend**: AWS, SQL (beginner to advanced), system design
 - **Career**: Interview preparation, coding interview guides
 
+## Parsed Content
+
+All PDFs have been parsed into readable markdown files. You can find the extracted text content in the [`parsed/`](./parsed) directory:
+
+- View all [Parsed PDF Files](./parsed/)
+
+Each markdown file contains the full text extracted from its corresponding PDF.
+
 ## Additional Resources
 
 - [SQL Interview Notes](sql.md)
