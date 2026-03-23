@@ -2,7 +2,7 @@
 
 ## Clean Code Architecture Diagram
 
-![Clean Code Architecture Diagram](./architecture.png)
+![Clean Code Architecture Diagram](./JS/architecture.png)
 
 ---
 
@@ -32,7 +32,7 @@ This project is designed to embody clean code principles by:
 
 ---
 
-![Clean Code Architecture Diagram](./flow.png)
+![Clean Code Architecture Diagram](./JS/flow.png)
 
 ## Clean Architecture Layers Explained (Ordering Machine Example)
 
@@ -57,7 +57,7 @@ This project is designed to embody clean code principles by:
 
 _In short: The outside layers handle user actions and devices, the middle layers adapt data, and the inner layers do the real work. Everything depends on the core, but the core depends on nothing else!_
 
-![Clean Code Architecture Diagram](./cleancode.png)
+![Clean Code Architecture Diagram](./JS/cleancode.png)
 
 - [Clean Architecture Example](https://github.com/dev-mastery/comments-api/tree/master/src)
 - [Clean Architecture Example Video](https://www.youtube.com/watch?v=CnailTcJV_U&list=PLcb3YuQNaC-uM1vHqdBP9yOw-hB1IZmAB)
