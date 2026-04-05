@@ -54,10 +54,6 @@ A comprehensive collection of PDF resources for interview preparation covering J
 | 46 | Crack interviews without DSA | [C𝗿𝗮𝗰𝗸 𝗶𝗻𝘁𝗲𝗿𝘃𝗶𝗲𝘄𝘀 𝘄𝗶𝘁𝗵𝗼𝘂𝘁 𝗗𝗦𝗔.pdf](C%F0%9D%97%89%F0%9D%97%96%F0%9D%97%84%F0%9D%97%8A%F0%9D%97%9C%F0%9D%97%9E%F0%9D%97%9D%F0%9D%97%9D%20%F0%9D%97%96%F0%9D%97%9A%F0%9D%97%9C%F0%9D%97%9E%F0%9D%97%9D%F0%9D%97%9D%20%F0%9D%97%8A%F0%9D%97%9C%F0%9D%97%9E%F0%9D%97%9D%F0%9D%97%9D%20%F0%9D%97%8A%F0%9D%97%9C%F0%9D%97%9E%F0%9D%97%9D%F0%9D%97%9D%20%F0%9D%97%8A%F0%9D%97%9C%F0%9D%97%9E%F0%9D%97%9D%F0%9D%97%9D%20%F0%9D%97%8A%F0%9D%97%9C%F0%9D%97%9E%F0%9D%97%9D%F0%9D%97%9D%20%F0%9D%97%8A%F0%9D%97%9C%F0%9D%97%9E%F0%9D%97%9D%F0%9D%97%9D%20%F0%9D%97%8A%F0%9D%97%9C%F0%9D%97%9E%F0%9D%97%9D%F0%9D%97%9D.pdf) |
 | 47 | react-questions | [react-questions.pdf](react-questions.pdf) |
 | 48 | Zero to Advanced DSA- 30 Days Challenge | [Zero to Advanced DSA- 30 Days Challenge.pdf](Zero%20to%20Advanced%20DSA-%2030%20Days%20Challenge.pdf) |
-| 49 | x- 130 REAL Node.js Interview Questions & Answers | [x- 130 REAL Node.js Interview Questions & Answers.pdf](x-%20130%20REAL%20Node.js%20Interview%20Questions%20%26%20Answers.pdf) |
-| 50 | x-git-command | [x-git-command.pdf](x-git-command.pdf) |
-| 51 | x-𝗦𝘆𝘀𝘁𝗲𝗺 𝗗𝗲𝘀𝗶𝗴𝗻 | [x-𝗦𝘆𝘀𝘁𝗲𝗺%20𝗗𝗲𝘀𝗶𝗴𝗻.pdf](x-%F0%9D%97%96%F0%9D%97%9A%F0%9D%97%9C%F0%9D%97%9E%F0%9D%97%9D%F0%9D%97%9D%20%F0%9D%97%96%F0%9D%97%9A%F0%9D%97%9C%F0%9D%97%9E%F0%9D%97%9D%F0%9D%97%9D.pdf) |
-| 52 | x-𝟭𝟱𝟬-𝗱𝗮𝘆 𝗿𝗼𝗮𝗱𝗺𝗮𝗽-for-DSA | [x-𝟭𝟱𝟬-𝗱𝗮𝘆 𝗿𝗼𝗮𝗱𝗺𝗮𝗽-for-DSA.pdf](x-%F0%9D%9F%AE%F0%9D%97%96%F0%9D%97%9A%F0%9D%97%9C%F0%9D%97%9E%F0%9D%97%9D%F0%9D%97%9D%20%F0%9D%97%96%F0%9D%97%9A%F0%9D%97%9C%F0%9D%97%9E%F0%9D%97%9D%F0%9D%97%9D%20for-DSA.pdf) |
 
 ## Topics Covered
 
