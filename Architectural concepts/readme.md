@@ -6,3 +6,6 @@ https://blog.algomaster.io/p/20-dsa-patterns
 https://bytebytego.com/courses/system-design-interview/foreword
 
 https://www.linkedin.com/pulse/weekend-learn-system-design-fundamentals-free-2-hour-course-larson-0rnic/
+
+GO
+https://go.dev/tour/moretypes/1
