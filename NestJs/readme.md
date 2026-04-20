@@ -165,6 +165,115 @@ const module = await Test.createTestingModule({
 - ModuleRef / Discovery → advanced DI control
 - Testing → reliability
 - Platform Agnostic → flexibility
+
+## Guards in NestJS
+
+### What is a Guard?
+
+A Guard determines whether a request should be handled or not.
+
+Think: “Is this user allowed to access this route?”
+
+Guards implement `CanActivate`.
+
+```ts
+import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
+
+@Injectable()
+export class AuthGuard implements CanActivate {
+  canActivate(context: ExecutionContext): boolean {
+    const request = context.switchToHttp().getRequest();
+    return !!request.headers.authorization;
+  }
+}
+```
+
+Use it in a controller:
+
+```ts
+import { UseGuards } from '@nestjs/common';
+
+@UseGuards(AuthGuard)
+@Get('profile')
+getProfile() {
+  return 'This is protected';
+}
+```
+
+Real use cases:
+- Authentication (JWT check)
+- Role-based access (admin/user)
+- API key validation
+
+Execution order (important):
+
+Guards run before:
+
+- Pipes
+- Interceptors
+- Controllers
+
+So they block early 🚫
+
+## Pipes in NestJS
+
+### What is a Pipe?
+
+A Pipe is used to validate or transform data.
+
+Think: “Is the input valid? If yes, clean/convert it.”
+
+Built-in example — `ParseIntPipe`:
+
+```ts
+@Get(':id')
+getUser(@Param('id', ParseIntPipe) id: number) {
+  return id;
+}
+```
+
+Converts string → number and throws if invalid.
+
+Custom Pipe example:
+
+```ts
+import { PipeTransform, Injectable, BadRequestException } from '@nestjs/common';
+
+@Injectable()
+export class AgeValidationPipe implements PipeTransform {
+  transform(value: any) {
+    if (value.age < 18) {
+      throw new BadRequestException('Age must be 18+');
+    }
+    return value;
+  }
+}
+```
+
+Use it:
+
+```ts
+@Post()
+createUser(@Body(AgeValidationPipe) body: any) {
+  return body;
+}
+```
+
+Real use cases:
+- DTO validation
+- Sanitizing input
+- Transforming query params
+
+Key difference (simple):
+
+Feature | Guard | Pipe
+---|---:|---
+Purpose | Authorization | Validation / Transformation
+Runs When | Before request reaches handler | After guard, before controller
+Stops Request? | Yes | Yes (if validation fails)
+
+---
+Added concise Guards and Pipes explanations, examples, and when to use them.
 Control lifetime of providers:
 
 Singleton (default) → one instance per app
