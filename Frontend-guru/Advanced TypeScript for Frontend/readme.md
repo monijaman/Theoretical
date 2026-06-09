@@ -14,6 +14,576 @@ Understand complex type concepts with these easy analogies:
 
 **Goal:** Build type-safe applications that catch bugs at compile-time, not runtime.
 
+## 🏗️ TypeScript Foundations
+
+Before diving into advanced patterns, master these essential concepts:
+
+---
+
+### 1️⃣ Unknown vs Any - Handle Unknown Data Safely
+
+**The Problem:**
+When data comes from external sources (APIs, user input, databases), you don't know its type. You have two options: `any` (dangerous) or `unknown` (safe).
+
+**The Difference:**
+
+```typescript
+// ❌ ANY - The "opt-out" of type safety
+let value: any = getUserInput(); // Could be anything!
+
+value.toUpperCase(); // ✅ No error (but crashes at runtime if number!)
+value.foo.bar.baz(); // ✅ No error (but crashes at runtime!)
+
+const result: string = value; // ✅ No error (but type is wrong!)
+```
+
+**Why `any` is dangerous:**
+
+```typescript
+function processData(data: any) {
+  // You lose ALL type safety
+  console.log(data.length); // ✅ Compile-time OK, but crashes if data is number
+  return data.toUpperCase(); // ✅ Compile-time OK, but crashes if data is number
+}
+
+processData(123); // 💥 Runtime error: data.toUpperCase is not a function
+```
+
+**✅ GOOD - Use `unknown` (the safe choice):**
+
+```typescript
+let value: unknown = getUserInput(); // Could be anything
+
+// ❌ TypeScript won't let you use it directly
+// value.toUpperCase(); // ERROR - "Object is of type 'unknown'"
+
+// ✅ You MUST check the type first (type guard)
+if (typeof value === "string") {
+  value.toUpperCase(); // ✅ Now TypeScript knows it's a string!
+}
+
+// ✅ Or type it explicitly (assertion)
+const str = value as string;
+str.toUpperCase(); // ✅ OK if you're sure
+
+// ✅ Or check with a helper function
+function isString(val: unknown): val is string {
+  return typeof val === "string";
+}
+
+if (isString(value)) {
+  value.toUpperCase(); // ✅ TypeScript is confident now
+}
+```
+
+**Real-World Example - API Response:**
+
+```typescript
+// ❌ BAD - Using `any`
+async function fetchUser(): Promise<any> {
+  const response = await fetch("/api/user");
+  return response.json(); // Returns `any`
+}
+
+const user = await fetchUser();
+console.log(user.email); // ✅ TypeScript doesn't warn, but crashes if email missing
+console.log(user.toUpperCase()); // ✅ TypeScript allows it, but crashes at runtime!
+
+// ✅ GOOD - Using `unknown` with validation
+async function fetchUser(): Promise<unknown> {
+  const response = await fetch("/api/user");
+  return response.json(); // Returns `unknown`
+}
+
+const user = await fetchUser();
+
+// ❌ TypeScript forces you to check first
+// console.log(user.email); // ERROR
+
+// ✅ Type guard approach
+if (user && typeof user === "object" && "email" in user) {
+  console.log((user as { email: string }).email); // Now it's safe
+}
+
+// ✅ Better - Use Zod validation (see later section)
+const userSchema = z.object({ email: z.string() });
+const validUser = userSchema.parse(user); // Validates and types it
+console.log(validUser.email); // ✅ 100% safe
+```
+
+**Type Guards - Checking Unknown Types:**
+
+```typescript
+// Helper function to check if value is a specific type
+function isString(val: unknown): val is string {
+  return typeof val === "string";
+}
+
+function isNumber(val: unknown): val is number {
+  return typeof val === "number";
+}
+
+function isObject(val: unknown): val is Record<string, unknown> {
+  return typeof val === "object" && val !== null;
+}
+
+function isArray(val: unknown): val is unknown[] {
+  return Array.isArray(val);
+}
+
+// Usage - Type narrowing (see next section)
+function handle(data: unknown) {
+  if (isString(data)) {
+    console.log(data.toUpperCase()); // ✅ data is string
+  } else if (isNumber(data)) {
+    console.log(data.toFixed(2)); // ✅ data is number
+  } else if (isArray(data)) {
+    console.log(data.length); // ✅ data is array
+  }
+}
+```
+
+**Summary Table:**
+
+| Feature      | `any`                              | `unknown`                         |
+| ------------ | ---------------------------------- | --------------------------------- |
+| Type Safety  | ❌ None - You opt out             | ✅ Full - Must check type first  |
+| Use When     | Legacy code / Third-party libs    | External data / Unknown sources   |
+| Safety Level | 🔴 Dangerous                      | 🟢 Safe                           |
+| Requires     | Nothing (too permissive)          | Type guard (forces discipline)    |
+
+**Rule of Thumb:**
+> Use `unknown` by default. Only use `any` when you absolutely must, and add a comment explaining why.
+
+---
+
+### 2️⃣ Union Types - Multiple Possible Types
+
+**The Idea:**
+A variable can be ONE of several types. Like a "union" in real life - a member belongs to one group or another.
+
+**Basic Syntax:**
+
+```typescript
+// Type is either string OR number
+type StringOrNumber = string | number;
+
+let value: StringOrNumber;
+
+value = "hello"; // ✅ OK
+value = 42; // ✅ OK
+value = true; // ❌ ERROR - not string or number
+```
+
+**Why Unions Matter:**
+
+```typescript
+// Without unions - you're forced to use `any`
+function process(data: any) {
+  // You don't know if it's string or number
+  // So you can't safely call methods
+}
+
+// With unions - type safety!
+function process(data: string | number) {
+  console.log(data.toString()); // ✅ Both string and number have toString()
+  // console.log(data.toUpperCase()); // ❌ ERROR - number doesn't have it
+}
+
+process("hello"); // ✅ OK
+process(42); // ✅ OK
+```
+
+**Real-World Example - API Status:**
+
+```typescript
+// Response can be one of three states
+type ApiResponse = 
+  | { status: "loading" }
+  | { status: "success"; data: string }
+  | { status: "error"; error: string };
+
+// You MUST check the status first (type narrowing - see next)
+function handleResponse(response: ApiResponse) {
+  if (response.status === "success") {
+    console.log(response.data); // ✅ data exists
+    // console.log(response.error); // ❌ error doesn't exist here!
+  } else if (response.status === "error") {
+    console.log(response.error); // ✅ error exists
+    // console.log(response.data); // ❌ data doesn't exist here!
+  }
+}
+```
+
+**Literal Types in Unions:**
+
+```typescript
+// Status can only be one of these exact strings
+type Status = "idle" | "loading" | "success" | "error";
+
+const currentStatus: Status = "loading"; // ✅ OK
+// const currentStatus: Status = "pending"; // ❌ ERROR - not in the union
+
+// Combine with other types
+type Result = 
+  | { success: true; value: number }
+  | { success: false; error: string };
+
+const result: Result = { success: true, value: 42 }; // ✅ OK
+```
+
+---
+
+### 3️⃣ Type Narrowing - Refining Types with Checks
+
+**The Idea:**
+Start with a broad type, then use checks to "narrow" it down to a specific type.
+
+**Common Narrowing Techniques:**
+
+```typescript
+// Start with union type
+function process(value: string | number) {
+  // At this point, you don't know which type it is
+
+  // ✅ NARROWING #1: typeof check
+  if (typeof value === "string") {
+    console.log(value.toUpperCase()); // ✅ TypeScript knows it's string
+  } else {
+    console.log(value.toFixed(2)); // ✅ TypeScript knows it's number
+  }
+}
+
+// ✅ NARROWING #2: instanceof check (for classes)
+function handle(value: Date | string) {
+  if (value instanceof Date) {
+    console.log(value.getTime()); // ✅ It's a Date
+  } else {
+    console.log(value.toUpperCase()); // ✅ It's a string
+  }
+}
+
+// ✅ NARROWING #3: Property check (in operator)
+function describe(value: { name: string } | string[]) {
+  if ("name" in value) {
+    console.log(value.name); // ✅ It has a name property
+  } else {
+    console.log(value.length); // ✅ It's an array
+  }
+}
+
+// ✅ NARROWING #4: Custom type guards
+function isString(val: unknown): val is string {
+  return typeof val === "string";
+}
+
+function process(data: unknown) {
+  if (isString(data)) {
+    console.log(data.toUpperCase()); // ✅ TypeScript knows it's string
+  }
+}
+
+// ✅ NARROWING #5: Truthiness check
+function printLength(str: string | null) {
+  if (str) {
+    console.log(str.length); // ✅ str is not null
+  }
+}
+
+// ✅ NARROWING #6: Equality check
+function compare(x: string | number, y: boolean | string) {
+  if (x === y) {
+    // Both are strings now
+    console.log(x.toUpperCase());
+  }
+}
+```
+
+**Real Example - React Component:**
+
+```typescript
+type ButtonProps = 
+  | { variant: "primary"; onClick: () => void }
+  | { variant: "secondary"; href: string };
+
+function Button(props: ButtonProps) {
+  // ✅ Type narrowing with variant check
+  if (props.variant === "primary") {
+    // TypeScript knows this is the first type
+    return <button onClick={props.onClick}>Click me</button>;
+  } else {
+    // TypeScript knows this is the second type
+    return <a href={props.href}>Link</a>;
+  }
+}
+
+// Usage
+<Button variant="primary" onClick={() => {}} />; // ✅ OK
+<Button variant="secondary" href="/about" />; // ✅ OK
+// <Button variant="primary" href="/about" />; // ❌ ERROR - href not in type
+```
+
+**Never Type - Unreachable Code:**
+
+```typescript
+// This ensures you've handled all cases
+function exhaustiveCheck(status: "success" | "error" | "loading"): never {
+  throw new Error(`Unhandled status: ${status}`);
+}
+
+function handleResponse(response: ApiResponse) {
+  if (response.status === "success") {
+    // ...
+  } else if (response.status === "error") {
+    // ...
+  } else {
+    // What if someone adds a new status?
+    // TypeScript will catch it here!
+    exhaustiveCheck(response.status); // ✅ Alerts you if you missed a case
+  }
+}
+```
+
+---
+
+### 4️⃣ Generics - Reusable Types with Flexibility
+
+**The Core Idea:**
+Instead of hardcoding types, let the type be passed as a parameter.
+
+```typescript
+// ❌ BAD - Hardcoded types (repetitive)
+function wrapString(value: string): { value: string } {
+  return { value };
+}
+
+function wrapNumber(value: number): { value: number } {
+  return { value };
+}
+
+// ✅ GOOD - Generic (reusable)
+function wrap<T>(value: T): { value: T } {
+  return { value };
+}
+
+// Works with any type!
+wrap("hello"); // ✅ { value: string }
+wrap(42); // ✅ { value: number }
+wrap([1, 2, 3]); // ✅ { value: number[] }
+```
+
+**Generic with Constraints:**
+
+```typescript
+// ❌ Too loose - accepts anything
+function getProperty<T>(obj: T, key: string): any {
+  return obj[key]; // ❌ Error - key might not exist
+}
+
+// ✅ With constraint - only works with objects that have string keys
+function getProperty<T extends Record<string, any>>(obj: T, key: keyof T): any {
+  return obj[key]; // ✅ Key is guaranteed to exist
+}
+
+const user = { name: "John", age: 30 };
+getProperty(user, "name"); // ✅ OK
+getProperty(user, "email"); // ❌ ERROR - email doesn't exist
+```
+
+**Generic Arrays:**
+
+```typescript
+// Reusable array function
+function first<T>(array: T[]): T {
+  return array[0];
+}
+
+const firstString = first(["a", "b", "c"]); // ✅ type is string
+const firstNumber = first([1, 2, 3]); // ✅ type is number
+```
+
+**Generic Types:**
+
+```typescript
+// Define once, use with many types
+type Maybe<T> = T | null;
+type Optional<T> = T | undefined;
+type Async<T> = Promise<T>;
+
+const maybeString: Maybe<string> = null; // ✅ OK
+const maybeNumber: Maybe<number> = 42; // ✅ OK
+
+const userData: Optional<{ name: string }> = undefined; // ✅ OK
+
+const promise: Async<string> = Promise.resolve("hello"); // ✅ OK
+```
+
+---
+
+### 5️⃣ Interfaces vs Types - When to Use Each
+
+**The Similarities:**
+
+Both define the shape of an object:
+
+```typescript
+// Using interface
+interface User {
+  name: string;
+  age: number;
+}
+
+// Using type
+type User = {
+  name: string;
+  age: number;
+};
+
+// Both work the same way
+const user: User = { name: "John", age: 30 };
+```
+
+**The Key Differences:**
+
+| Feature                | Interface                  | Type                        |
+| ---------------------- | -------------------------- | --------------------------- |
+| **Declaration merging** | ✅ Yes (auto-merge)        | ❌ No (will error)          |
+| **Extends other types** | ✅ Yes                     | ✅ Yes                      |
+| **Union types**         | ❌ No                      | ✅ Yes (`A \| B`)           |
+| **Mapped types**        | ❌ No                      | ✅ Yes                      |
+| **Primitives**          | ❌ No                      | ✅ Yes (`type Age = number`) |
+| **Tuples**              | ❌ No                      | ✅ Yes (`type Pair = [1, 2]`) |
+| **Performance**         | Slightly faster            | Slightly slower             |
+
+**Difference #1 - Declaration Merging:**
+
+```typescript
+// ✅ Interfaces auto-merge
+interface User {
+  name: string;
+}
+
+interface User {
+  age: number; // Merged!
+}
+
+const user: User = { name: "John", age: 30 }; // ✅ Both properties required
+
+// ❌ Types don't merge
+type User = { name: string };
+type User = { age: number }; // ❌ ERROR - duplicate identifier
+```
+
+**Difference #2 - Union Types:**
+
+```typescript
+// ✅ Types support unions
+type Status = "success" | "error" | "loading";
+type Response = User | Post | Comment;
+
+// ❌ Interfaces don't (interfaces are always object-like)
+// interface Status = "success" | "error"; // ❌ ERROR
+```
+
+**Difference #3 - Mapped Types:**
+
+```typescript
+// ✅ Types support mapped types
+type ReadOnly<T> = {
+  readonly [K in keyof T]: T[K];
+};
+
+type User = { name: string; age: number };
+type ReadOnlyUser = ReadOnly<User>;
+// ✅ Results in: { readonly name: string; readonly age: number }
+
+// ❌ Interfaces don't support this
+// interface ReadOnly<T> { // This won't work
+//   readonly [K in keyof T]: T[K];
+// }
+```
+
+**When to Use What:**
+
+```typescript
+// ✅ Use INTERFACE for:
+// - Object structures (classes, components props)
+// - Extensibility (will other libraries extend this?)
+// - API contracts that might need merging
+
+interface ComponentProps {
+  title: string;
+  onClick: () => void;
+}
+
+interface DatabaseRow {
+  id: number;
+  createdAt: Date;
+}
+
+// ✅ Use TYPE for:
+// - Complex types (unions, intersections, mapped)
+// - Primitives, tuples, functions
+// - Type transformations
+
+type Status = "idle" | "loading" | "error" | "success";
+type Callback = (data: unknown) => void;
+type Flatten<T> = T extends Array<infer U> ? U : T;
+```
+
+**Real-World Example - Combining Both:**
+
+```typescript
+// Define data shape with interface (object-like)
+interface User {
+  id: number;
+  name: string;
+  email: string;
+}
+
+// Define API response with type (union)
+type ApiResponse<T> = 
+  | { status: "success"; data: T }
+  | { status: "error"; error: string };
+
+// Use both together
+type UserResponse = ApiResponse<User>;
+
+// Result:
+// {
+//   status: "success";
+//   data: {
+//     id: number;
+//     name: string;
+//     email: string;
+//   };
+// } | {
+//   status: "error";
+//   error: string;
+// }
+```
+
+**Extending Types:**
+
+```typescript
+// Interfaces - use extends
+interface Animal {
+  name: string;
+}
+
+interface Dog extends Animal {
+  breed: string;
+}
+
+// Types - use intersection (&)
+type Animal = { name: string };
+type Dog = Animal & { breed: string };
+
+// Both result in: { name: string; breed: string }
+```
+
+---
+
 ## 📚 Learn
 
 ### 🧬 Core Mastery Concepts
