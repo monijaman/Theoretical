@@ -1,379 +1,468 @@
-# NestJS Concepts — Quick Reference
+# NestJS — Core Concepts
 
-A compact overview of common NestJS building blocks with small examples.
+> **Restaurant Analogy** (use this to remember everything):
+> Module = the restaurant | Controller = waiter | Service = kitchen | Guard = bouncer | Pipe = food prep | Interceptor = manager | Middleware = lobby | Exception Filter = customer service desk
 
-## Controllers
+---
 
-Handle incoming HTTP requests and return responses.
+## Request Lifecycle (the order things run)
 
-- Responsibilities: define routes, delegate to services, return responses.
+```
+Request →  Middleware → Guard → Pipe → Controller → Service → Interceptor → Response
+                ↓                                                       ↑
+          (Exception Filter catches errors anywhere in the chain)
+```
 
-Example:
+| Step              | Job                              | Stops request? |
+|-------------------|----------------------------------|----------------|
+| Middleware        | Logging, CORS, cookies           | No             |
+| Guard             | Auth / permission check          | Yes            |
+| Pipe              | Validate & transform input       | Yes            |
+| Controller        | Route handler                    | —              |
+| Service           | Business logic                   | —              |
+| Interceptor       | Wrap response, timing, caching   | No             |
+| Exception Filter  | Format error responses           | —              |
+
+---
+
+## 1. Modules
+
+**Think:** A restaurant. Groups everything related together (controllers, services, imports, exports).
+
+Every app has a root `AppModule`. Feature modules (e.g. `UsersModule`) plug into it.
 
 ```ts
-@Controller('users')
+@Module({
+  imports: [],          // other modules this one needs
+  controllers: [UserController],
+  providers: [UserService],
+  exports: [UserService], // share with other modules
+})
+export class UsersModule {}
+```
+
+**Rule:** If you want to use a service from another module, that module must `export` it and you must `import` the module.
+
+---
+
+## 2. Controllers
+
+**Think:** The waiter. Receives orders (HTTP requests), delegates to the kitchen (service), returns the result.
+
+Controllers should be thin — no business logic here.
+
+```ts
+@Controller('users')        // base route: /users
 export class UserController {
-  @Get()
+  constructor(private userService: UserService) {}
+
+  @Get()                    // GET /users
   findAll() {
-    return 'All users';
+    return this.userService.findAll();
+  }
+
+  @Get(':id')               // GET /users/42
+  findOne(@Param('id') id: string) {
+    return this.userService.findOne(+id);
+  }
+
+  @Post()                   // POST /users
+  create(@Body() dto: CreateUserDto) {
+    return this.userService.create(dto);
   }
 }
 ```
 
-## Providers (Services)
+Common decorators: `@Get()` `@Post()` `@Put()` `@Delete()` `@Patch()`  
+Extract data: `@Param()` `@Body()` `@Query()` `@Headers()`
 
-Reusable classes that contain business logic and are injectable via DI.
+---
 
-- Marked with `@Injectable()` and listed in a module's `providers`.
+## 3. Providers / Services
+
+**Think:** The kitchen. Does the actual work — database calls, calculations, business rules.
+
+Mark with `@Injectable()` so NestJS can inject it.
 
 ```ts
 @Injectable()
-## Custom Providers
+export class UserService {
+  private users = [];
 
-Control exactly how dependencies are created and injected. Useful for configs, mocks, or swapping implementations.
+  findAll() {
+    return this.users;
+  }
 
-```ts
-// examples of provider options
-useClass
-useValue
-useFactory
-useExisting
-
-{
-  provide: 'API_KEY',
-  useValue: '123456',
+  create(data: any) {
+    this.users.push(data);
+    return data;
+  }
 }
 ```
 
-## Asynchronous Providers
+Register in the module's `providers` array, then inject via constructor:
 
-Use when a dependency requires async initialization (DB connections, remote services). Commonly used in `forRootAsync()` patterns.
+```ts
+constructor(private userService: UserService) {}
+```
+
+---
+
+## 4. Dependency Injection (DI)
+
+**Think:** You don't fetch your tools — they're handed to you.
+
+Instead of `new UserService()` inside your controller, you declare it in the constructor and NestJS creates and injects it automatically.
+
+```ts
+// NestJS wires this up — you never call new UserService()
+constructor(private userService: UserService) {}
+```
+
+Benefits: loose coupling, easy to swap for mocks in tests.
+
+---
+
+## 5. Guards
+
+**Think:** The bouncer. Checks if you're allowed in before you reach the controller.
+
+Implements `CanActivate` → return `true` (allow) or `false`/throw (block).
+
+```ts
+@Injectable()
+export class AuthGuard implements CanActivate {
+  canActivate(context: ExecutionContext): boolean {
+    const request = context.switchToHttp().getRequest();
+    return !!request.headers.authorization; // block if no token
+  }
+}
+```
+
+Apply to a route or whole controller:
+
+```ts
+@UseGuards(AuthGuard)
+@Get('profile')
+getProfile() { ... }
+```
+
+Real use cases: JWT auth, role-based access (`@Roles('admin')`), API key checks.
+
+---
+
+## 6. Pipes
+
+**Think:** Food prep. Validates and transforms input before it reaches the controller.
+
+Two jobs:
+1. **Validate** — throw if data is wrong
+2. **Transform** — convert type (e.g. `"42"` → `42`)
+
+Built-in pipes: `ParseIntPipe`, `ParseBoolPipe`, `ValidationPipe`, `DefaultValuePipe`
+
+```ts
+@Get(':id')
+getUser(@Param('id', ParseIntPipe) id: number) {
+  // id is already a number, not a string
+  return id;
+}
+```
+
+Custom pipe:
+
+```ts
+@Injectable()
+export class AgeValidationPipe implements PipeTransform {
+  transform(value: any) {
+    if (value.age < 18) throw new BadRequestException('Must be 18+');
+    return value;
+  }
+}
+
+// Use it:
+@Post()
+create(@Body(AgeValidationPipe) body: CreateUserDto) { ... }
+```
+
+> **Guard vs Pipe:** Guard asks *"are you allowed?"* — Pipe asks *"is your data valid?"*
+
+---
+
+## 7. Interceptors
+
+**Think:** The manager hovering over the waiter. Runs before AND after the handler. Good for logging, response shaping, caching, timing.
+
+```ts
+@Injectable()
+export class LoggingInterceptor implements NestInterceptor {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+    console.log('Before handler...');
+    const start = Date.now();
+
+    return next.handle().pipe(
+      tap(() => console.log(`After... ${Date.now() - start}ms`)),
+    );
+  }
+}
+```
+
+Apply with `@UseInterceptors(LoggingInterceptor)`.
+
+Common uses: wrap response in `{ data: ... }`, strip sensitive fields, measure performance.
+
+---
+
+## 8. Middleware
+
+**Think:** The lobby. Every request passes through before being seated (before guards/pipes).
+
+```ts
+@Injectable()
+export class LoggerMiddleware implements NestMiddleware {
+  use(req: Request, res: Response, next: NextFunction) {
+    console.log(`${req.method} ${req.url}`);
+    next(); // always call next() or the request hangs
+  }
+}
+```
+
+Register in the module:
+
+```ts
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(LoggerMiddleware).forRoutes('*');
+  }
+}
+```
+
+> **Middleware vs Interceptor:** Middleware runs at the Express level (before NestJS pipeline). Interceptors run inside NestJS and have access to the execution context.
+
+---
+
+## 9. Exception Filters
+
+**Think:** Customer service desk. Catches errors and formats them into clean responses.
+
+```ts
+@Catch(HttpException)
+export class HttpExceptionFilter implements ExceptionFilter {
+  catch(exception: HttpException, host: ArgumentsHost) {
+    const ctx = host.switchToHttp();
+    const response = ctx.getResponse<Response>();
+    const status = exception.getStatus();
+
+    response.status(status).json({
+      statusCode: status,
+      message: exception.message,
+      timestamp: new Date().toISOString(),
+    });
+  }
+}
+```
+
+Apply globally: `app.useGlobalFilters(new HttpExceptionFilter())`
+
+NestJS has built-in `HttpException` subclasses: `NotFoundException`, `UnauthorizedException`, `BadRequestException`, etc.
+
+---
+
+## 10. Custom Providers
+
+Control exactly how a dependency is created.
+
+```ts
+// Provide a fixed value
+{ provide: 'API_KEY', useValue: 'abc-123' }
+
+// Use a specific class
+{ provide: LoggerService, useClass: DevLoggerService }
+
+// Use a factory function
+{ provide: 'CONFIG', useFactory: () => ({ debug: true }) }
+
+// Alias one provider to another
+{ provide: 'AliasService', useExisting: RealService }
+```
+
+Inject non-class tokens with `@Inject()`:
+
+```ts
+constructor(@Inject('API_KEY') private apiKey: string) {}
+```
+
+---
+
+## 11. Async Providers
+
+Use when setup needs `await` (DB connections, config loading).
 
 ```ts
 {
   provide: 'DB_CONNECTION',
   useFactory: async () => {
-    return await connectToDB();
+    const conn = await connectToDatabase();
+    return conn;
   },
 }
 ```
 
-## Dynamic Modules
+NestJS will wait for the promise before starting the app.
 
-Modules that configure themselves at runtime and export configured providers.
+---
+
+## 12. Dynamic Modules
+
+Modules that configure themselves at runtime — common for libraries (`ConfigModule`, `TypeOrmModule`).
 
 ```ts
 @Module({})
 export class ConfigModule {
-  static forRoot(options): DynamicModule {
+  static forRoot(options: ConfigOptions): DynamicModule {
     return {
       module: ConfigModule,
-      providers: [
-        { provide: 'CONFIG', useValue: options },
-      ],
+      providers: [{ provide: 'CONFIG', useValue: options }],
       exports: ['CONFIG'],
+      global: true, // available everywhere without importing
     };
   }
 }
+
+// Usage:
+ConfigModule.forRoot({ envFilePath: '.env' })
 ```
 
-## Injection Scopes
+---
 
-Control provider lifetimes:
+## 13. Injection Scopes
 
-- Singleton (default): one instance per app
-- Request: new instance per request
-- Transient: new instance per injection
+Controls how long a provider instance lives.
+
+| Scope       | Behavior                        | Use when                          |
+|-------------|----------------------------------|-----------------------------------|
+| `DEFAULT`   | One instance per app (singleton) | Almost always                     |
+| `REQUEST`   | New instance per HTTP request    | Need request-specific data        |
+| `TRANSIENT` | New instance per injection       | Stateless utilities               |
 
 ```ts
 @Injectable({ scope: Scope.REQUEST })
 export class RequestScopedService {}
 ```
 
-Use request scope sparingly due to performance cost.
-
-## Circular Dependency
-
-When two services depend on each other, resolve with `forwardRef()` or refactor to remove the cycle.
-
-```ts
-@Injectable()
-export class AService {
-  constructor(@Inject(forwardRef(() => BService)) private b: BService) {}
-}
-```
-
-## ModuleRef (Manual DI Access)
-
-Access the DI container directly for dynamic or conditional injection.
-
-```ts
-constructor(private moduleRef: ModuleRef) {}
-
-const service = this.moduleRef.get(Service);
-```
-
-## Lazy-loading Modules
-
-Load modules on demand (e.g., large features or microservices) to improve startup performance. Often done via dynamic imports or `ModuleRef`.
-
-## Execution Context
-
-Represents the current request environment and works across HTTP, WebSockets, and microservices.
-
-```ts
-const ctx = context.switchToHttp();
-const request = ctx.getRequest();
-```
-
-## Lifecycle Events
-
-Hooks that run during application/module lifecycle for setup/cleanup.
-
-```ts
-onModuleInit() {
-  console.log('Module initialized');
-}
-```
-
-Common hooks: `onModuleInit()`, `onApplicationBootstrap()`, `onModuleDestroy()`.
-
-## Discovery Service
-
-Scan and access metadata (decorators, providers) — useful for building plugins and automation tools. Provided by `@nestjs/core`.
-
-## Platform Agnosticism
-
-NestJS supports multiple runtimes (Express, Fastify) and microservice transports (Kafka, Redis, gRPC). The application code stays largely the same while adapters change.
-
-## Testing
-
-Built-in support for unit and e2e testing using `@nestjs/testing` with Jest and Supertest.
-
-```ts
-const module = await Test.createTestingModule({
-  providers: [UserService],
-}).compile();
-```
-
-## Quick Mental Model
-
-- Custom/Async Providers → how dependencies are created
-- Dynamic Modules → configurable modules
-- Scopes → lifecycle of instances
-- Execution Context / Lifecycle → runtime behavior
-- ModuleRef / Discovery → advanced DI control
-- Testing → reliability
-- Platform Agnostic → flexibility
-
-## Guards in NestJS
-
-### What is a Guard?
-
-A Guard determines whether a request should be handled or not.
-
-Think: “Is this user allowed to access this route?”
-
-Guards implement `CanActivate`.
-
-```ts
-import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
-
-@Injectable()
-export class AuthGuard implements CanActivate {
-  canActivate(context: ExecutionContext): boolean {
-    const request = context.switchToHttp().getRequest();
-    return !!request.headers.authorization;
-  }
-}
-```
-
-Use it in a controller:
-
-```ts
-import { UseGuards } from '@nestjs/common';
-
-@UseGuards(AuthGuard)
-@Get('profile')
-getProfile() {
-  return 'This is protected';
-}
-```
-
-Real use cases:
-- Authentication (JWT check)
-- Role-based access (admin/user)
-- API key validation
-
-Execution order (important):
-
-Guards run before:
-
-- Pipes
-- Interceptors
-- Controllers
-
-So they block early 🚫
-
-## Pipes in NestJS
-
-### What is a Pipe?
-
-A Pipe is used to validate or transform data.
-
-Think: “Is the input valid? If yes, clean/convert it.”
-
-Built-in example — `ParseIntPipe`:
-
-```ts
-@Get(':id')
-getUser(@Param('id', ParseIntPipe) id: number) {
-  return id;
-}
-```
-
-Converts string → number and throws if invalid.
-
-Custom Pipe example:
-
-```ts
-import { PipeTransform, Injectable, BadRequestException } from '@nestjs/common';
-
-@Injectable()
-export class AgeValidationPipe implements PipeTransform {
-  transform(value: any) {
-    if (value.age < 18) {
-      throw new BadRequestException('Age must be 18+');
-    }
-    return value;
-  }
-}
-```
-
-Use it:
-
-```ts
-@Post()
-createUser(@Body(AgeValidationPipe) body: any) {
-  return body;
-}
-```
-
-Real use cases:
-- DTO validation
-- Sanitizing input
-- Transforming query params
-
-Key difference (simple):
-
-Feature | Guard | Pipe
----|---:|---
-Purpose | Authorization | Validation / Transformation
-Runs When | Before request reaches handler | After guard, before controller
-Stops Request? | Yes | Yes (if validation fails)
+> Avoid `REQUEST` scope unless necessary — it disables singleton optimizations and cascades up the injection tree.
 
 ---
-Added concise Guards and Pipes explanations, examples, and when to use them.
-Control lifetime of providers:
 
-Singleton (default) → one instance per app
-Request → new instance per request
-Transient → new instance per injection
-@Injectable({ scope: Scope.REQUEST })
+## 14. Circular Dependency
 
-👉 Use request scope carefully (performance cost).
+When ServiceA depends on ServiceB and ServiceB depends on ServiceA.
 
-🔹 Circular Dependency
+Fix with `forwardRef()` (use as a last resort — prefer redesigning):
 
-When two services depend on each other.
-
+```ts
 @Injectable()
 export class AService {
-  constructor(@Inject(forwardRef(() => BService)) private b: BService) {}
+  constructor(
+    @Inject(forwardRef(() => BService)) private b: BService,
+  ) {}
 }
+```
 
-👉 Use forwardRef() to resolve, but better to redesign.
+Both sides must use `forwardRef()`.
 
-🔹 Module Reference (ModuleRef)
+---
 
-Gives manual access to DI container.
+## 15. ModuleRef (Manual DI Access)
 
+Reach into the DI container to get a provider dynamically (e.g. in a factory or event handler).
+
+```ts
 constructor(private moduleRef: ModuleRef) {}
 
-const service = this.moduleRef.get(Service);
-
-👉 Useful for dynamic or conditional injection.
-
-🔹 Lazy-loading Modules
-
-Load modules only when needed instead of at startup.
-
-Improves performance for large apps
-Useful for microservices or feature-heavy systems
-
-👉 Often done via ModuleRef or dynamic imports.
-
-🔹 Execution Context
-
-Represents current request environment.
-
-const ctx = context.switchToHttp();
-const request = ctx.getRequest();
-
-👉 Works across:
-
-HTTP
-WebSockets
-Microservices
-🔹 Lifecycle Events
-
-Hooks that run during app lifecycle:
-
-onModuleInit()
-onApplicationBootstrap()
-onModuleDestroy()
-onModuleInit() {
-  console.log('Module initialized');
+async doSomething() {
+  const service = this.moduleRef.get(UserService, { strict: false });
 }
+```
 
-👉 Used for setup/cleanup logic.
+---
 
-🔹 Discovery Service
+## 16. Lifecycle Hooks
 
-Used to scan and access metadata (decorators, providers).
+Run code at specific moments during app startup/shutdown.
 
-Comes from @nestjs/core
-Helps build plugins, automation tools
+```ts
+@Injectable()
+export class AppService implements OnModuleInit, OnModuleDestroy {
+  onModuleInit() {
+    console.log('Module ready — connect to DB here');
+  }
 
-👉 Advanced use case (framework-level features).
+  onModuleDestroy() {
+    console.log('Module teardown — close connections here');
+  }
+}
+```
 
-🔹 Platform Agnosticism
+| Hook                       | When it runs                        |
+|----------------------------|--------------------------------------|
+| `onModuleInit()`           | After module's dependencies resolved |
+| `onApplicationBootstrap()` | After all modules initialized        |
+| `onModuleDestroy()`        | On app shutdown signal               |
+| `beforeApplicationShutdown()` | Before shutdown hooks fire        |
 
-NestJS works on multiple platforms:
+Enable shutdown hooks: `app.enableShutdownHooks()`
 
-Express (default)
-Fastify
-Microservices (Kafka, Redis, gRPC)
+---
 
-👉 Same code, different runtime adapters.
+## 17. Testing
 
-🔹 Testing
+NestJS has a testing module that creates a mini app with real DI.
 
-NestJS has built-in support for unit + e2e testing.
-
+```ts
+// Unit test — swap real service with a mock
 const module = await Test.createTestingModule({
-  providers: [UserService],
+  controllers: [UserController],
+  providers: [
+    {
+      provide: UserService,
+      useValue: { findAll: jest.fn().mockReturnValue([]) },
+    },
+  ],
 }).compile();
 
-👉 Tools:
+const controller = module.get(UserController);
+```
 
-Jest (default)
-Supertest (for APIs)
-🧠 Quick Mental Model
-Custom/Async Providers → how dependencies are created
-Dynamic Modules → configurable modules
-Scopes → lifecycle of instances
-Execution Context / Lifecycle → runtime behavior
-ModuleRef / Discovery → advanced DI control
-Testing → reliability
-Platform Agnostic → flexibility
+```ts
+// E2E test — full HTTP with Supertest
+const app = module.createNestApplication();
+await app.init();
+
+await request(app.getHttpServer())
+  .get('/users')
+  .expect(200);
+```
+
+---
+
+## Quick Cheat Sheet
+
+```
+Module       → groups related things (import/export)
+Controller   → routes + request/response (thin)
+Service      → business logic (injectable)
+Guard        → who can access (auth/roles)
+Pipe         → is data valid/clean (validate/transform)
+Interceptor  → before + after handler (logging/wrapping)
+Middleware   → before NestJS pipeline (Express-level)
+ExFilter     → format errors consistently
+
+DI           → declare in constructor, NestJS provides it
+forwardRef() → fix circular deps (but prefer redesign)
+ModuleRef    → get provider dynamically at runtime
+Scope        → DEFAULT (singleton) | REQUEST | TRANSIENT
+```
+
+> **One-liner to remember the pipeline:**
+> `Middleware → Guard → Pipe → Handler → Interceptor`
