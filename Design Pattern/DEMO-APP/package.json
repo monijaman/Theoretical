@@ -1,0 +1,29 @@
+{
+  "name": "design-patterns-demo",
+  "version": "1.0.0",
+  "description": "Comprehensive demonstration of design patterns in JavaScript",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "node src/main.js",
+    "demo": "node src/main.js",
+    "test": "echo \"Run npm start to see the design patterns demo\" && exit 1"
+  },
+  "keywords": [
+    "design-patterns",
+    "javascript",
+    "factory",
+    "singleton",
+    "module",
+    "observer",
+    "decorator",
+    "proxy",
+    "strategy",
+    "command",
+    "educational"
+  ],
+  "author": "Design Patterns Demo",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
