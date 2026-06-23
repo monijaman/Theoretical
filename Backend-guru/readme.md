@@ -4,7 +4,7 @@ Master backend engineering. Build scalable, secure, production-ready APIs and sy
 
 ---
 
-## ✨ Module Status: FULLY ENHANCED (7/7)
+## ✨ Module Status: FULLY ENHANCED (10/10)
 
 All Backend-guru modules have been comprehensively enhanced with real-world case studies, production code examples, and career progression frameworks.
 
@@ -19,8 +19,11 @@ All Backend-guru modules have been comprehensively enhanced with real-world case
 | ☸️ **Kubernetes + Observability + Production** | ✅ **COMPREHENSIVE** | K8s fundamentals, auto-scaling, health checks, RBAC, graceful shutdown                  |
 | 📊 **Observability & Reliability**             | ✅ **COMPREHENSIVE** | Structured logging, metrics, traces, SLOs, incident response, error budgets             |
 | 🧪 **Production Simulation & Chaos**           | ✅ **COMPREHENSIVE** | Load testing, chaos hypotheses, failure scenarios, RTO/RPO, multi-region failover       |
+| ✏️ **Coding Styles**                           | ✅ **COMPREHENSIVE** | Naming conventions, function design, project layout, error handling, TypeScript, linting |
+| 🔐 **Security & Performance**                  | ✅ **COMPREHENSIVE** | OWASP Top 10, JWT, rate limiting, SQL injection, caching, N+1, DB indexing, profiling   |
+| 🔌 **API Design**                              | ✅ **COMPREHENSIVE** | REST principles, versioning, response contracts, pagination, idempotency, OpenAPI       |
 
-**Total Enhanced Content:** 14,000+ lines of production-ready material
+**Total Enhanced Content:** 17,000+ lines of production-ready material
 **Real-World Case Studies:** Netflix, Uber, Google, Capital One, Airbnb
 **Code Examples:** 150+ production-grade implementations
 **Business Impact Metrics:** Revenue optimization, cost savings, MTTR improvements
@@ -76,6 +79,23 @@ Design patterns for scalable systems.
 
 ---
 
+#### [API Design](./API%20Design/readme.md)
+
+Build APIs that stand the test of time.
+
+- RESTful URL design and HTTP semantics
+- Consistent request/response contracts
+- Versioning strategies (URI, header)
+- Pagination (offset vs cursor)
+- Idempotency keys for safe retries
+- GraphQL vs REST trade-offs
+- OpenAPI documentation
+- Stripe-inspired patterns (prefixed IDs, expandable resources)
+
+**Time Commitment:** 2-3 weeks | **Difficulty:** ⭐⭐⭐⭐
+
+---
+
 #### [Distributed Systems Concepts](./Distributed%20Systems%20Concepts/readme.md)
 
 Understanding systems at scale.
@@ -88,6 +108,39 @@ Understanding systems at scale.
 - Fault tolerance
 
 **Time Commitment:** 3 weeks | **Difficulty:** ⭐⭐⭐⭐⭐
+
+---
+
+#### [Security & Performance](./Security%20and%20Performance/readme.md)
+
+Build fast, bulletproof backends.
+
+- OWASP Top 10 mapped to Node.js code
+- Broken access control, SQL/NoSQL injection prevention
+- JWT best practices, bcrypt password hashing
+- Rate limiting with Redis
+- Security headers (Helmet.js), CORS, secrets management
+- Cache-aside, write-through, stampede prevention
+- Database indexing, N+1 problem, connection pooling
+- Async performance, worker threads, Prometheus metrics
+
+**Time Commitment:** 3-4 weeks | **Difficulty:** ⭐⭐⭐⭐⭐
+
+---
+
+#### [Coding Styles](./Coding%20Styles/readme.md)
+
+Write code like a senior engineer.
+
+- Naming conventions (variables, constants, booleans, files)
+- Function design (single responsibility, guard clauses, immutability)
+- Project layout (layered architecture, dependency direction)
+- Error handling patterns (custom error classes, centralized handler)
+- TypeScript best practices (strict mode, no `any`, interfaces vs types)
+- ESLint, Prettier, Husky — automated enforcement
+- Code review checklist
+
+**Time Commitment:** 2 weeks | **Difficulty:** ⭐⭐⭐
 
 ---
 
@@ -203,19 +256,22 @@ Test systems like they're running in production.
 ### Option 1: Sequential (Recommended)
 
 ```
-Week 1-3:    Advanced Node.js Internals
-Week 4-5:    Express & HTTP Servers
-Week 6-8:    Architecture Patterns
-Week 9-11:   PostgreSQL Mastery
-Week 12-13:  Redis Deep Dive
-Week 14-16:  Distributed Systems
-Week 17-18:  RabbitMQ & Events
-Week 19-22:  Kubernetes & Observability
-Week 23-24:  Production Simulation
-Week 25-32:  Capstone Project
+Week 1-2:    Coding Styles (foundation — good habits from day 1)
+Week 3-5:    Advanced Node.js Internals
+Week 6-7:    Express & HTTP Servers
+Week 8-10:   API Design
+Week 11-13:  Architecture Patterns
+Week 14-16:  PostgreSQL Mastery
+Week 17-18:  Redis Deep Dive
+Week 19-21:  Security & Performance
+Week 22-24:  Distributed Systems
+Week 25-26:  RabbitMQ & Events
+Week 27-30:  Kubernetes & Observability
+Week 31-32:  Production Simulation
+Week 33-40:  Capstone Project
 ```
 
-**Total Time:** ~8 months of focused study
+**Total Time:** ~10 months of focused study
 
 ---
 
@@ -233,16 +289,18 @@ Pick one area and master it deeply before moving on.
 
 ## 📊 Skill Progression Matrix
 
-| Topic               | Junior               | Mid                | Senior            | Staff |
-| ------------------- | -------------------- | ------------------ | ----------------- | ----- |
-| Node.js             | Basics               | Competent          | Mastery           | ✅    |
-| API Design          | Routes               | RESTful            | Scalable          | ✅    |
-| PostgreSQL          | CRUD                 | Query optimization | Schema design     | ✅    |
-| Redis               | Know what it is      | Using patterns     | Advanced patterns | ✅    |
-| Distributed Systems | Aware                | Building           | Architecting      | ✅    |
-| Message Queues      | Curious              | Using              | Designing         | ✅    |
-| Kubernetes          | Heard of it          | Deploying          | Operating         | ✅    |
-| Security            | Following checklists | Implementing       | Designing         | ✅    |
+| Topic               | Junior               | Mid                    | Senior                   | Staff |
+| ------------------- | -------------------- | ---------------------- | ------------------------ | ----- |
+| Node.js             | Basics                    | Competent              | Mastery                       | ✅    |
+| Coding Styles       | Inconsistent naming       | Follows conventions    | Enforced via CI + tooling     | ✅    |
+| API Design          | Routes only               | RESTful + status codes | Versioned, contract-first     | ✅    |
+| PostgreSQL          | CRUD                      | Query optimization     | Schema design + replication   | ✅    |
+| Redis               | Know what it is           | Using patterns         | Stampede prevention, cluster  | ✅    |
+| Security            | Following checklists      | OWASP + JWT + Zod      | Threat modeling, audit logs   | ✅    |
+| Performance         | Aware of slow queries     | Caching + indexing     | Profiling + async tuning      | ✅    |
+| Distributed Systems | Aware                     | Building               | Architecting                  | ✅    |
+| Message Queues      | Curious                   | Using                  | Designing sagas + DLQ         | ✅    |
+| Kubernetes          | Heard of it               | Deploying              | Operating + RBAC + HPA        | ✅    |
 
 ---
 
