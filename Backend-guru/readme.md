@@ -22,6 +22,7 @@ All Backend-guru modules have been comprehensively enhanced with real-world case
 | ✏️ **Coding Styles**                           | ✅ **COMPREHENSIVE** | Naming conventions, function design, project layout, error handling, TypeScript, linting |
 | 🔐 **Security & Performance**                  | ✅ **COMPREHENSIVE** | OWASP Top 10, JWT, rate limiting, SQL injection, caching, N+1, DB indexing, profiling   |
 | 🔌 **API Design**                              | ✅ **COMPREHENSIVE** | REST principles, versioning, response contracts, pagination, idempotency, OpenAPI       |
+| 🧭 **System Design**                           | ✅ **COMPREHENSIVE** | CAP/PACELC, sharding/replication, caching, queues, consensus, HA/DR, 19 full system design write-ups |
 
 **Total Enhanced Content:** 17,000+ lines of production-ready material
 **Real-World Case Studies:** Netflix, Uber, Google, Capital One, Airbnb
@@ -93,6 +94,19 @@ Build APIs that stand the test of time.
 - Stripe-inspired patterns (prefixed IDs, expandable resources)
 
 **Time Commitment:** 2-3 weeks | **Difficulty:** ⭐⭐⭐⭐
+
+---
+
+#### [System Design](./System%20Design/readme.md)
+
+Senior/staff/architect-level system design interview notes — 10 topic areas plus full end-to-end system design practice.
+
+- Scaling & traffic management, data & storage, consistency & distributed theory
+- Caching, messaging & event-driven architecture, communication protocols
+- Architecture patterns, reliability & operations, large-scale data systems
+- 19 full system design walkthroughs (URL shortener, Uber, Netflix, chat, news feed, payments, and more)
+
+**Time Commitment:** 4-6 weeks | **Difficulty:** ⭐⭐⭐⭐⭐
 
 ---
 
