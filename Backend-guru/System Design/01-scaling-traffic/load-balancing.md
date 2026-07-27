@@ -1,9 +1,25 @@
 # Load Balancing
 [← Back to index](../readme.md)
 
+## Quick summary
+
+Think of load balancing as the traffic manager for your system. It decides which backend instance should receive each request so the system stays responsive, reliable, and balanced under load.
+
+In plain English:
+
+- If one server is overloaded, another should take some traffic.
+- If one server fails, traffic should be redirected quickly.
+- If the system is stateful, you need to think carefully about session affinity and shared state.
+
 ## Why it matters
 
 The moment you have more than one instance of a service, something has to decide which instance handles which request. Get this wrong and you get hot instances that fall over while siblings sit idle, connection storms during deploys, or an outage the instant one box dies. Load balancing is the first piece of infrastructure that turns "a server" into "a service," and interviewers use it to check whether you understand the difference between routing packets and routing requests — i.e., L4 vs L7 — and whether you can reason about statefulness, health, and failure.
+
+## At a glance
+
+- Use L4 when you care mostly about raw performance and TCP/UDP traffic.
+- Use L7 when you need smart routing based on HTTP paths, headers, or cookies.
+- Prefer stateless backends and shared state for the cleanest long-term design.
 
 ## L4 vs L7
 
