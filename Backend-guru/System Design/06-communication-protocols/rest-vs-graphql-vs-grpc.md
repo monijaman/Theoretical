@@ -1,38 +1,105 @@
 # REST vs GraphQL vs gRPC
 [← Back to index](../readme.md)
 
-## What this is and why it's asked
+## What it is and why interviewers ask about it
 
-Every API needs to pick a wire contract between client and server, and the three dominant answers optimize for different things: REST optimizes for uniformity and cacheability using HTTP itself as the semantics layer, GraphQL optimizes for letting the client dictate exactly what shape of data it needs, and gRPC optimizes for performance and strict contracts between services that both sides control. Interviewers ask this to see whether you understand *why* a company runs all three at once rather than picking a single "best" one — the honest answer is almost always "REST/GraphQL face the public internet and human client teams, gRPC talks to itself internally," and being able to justify that split is the actual signal they're listening for.
+When building an API, you need a contract between clients and servers. The three dominant approaches solve different problems:
 
-## REST — resource-oriented, HTTP semantics
+- **REST** focuses on simplicity, HTTP standards, and caching.
+- **GraphQL** lets clients request exactly the data they need.
+- **gRPC** focuses on high-performance communication between services.
 
-REST models the API as a set of *resources* addressed by URLs, manipulated via standard HTTP verbs, with HTTP status codes and headers doing real semantic work (caching, idempotency, content negotiation) instead of being an afterthought.
+There is no universally "best" API style.
 
+Large companies commonly use all three:
+
+- **REST** for public APIs.
+- **GraphQL** for frontend applications with flexible data needs.
+- **gRPC** for internal service-to-service communication.
+
+Interviewers want to know whether you understand these trade-offs instead of treating one technology as universally superior.
+
+---
+
+# REST
+
+REST models everything as **resources** exposed through URLs and manipulated using standard HTTP methods.
+
+```text
+GET    /users/42
+POST   /users
+PATCH  /users/42
+DELETE /users/42
+GET    /users/42/orders
 ```
-GET    /users/42          -> fetch user 42
-POST   /users             -> create a user
-PATCH  /users/42          -> partially update user 42
-DELETE /users/42          -> delete user 42
-GET    /users/42/orders   -> nested resource: user 42's orders
+
+REST relies heavily on HTTP semantics.
+
+Examples include:
+
+- HTTP verbs (`GET`, `POST`, `PUT`, `PATCH`, `DELETE`)
+- HTTP status codes
+- Cache-Control
+- ETag
+- Content negotiation
+
+Because it follows HTTP conventions, REST integrates naturally with:
+
+- browsers
+- CDNs
+- API gateways
+- proxies
+- curl
+- monitoring tools
+
+---
+
+## REST's biggest weakness
+
+REST endpoints return predefined response shapes.
+
+Suppose a mobile screen only needs:
+
+- user name
+- avatar
+- last five order totals
+
+The client might call:
+
+```text
+GET /users/42
+GET /users/42/orders
 ```
 
-Because REST reuses HTTP's own semantics, you get CDN/browser caching (`Cache-Control`, `ETag`), idempotency guarantees baked into the verb (`GET`/`PUT`/`DELETE` are supposed to be idempotent), and a uniform interface any HTTP-aware tool (browsers, curl, API gateways, CDNs) already understands without custom tooling — this is exactly what `../04-caching/cdn-architecture.md` and `../04-caching/caching-strategies.md` build on for GET-heavy endpoints.
+Problems:
 
-**The over-fetching / under-fetching problem** is REST's classic pain point: a mobile client that only needs a user's name and avatar still gets the *entire* user object (over-fetching) because the endpoint shape is fixed by the server, not the client; conversely, rendering a screen that needs a user, their last 5 orders, and each order's line items often requires several round trips (under-fetching) — `GET /users/42`, then `GET /users/42/orders`, then `GET /orders/17/items` — unless the backend adds bespoke aggregation endpoints for every screen shape a client needs, which doesn't scale as the number of client screens grows.
+- User endpoint returns many unnecessary fields.
+- Orders endpoint returns far more information than needed.
+- Multiple HTTP requests are required.
 
+This creates two common problems:
+
+### Over-fetching
+
+Receiving more data than needed.
+
+### Under-fetching
+
+Making multiple requests to build one screen.
+
+As applications grow, backend teams often create custom endpoints for every UI screen, which becomes difficult to maintain.
+
+---
+
+# GraphQL
+
+GraphQL exposes a single endpoint, typically:
+
+```text
+POST /graphql
 ```
-Mobile screen needs: user.name, user.avatar, last 5 orders' totals
 
-REST (naive):
-  GET /users/42            -> full user object (way more fields than needed)
-  GET /users/42/orders     -> full order objects (way more than "total")
-  (2 round trips, both over-fetched)
-```
-
-## GraphQL — single endpoint, client-specified queries
-
-GraphQL exposes exactly one endpoint (typically `POST /graphql`) backed by a strongly typed **schema**, and the client sends a query describing precisely the shape of data it wants — nested, in one request, no more and no less.
+Instead of fixed endpoints, the client sends a query describing exactly the data it wants.
 
 ```graphql
 query {
@@ -47,22 +114,36 @@ query {
 }
 ```
 
+The server returns only those fields.
+
 ```json
 {
   "data": {
     "user": {
       "name": "Alice",
-      "avatar": "https://...",
+      "avatar": "...",
       "orders": [
-        { "total": 42.00, "createdAt": "2026-07-01" },
-        { "total": 19.99, "createdAt": "2026-06-28" }
+        {
+          "total": 42,
+          "createdAt": "2026-07-01"
+        }
       ]
     }
   }
 }
 ```
 
-This directly solves REST's over/under-fetching problem: one request, exactly the fields asked for, arbitrarily nested. The **schema/type system** (defined in SDL — Schema Definition Language) is the contract: every field has a declared type, queries are validated against it before execution, and tools (GraphiQL, Apollo Studio) can introspect the schema to auto-generate docs and typed client code.
+One request.
+
+No over-fetching.
+
+No under-fetching.
+
+---
+
+## Strong schema
+
+Every GraphQL API defines a schema.
 
 ```graphql
 type User {
@@ -71,6 +152,7 @@ type User {
   avatar: String
   orders(limit: Int): [Order!]!
 }
+
 type Order {
   id: ID!
   total: Float!
@@ -78,96 +160,358 @@ type Order {
 }
 ```
 
-**The N+1 resolver problem** is GraphQL's own classic pain point, and it's the mirror image of REST's under-fetching problem: the naive way to resolve `user.orders` for a list of 50 users is to run one query per user's orders, resulting in 1 query for the users plus N queries for each user's orders — 51 round trips to the database for what should be 2.
+The schema provides:
 
+- type safety
+- automatic documentation
+- IDE autocomplete
+- query validation
+- code generation
+
+---
+
+## The N+1 problem
+
+GraphQL resolves fields independently.
+
+Imagine requesting:
+
+- 50 users
+- each user's orders
+
+A naive implementation performs:
+
+```text
+1 query:
+SELECT * FROM users
+
+50 queries:
+SELECT * FROM orders WHERE user_id = ?
+
+Total = 51 database queries
 ```
-Naive resolver execution for "give me 50 users and each one's orders":
-  1 query: SELECT * FROM users LIMIT 50
-  50 queries: SELECT * FROM orders WHERE user_id = ?   (one per user!)
-  = 51 total DB round trips for what should be 2
+
+This is called the **N+1 problem**.
+
+---
+
+## DataLoader
+
+DataLoader batches multiple resolver calls into one database query.
+
+Instead of:
+
+```text
+50 database queries
 ```
 
-**DataLoader** (originated at Facebook alongside GraphQL itself) fixes this by batching and deduplicating individual `load(id)` calls made *within a single tick of the event loop* into one batched query, then caching results for the duration of that one GraphQL request.
+It performs:
 
-```javascript
-const orderLoader = new DataLoader(async (userIds) => {
-  const orders = await db.query(
-    "SELECT * FROM orders WHERE user_id IN (?)", userIds
-  );
-  return userIds.map(id => orders.filter(o => o.user_id === id));
-});
-
-// each resolver just calls orderLoader.load(userId);
-// DataLoader collects all calls made in the same tick and
-// issues ONE batched query instead of 50 individual ones
+```text
+SELECT * FROM orders
+WHERE user_id IN (...)
 ```
 
-- Good fit: mobile/web clients with diverse, evolving data needs (many different screens each wanting a different slice of the graph), rapidly iterating frontend teams who don't want to wait on backend endpoint changes for every new field.
-- Costs: query complexity itself becomes an attack surface (a deeply nested query can be expensive to resolve — needs query cost analysis/depth limiting); HTTP-level caching is mostly lost since everything goes through `POST /graphql` (no verb/URL semantics for a CDN to key on) — response caching has to be done at the application/field level instead.
+Only one query is executed.
 
-## gRPC — binary, HTTP/2, contract-first, internal default
+Resolvers remain simple while database performance improves dramatically.
 
-gRPC defines service contracts in **Protocol Buffers** (protobuf) — a schema language and binary serialization format — and generates strongly-typed client/server stubs in whatever languages the services are written in, communicating over **HTTP/2** for built-in multiplexing (many concurrent requests over one TCP connection, no head-of-line blocking at the request level) and low overhead (binary framing instead of repeated text headers).
+---
+
+## When GraphQL shines
+
+GraphQL works well when:
+
+- mobile apps need different data
+- frontend teams iterate rapidly
+- many screens require different response shapes
+- reducing network requests matters
+
+---
+
+## GraphQL drawbacks
+
+GraphQL introduces new challenges:
+
+- Query complexity must be limited.
+- Deeply nested queries can become expensive.
+- HTTP caching is harder because everything uses one endpoint.
+- Resolver performance requires careful optimization.
+
+---
+
+# gRPC
+
+gRPC is Google's high-performance RPC framework.
+
+Instead of JSON, it uses **Protocol Buffers (protobuf)** for compact binary serialization.
+
+Example service definition:
 
 ```protobuf
 service OrderService {
-  rpc GetOrder(GetOrderRequest) returns (Order);
-  rpc StreamOrderUpdates(OrderSubscription) returns (stream OrderUpdate);
-}
-message GetOrderRequest { int64 order_id = 1; }
-message Order {
-  int64 id = 1;
-  double total = 2;
-  string status = 3;
+    rpc GetOrder(GetOrderRequest)
+        returns (Order);
+
+    rpc StreamOrders(OrderSubscription)
+        returns (stream OrderUpdate);
 }
 ```
 
+Code generators create client and server implementations automatically.
+
+Developers simply call methods like:
+
+```text
+orderClient.GetOrder(...)
 ```
-Client stub (generated)          Server (generated skeleton, you implement)
-   orderClient.GetOrder(req)  --protobuf over HTTP/2-->  OrderService.GetOrder(req)
-   <-- Order (binary) --------------------------------------
+
+instead of constructing HTTP requests manually.
+
+---
+
+## Why gRPC is fast
+
+gRPC gains performance through:
+
+- binary protobuf messages
+- HTTP/2
+- connection reuse
+- multiplexing
+- generated serialization code
+
+Compared to JSON APIs:
+
+- smaller payloads
+- less CPU
+- lower latency
+- higher throughput
+
+---
+
+## Streaming support
+
+Streaming is built into gRPC.
+
+It supports four communication models.
+
+### Unary
+
+One request.
+
+One response.
+
+```text
+Client ─────► Server
+Client ◄───── Server
 ```
 
-**Streaming RPCs** are a first-class part of the contract, not a bolt-on — gRPC supports unary (one request, one response), server streaming (one request, a stream of responses — e.g., `StreamOrderUpdates` above), client streaming (a stream of requests, one response — e.g., uploading chunks), and full bidirectional streaming, all multiplexed over the same HTTP/2 connection.
+---
 
-**Why it's the internal service-to-service default** at companies like Google (where it originated, as the open-sourced version of Google's internal Stubby protocol) and Netflix: internal microservice calls happen at enormous volume between services *you control on both ends*, so the trade-offs flip relative to a public API — you want the smallest possible serialization overhead (binary protobuf vs. JSON text), the strongest possible compile-time contract (protobuf-generated types catch a mismatched field at build time, not in production), and multiplexed low-latency streaming (service meshes routing thousands of calls/sec benefit enormously from HTTP/2 connection reuse) — none of which matter as much when your client is a public web browser that can't easily consume raw binary protobuf or arbitrary HTTP/2 semantics behind corporate proxies. This is exactly why the typical shape of a large system (see `../07-architecture-patterns/microservices-architecture.md`) is REST or GraphQL at the edge, facing external clients, with gRPC carrying the calls between internal services behind the API gateway.
+### Server streaming
 
-- Good fit: internal microservice-to-microservice calls, especially latency-sensitive or high-fanout ones; polyglot service meshes where strict, generated contracts prevent drift between teams' services; anything needing real bidirectional streaming (live telemetry, chat backends' internal fanout, video encoding pipelines).
-- Costs: not natively browser-consumable (needs gRPC-Web plus a proxy translation layer to reach browsers, since browsers can't originate raw HTTP/2 trailers-based streams the way gRPC needs); binary payloads aren't human-readable/debuggable with just curl and your eyes the way JSON is; schema changes require regenerating and redistributing stubs across every consuming service, which is a coordination cost REST/GraphQL's looser contracts don't have.
+One request.
 
-## Comparison table
+Many responses.
 
-| | REST | GraphQL | gRPC |
+```text
+Client ─────► Server
+
+Client ◄───── Event 1
+Client ◄───── Event 2
+Client ◄───── Event 3
+```
+
+---
+
+### Client streaming
+
+Many requests.
+
+One response.
+
+```text
+Client ─────► Chunk 1
+Client ─────► Chunk 2
+Client ─────► Chunk 3
+
+Client ◄───── Upload complete
+```
+
+---
+
+### Bidirectional streaming
+
+Both sides continuously exchange messages.
+
+```text
+Client ◄────────────► Server
+```
+
+Useful for:
+
+- chat
+- telemetry
+- video processing
+- live collaboration
+
+---
+
+## Why companies use gRPC internally
+
+Internal microservices communicate constantly.
+
+Requirements include:
+
+- low latency
+- strict contracts
+- high throughput
+- efficient serialization
+
+gRPC is ideal because both client and server are controlled by the same organization.
+
+Large companies often expose REST or GraphQL publicly while using gRPC internally between services.
+
+---
+
+## gRPC drawbacks
+
+gRPC is less suitable for public APIs because:
+
+- browsers don't natively support it
+- debugging binary messages is harder
+- generated client code must stay synchronized
+- schema changes require regenerating stubs
+
+---
+
+# Comparison
+
+| Feature | REST | GraphQL | gRPC |
 |---|---|---|---|
-| Endpoint shape | Many resource URLs + HTTP verbs | Single endpoint, client-specified query | Many typed RPC methods, code-generated stubs |
-| Serialization | Usually JSON (text) | Usually JSON (text) | Protobuf (binary) |
-| Transport | HTTP/1.1 or HTTP/2 | HTTP/1.1 or HTTP/2 (transport-agnostic in spec) | HTTP/2 required |
-| Over/under-fetching | Common problem | Solved by design | N/A (fixed, purpose-built messages per call) |
-| Browser-native | Yes | Yes (just HTTP POST) | No (needs gRPC-Web + proxy) |
-| HTTP-level caching (CDN, browser) | Excellent (verbs + headers) | Poor (single POST endpoint) | Poor (binary, not cache-key-friendly) |
-| Contract strictness | Loose (OpenAPI optional, not enforced) | Strong (schema enforced at query time) | Strongest (protobuf, compile-time generated types) |
-| Streaming | Not native (needs SSE/WebSockets alongside) | Subscriptions exist but bolt-on | First-class (unary/server/client/bidi streaming) |
-| Typical audience | Public APIs, web clients | Frontend teams, mobile apps with diverse screens | Internal service-to-service (Google, Netflix internally) |
+| API style | Resource-oriented | Query-oriented | RPC |
+| Endpoints | Many | Single | Multiple RPC methods |
+| Serialization | JSON | JSON | Protobuf |
+| Transport | HTTP/1.1 or HTTP/2 | HTTP/1.1 or HTTP/2 | HTTP/2 |
+| Browser support | Excellent | Excellent | Requires gRPC-Web |
+| Caching | Excellent | Limited | Limited |
+| Over-fetching | Common | None | None |
+| Under-fetching | Common | None | None |
+| Type safety | Optional | Strong | Very strong |
+| Streaming | External technologies | Subscriptions | Built-in |
+| Performance | Good | Good | Excellent |
+| Best use case | Public APIs | Flexible frontend APIs | Internal microservices |
 
-## Common interview follow-ups
+---
 
-**Q: Why don't companies just use gRPC everywhere, since it's the fastest and most strictly typed?**
-Because its strengths (binary payloads, HTTP/2-only, generated stubs) are exactly what makes it a poor fit for public clients: browsers can't natively speak it, it's not human-debuggable over curl, and every schema change requires redistributing generated code to every consumer — fine when you control both ends inside one organization's service mesh, painful when your consumers are third-party developers or a web frontend team shipping independently.
+# Which should you choose?
 
-**Q: How does GraphQL's single endpoint break traditional HTTP caching, and how do teams work around it?**
-Since every query goes through `POST /graphql`, there's no stable URL or verb for a CDN to key a cache entry on the way it can with `GET /users/42`; workarounds include persisted queries (mapping a query to a stable hash/ID so it *can* be treated like a cacheable GET), field-level caching inside resolvers (often backed by the same Redis patterns in `../04-caching/caching-strategies.md`), or automatic persisted queries plus a CDN rule keyed on the query hash.
+Choose **REST** when:
 
-**Q: Walk through why the N+1 problem happens and how DataLoader fixes it without changing the GraphQL query itself.**
-GraphQL resolves a query field-by-field, so a nested list field like `orders` gets its own resolver invocation per parent object — with 50 users, that resolver naively runs 50 times, once per user, each issuing its own DB query; DataLoader intercepts each individual `load(id)` call, waits until the current execution tick finishes collecting all of them, then fires one batched query for the whole set and hands each caller its slice of the result — no change to the GraphQL schema or query is needed, only to how the resolver fetches data.
+- resources are stable
+- HTTP caching is important
+- public APIs are simple
+- browser compatibility matters
 
-**Q: If gRPC is internal and REST/GraphQL are external, how does a request from a browser actually reach a gRPC-based backend service?**
-Through an API gateway or edge proxy (see `../10-system-design-practice/api-gateway.md`) that terminates the public REST/GraphQL request, then translates it into one or more internal gRPC calls to the appropriate microservices — the browser never speaks gRPC directly; the gateway is the seam where the public contract (REST/GraphQL) meets the internal one (gRPC).
+Choose **GraphQL** when:
 
-**Q: What's a concrete reason to pick REST over GraphQL for a simple public API?**
-If the API is small, resource shapes are stable, and you want to lean on free infrastructure — CDN caching of `GET` responses, HTTP status codes for error semantics, straightforward rate limiting per endpoint — REST gets you all of that for free from existing HTTP tooling, whereas GraphQL's single endpoint and query flexibility mostly pay off once you have many different client screens with genuinely divergent data needs; for a handful of well-known resources, that flexibility is often not worth the added operational complexity (query cost limiting, persisted queries, resolver N+1 diligence).
+- clients need different data
+- mobile bandwidth matters
+- frontend teams evolve quickly
+- many UI screens require different response shapes
 
-**Q: How do streaming RPCs in gRPC compare to WebSockets for a real-time use case?**
-Both provide a persistent bidirectional channel, but gRPC streaming is contract-first (protobuf-defined message types flowing in a typed stream) and lives inside a service-mesh/internal context, whereas WebSockets are the browser-facing, untyped-by-default choice — a chat backend might use gRPC bidi streaming between its own internal chat and presence services, while still exposing WebSockets at the edge for the actual browser/mobile client connection; see `websockets-vs-sse-vs-long-polling.md` for the client-facing side of that split.
+Choose **gRPC** when:
+
+- services communicate internally
+- performance is critical
+- streaming is required
+- strict contracts are valuable
+
+Many organizations use all three simultaneously.
+
+---
+
+# Common interview follow-ups
+
+### Q: Why not use gRPC everywhere?
+
+Because browsers don't natively support it, debugging is harder, and distributing generated client libraries to external consumers is inconvenient.
+
+REST and GraphQL provide a much better developer experience for public APIs.
+
+---
+
+### Q: Why does GraphQL make HTTP caching difficult?
+
+Everything typically goes through a single endpoint (`POST /graphql`).
+
+Traditional CDNs cache based on URL and HTTP method, so GraphQL usually requires application-level caching or persisted queries.
+
+---
+
+### Q: What causes the N+1 problem?
+
+Each resolver independently fetches related data.
+
+Fetching 50 users may trigger 50 additional database queries for orders unless requests are batched.
+
+DataLoader solves this by combining multiple resolver requests into one query.
+
+---
+
+### Q: How does a browser reach internal gRPC services?
+
+The browser communicates with an API Gateway using REST or GraphQL.
+
+The gateway translates incoming requests into internal gRPC calls to backend services.
+
+```text
+Browser
+    │
+ REST / GraphQL
+    │
+    ▼
+API Gateway
+    │
+   gRPC
+    │
+    ▼
+Microservices
+```
+
+---
+
+### Q: When is REST better than GraphQL?
+
+REST is often better when:
+
+- the API is small
+- response shapes rarely change
+- HTTP caching provides significant value
+- infrastructure simplicity is preferred
+
+GraphQL's flexibility introduces additional operational complexity that isn't always justified.
+
+---
+
+### Q: When is GraphQL better than REST?
+
+When multiple frontend clients require different combinations of data.
+
+GraphQL eliminates unnecessary network requests while allowing each client to request exactly the fields it needs.
+
+---
+
+### Q: How does gRPC streaming compare with WebSockets?
+
+Both support long-lived connections.
+
+The difference is the audience:
+
+- **WebSockets** are designed for browsers and public clients.
+- **gRPC streaming** is designed for internal services using strongly typed protobuf messages.
+
+A typical architecture exposes WebSockets to browsers while using gRPC streams between backend services.
 
 ## Related topics
 - [WebSockets vs SSE vs Long Polling](websockets-vs-sse-vs-long-polling.md)

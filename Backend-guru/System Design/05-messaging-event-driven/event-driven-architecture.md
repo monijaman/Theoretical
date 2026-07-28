@@ -1,136 +1,710 @@
 # Event-Driven Architecture
 [← Back to index](../readme.md)
 
-## Why an interviewer cares
+---
 
-Event-driven architecture (EDA) is the organizing principle behind most large-scale, loosely-coupled systems — it's how you avoid a mesh of synchronous service-to-service calls that turns into a distributed monolith. An interviewer brings this up to see whether you can reason about *when decoupling helps and when it just hides complexity* — specifically, whether you understand the eventual consistency and observability costs that come with going async, not just the scalability benefits.
+# Event-Driven Architecture
 
-## Core idea
+## What is Event-Driven Architecture?
 
-Instead of Service A calling Service B directly and waiting for a response, Service A publishes a fact ("an event") that something happened, and any interested party reacts to it independently, on its own schedule.
+**Event-Driven Architecture (EDA)** is a software architecture where services communicate by **publishing events** instead of calling each other directly.
+
+An **event** represents something that has already happened, such as:
+
+- Order placed
+- Payment completed
+- User registered
+- Product updated
+
+Instead of asking another service to perform work immediately, a service simply announces:
+
+> "This happened."
+
+Any service interested in that event reacts independently.
+
+---
+
+## Why Interviewers Ask This
+
+Interviewers want to know whether you understand:
+
+- How to decouple microservices
+- When asynchronous communication is better than synchronous APIs
+- Eventual consistency
+- Scalability trade-offs
+- Failure isolation
+- Workflow coordination
+
+Many modern systems (Uber, Netflix, Amazon, Airbnb) rely heavily on event-driven communication.
+
+---
+
+# Traditional Request/Response vs Event-Driven
+
+## Traditional Synchronous Flow
 
 ```
-Synchronous (request-driven):
-  OrderService --HTTP call--> InventoryService --HTTP call--> BillingService
-  (caller blocks until the whole chain completes; tight coupling to availability of all three)
-
-Event-driven:
-  OrderService --publishes--> "OrderPlaced" event --> [ Broker/Bus ]
-                                                          |
-                              +---------------------------+---------------------------+
-                              v                           v                           v
-                     InventoryService            BillingService              AnalyticsService
-                     (reserves stock)            (charges card)              (updates dashboard)
+Order Service
+      |
+      v
+Inventory Service
+      |
+      v
+Payment Service
+      |
+      v
+Shipping Service
 ```
 
-OrderService doesn't know or care who's listening. Consumers can be added or removed without touching the producer. This is the essence of *decoupling in space* (producer/consumer don't need to know each other's location or identity — just the event schema) and *decoupling in time* (consumer doesn't need to be up when the event is published; it processes it whenever it comes back online).
+Every service waits for the previous one.
 
-## Event notification vs. event-carried state transfer
+If one service is slow or unavailable...
 
-This is the distinction interviewers most often probe, because picking wrong causes real production pain.
+Everything waits.
 
-**Event notification** — the event is a thin signal ("something happened, go find out more if you care"):
-```json
-{ "event": "OrderPlaced", "orderId": "o-123", "timestamp": "..." }
+Problems:
+
+- Tight coupling
+- Higher latency
+- Cascading failures
+- Difficult scaling
+
+---
+
+## Event-Driven Flow
+
 ```
-The consumer, on receiving this, calls back into the OrderService API to fetch full order details.
+              OrderPlaced Event
+                     |
+                     v
+              Message Broker
+          /         |          \
+         /          |           \
+Inventory     Payment      Analytics
+ Service       Service       Service
+```
 
-- Pros: small events, single source of truth for current data, no risk of stale duplicated data.
-- Cons: reintroduces a synchronous dependency at consumption time — if OrderService is down, consumers can't enrich the event. Also causes a fan-in load spike on the source service every time an event fires.
+Order Service doesn't know who consumes the event.
 
-**Event-carried state transfer** — the event carries the full (or sufficiently complete) data the consumer needs:
+Each consumer processes it independently.
+
+Advantages:
+
+- Loose coupling
+- Better scalability
+- Better fault isolation
+- Easy to add new consumers
+
+---
+
+# Core Components
+
+An event-driven system usually contains four parts.
+
+## 1. Producer
+
+Produces events.
+
+Example:
+
+```
+Order Service
+
+publishes
+
+OrderPlaced
+```
+
+---
+
+## 2. Event Broker
+
+Receives events and distributes them.
+
+Examples:
+
+- Kafka
+- RabbitMQ
+- Amazon SNS/SQS
+- Pulsar
+- NATS
+
+The broker stores or forwards events to interested consumers.
+
+---
+
+## 3. Consumer
+
+Consumes events.
+
+Example:
+
+```
+Payment Service
+
+listens for
+
+OrderPlaced
+```
+
+---
+
+## 4. Event
+
+A record describing something that already happened.
+
+Example:
+
 ```json
 {
   "event": "OrderPlaced",
-  "orderId": "o-123",
-  "customerId": "c-456",
-  "items": [{"sku": "A1", "qty": 2, "price": 19.99}],
-  "total": 39.98,
-  "timestamp": "..."
+  "orderId": "O-123",
+  "customerId": "C-50",
+  "timestamp": "2026-07-29T12:00:00Z"
 }
 ```
-- Pros: consumers are fully decoupled — no callback needed, they can process even if the source is down, and can build their own local read models from the event stream (see [CQRS](cqrs-pattern.md)).
-- Cons: data duplication across services (multiple sources hold a copy of order data), payload bloat, and schema versioning becomes a first-class concern since every consumer depends on the event's shape.
 
-Most mature systems land on event-carried state transfer for the "important enough to build a read model from" events, and thin notifications for high-frequency/low-value signals (e.g., "cache entry invalidated").
+Events should describe **facts**, not requests.
 
-## Choreography vs. orchestration
-
-Two ways to coordinate a multi-step business process across services.
-
-**Choreography** — no central coordinator; each service reacts to events and emits its own events, and the overall workflow emerges from the chain of reactions.
-```
-OrderPlaced -> InventoryService reserves stock -> StockReserved
-StockReserved -> BillingService charges card -> PaymentCharged
-PaymentCharged -> ShippingService ships -> OrderShipped
-```
-- Pros: maximally decoupled, no single point of failure/bottleneck, easy to add new participants.
-- Cons: the overall business process isn't written down anywhere explicit — it's implicit in the sum of each service's event handlers. Debugging "why didn't my order ship" means tracing across many services' logs. Handling a mid-flow failure (e.g., payment fails after stock is reserved) requires each service to know how to compensate, and that compensation logic is scattered.
-
-**Orchestration** — a central coordinator (saga orchestrator / workflow engine) explicitly calls each step and handles success/failure/compensation.
-```
-                     +--------------------+
-                     |  Order Orchestrator |
-                     +--------------------+
-                       |    |    |    |
-                reserve|  charge| ship|  (each a command, with explicit compensation on failure)
-                       v    v    v    v
-                 Inventory Billing Shipping
-```
-- Pros: the business process is explicit code/config in one place — easy to understand, monitor, and modify. Centralized error handling and compensation (sagas).
-- Cons: the orchestrator becomes a coupling point and potential bottleneck/single point of failure; it needs to know about every participant, reducing the "add a consumer without touching the producer" benefit.
-
-Rule of thumb: choreography scales better for simple fan-out reactions with few steps; orchestration wins once you have a multi-step workflow with compensation logic and a need for visibility into "where is this order right now" (tools like AWS Step Functions, Temporal, Camunda exist specifically for this).
-
-## Decoupling producers and consumers
-
-The mechanics that make this work: producers publish to a broker/topic (not to a target address), and consumers subscribe independently.
+Good:
 
 ```
-Producer --> [Topic: order.events] <-- Consumer group A (inventory)
-                                    <-- Consumer group B (billing)
-                                    <-- Consumer group C (new: fraud-detection, added later)
+OrderPlaced
 ```
 
-Adding `fraud-detection` as a new consumer requires zero changes to OrderService or any existing consumer — this is the payoff. The cost is that the *contract* is now the event schema, not a request/response API, so schema evolution discipline matters (see [Event Sourcing](event-sourcing.md) for schema versioning strategies, which apply here too).
+Bad:
 
-## Eventual consistency implications
+```
+CreateInvoice
+```
 
-Because consumers process events asynchronously, there is always a window where the system is in an inconsistent state relative to a synchronous model:
+The first describes something that happened.
 
-- Between `OrderPlaced` being published and `InventoryService` reserving stock, the order exists but stock hasn't been decremented — a second concurrent order could oversell if there's no compensating check.
-- UI/read models built from events (see [CQRS](cqrs-pattern.md)) can lag behind the write side by milliseconds to seconds depending on broker/consumer latency — users may see "processing" states, or need optimistic UI updates.
-- Failure handling shifts from "the transaction rolled back" to "compensating actions must be designed" — e.g., if billing fails after inventory reserved stock, something must emit a `ReleaseStock` command/event.
+The second is a command.
 
-This is the same trade-off explored generally in [Strong vs. Eventual Consistency](../03-consistency-distributed/strong-vs-eventual-consistency.md) and [CAP theorem](../03-consistency-distributed/cap-theorem.md) — EDA is essentially choosing availability/partition-tolerance-friendly async processing over the simplicity of synchronous strong consistency, at the application-architecture level rather than just the database level.
+---
 
-## Trade-offs summary
+# Event Notification vs Event-Carried State Transfer
 
-| | Synchronous request/response | Event-driven |
-|---|---|---|
-| Coupling | Tight (caller needs callee up and responsive) | Loose (producer doesn't know consumers) |
-| Consistency | Immediate/strong (within a request) | Eventual |
-| Failure isolation | Failure cascades up the call chain | Failure is contained; consumer catches up later |
-| Debuggability | Easier to trace a single request | Requires distributed tracing / correlation IDs across async hops |
-| Adding new functionality | Requires modifying the caller to add a new call | Add a new consumer, zero changes to producer |
-| Latency for the "full" workflow | Bounded by the sum of synchronous calls | Can be faster for the *triggering* action, but the full workflow's end-to-end completion is harder to observe |
+One of the most common interview questions.
 
-## Common interview follow-ups
+---
 
-**Q: How do you handle a business process that fails halfway through in a choreographed system?**
-Each participant must know how to compensate for its own action (e.g., inventory service listens for `PaymentFailed` and emits `StockReleased`). This is the saga pattern implemented via choreography. If compensation logic grows complex across many steps, that's usually the signal to switch to an orchestrated saga for explicit visibility.
+## Event Notification
 
-**Q: How do you trace a request across five async hops for debugging?**
-Propagate a correlation/trace ID through every event's metadata, and use [distributed tracing](../08-reliability-operations/distributed-tracing.md) infrastructure (e.g., OpenTelemetry context propagation) so spans across services can be stitched together even though the calls aren't a nested synchronous stack.
+The event only contains minimal information.
 
-**Q: When would you avoid event-driven architecture entirely?**
-When the caller genuinely needs an immediate answer to proceed (e.g., "is this payment authorized, yes/no, right now") — forcing that into async messaging just adds complexity and latency without benefit. Simple CRUD services with few integrations also don't need the operational overhead of a broker.
+```
+{
+  "event":"OrderPlaced",
+  "orderId":"123"
+}
+```
 
-**Q: Event notification or event-carried state transfer — how do you decide?**
-Ask whether consumers need to function when the producer is down or under load, and whether they need historical/replayable data to build their own view. If yes to either, carry the state in the event. If the event is high-frequency and most consumers won't care about the payload, a thin notification avoids bloat.
+Consumers call the producer to fetch details.
 
-**Q: How do choreography-based systems avoid becoming a "distributed spaghetti" nobody can reason about?**
-Discipline: maintain a living event catalog/schema registry, use consistent event naming and versioning, and invest in tracing/observability tooling that can reconstruct a business process across services. Some teams add a lightweight orchestrator specifically for the subset of workflows that need visibility, while keeping simple fan-outs choreographed.
+```
+Consumer
+     |
+HTTP Request
+     |
+Order Service
+```
+
+### Advantages
+
+- Small events
+- Single source of truth
+- Easier schema evolution
+
+### Disadvantages
+
+- Creates synchronous dependency
+- Producer must be available
+- Can overload producer
+
+---
+
+## Event-Carried State Transfer
+
+The event contains all necessary data.
+
+```
+{
+  "event":"OrderPlaced",
+  "orderId":"123",
+  "customerId":"456",
+  "items":[...],
+  "total":120
+}
+```
+
+Consumers never call Order Service.
+
+They already have the data.
+
+### Advantages
+
+- Fully decoupled
+- Works if producer is offline
+- Supports replay
+- Great for CQRS
+
+### Disadvantages
+
+- Larger payloads
+- Data duplication
+- Schema versioning becomes important
+
+---
+
+## Which Should You Choose?
+
+Use **Event Notification** when:
+
+- Data is large
+- Consumers rarely need full details
+
+Use **Event-Carried State Transfer** when:
+
+- Consumers build read models
+- Services must stay independent
+- Replay is required
+
+Most mature systems use **Event-Carried State Transfer**.
+
+---
+
+# Choreography vs Orchestration
+
+Another favorite interview topic.
+
+---
+
+## Choreography
+
+There is **no central coordinator**.
+
+Each service reacts to events.
+
+```
+OrderPlaced
+      |
+      v
+Inventory
+      |
+StockReserved
+      |
+      v
+Payment
+      |
+PaymentCompleted
+      |
+      v
+Shipping
+```
+
+Each service only knows about events.
+
+### Advantages
+
+- Very loosely coupled
+- Easy to add new consumers
+- Highly scalable
+
+### Disadvantages
+
+- Workflow is difficult to visualize
+- Debugging is harder
+- Compensation logic is scattered
+
+---
+
+## Orchestration
+
+One service coordinates everything.
+
+```
+              Order Orchestrator
+                /     |      \
+               /      |       \
+      Inventory Payment Shipping
+```
+
+The orchestrator controls the workflow.
+
+Advantages:
+
+- Easy to understand
+- Centralized workflow
+- Easier retries
+- Easier compensation
+
+Disadvantages:
+
+- Central dependency
+- Potential bottleneck
+- Knows about every participant
+
+---
+
+## Rule of Thumb
+
+Use **Choreography** for:
+
+- Independent reactions
+- Simple workflows
+- Fan-out events
+
+Use **Orchestration** for:
+
+- Multi-step business processes
+- Complex failure handling
+- Long-running workflows
+
+Examples:
+
+- Temporal
+- AWS Step Functions
+- Camunda
+
+---
+
+# Event Broker
+
+The broker sits between producers and consumers.
+
+```
+Producer
+    |
+    v
++-----------+
+|   Kafka   |
++-----------+
+   |   |   |
+   |   |   |
+Inventory
+Billing
+Analytics
+Search
+Fraud Detection
+```
+
+Adding another consumer requires:
+
+**Zero changes to the producer.**
+
+That's the biggest advantage of EDA.
+
+---
+
+# Eventual Consistency
+
+EDA is usually **eventually consistent**.
+
+Example:
+
+```
+User places order
+
+↓
+
+Order stored
+
+↓
+
+Event published
+
+↓
+
+Inventory updated
+
+↓
+
+Payment processed
+
+↓
+
+Analytics updated
+```
+
+Between these steps the system is temporarily inconsistent.
+
+For example:
+
+```
+Order exists
+
+Inventory not updated yet
+```
+
+This is normal.
+
+---
+
+## Handling Eventual Consistency
+
+Common techniques include:
+
+### Optimistic UI
+
+Immediately show success.
+
+Don't wait for every consumer.
+
+---
+
+### Processing Status
+
+Show:
+
+```
+Processing...
+```
+
+instead of pretending everything is finished.
+
+---
+
+### Retry Mechanisms
+
+If a consumer fails,
+
+the broker retries later.
+
+---
+
+### Dead Letter Queue (DLQ)
+
+Events that repeatedly fail are moved to a DLQ for investigation instead of blocking the system.
+
+---
+
+# Benefits
+
+- Loose coupling
+- Independent deployments
+- Easy horizontal scaling
+- Better fault isolation
+- Easier feature expansion
+- Supports replay
+- Enables CQRS
+- Enables Event Sourcing
+- High throughput
+
+---
+
+# Challenges
+
+- Eventual consistency
+- More difficult debugging
+- Distributed tracing required
+- Duplicate event handling
+- Idempotency
+- Event versioning
+- Ordering guarantees
+- More operational complexity
+
+---
+
+# Real-World Examples
+
+## E-commerce
+
+```
+OrderPlaced
+
+↓
+
+Inventory
+
+↓
+
+Payment
+
+↓
+
+Shipping
+
+↓
+
+Notification
+
+↓
+
+Analytics
+```
+
+---
+
+## Ride Sharing
+
+```
+RideRequested
+
+↓
+
+Matching Service
+
+↓
+
+Driver Assigned
+
+↓
+
+Payment
+
+↓
+
+Location Tracking
+
+↓
+
+Analytics
+```
+
+---
+
+## Banking
+
+```
+MoneyTransferred
+
+↓
+
+Fraud Detection
+
+↓
+
+Notification
+
+↓
+
+Audit
+
+↓
+
+Ledger
+
+↓
+
+Analytics
+```
+
+One event triggers many independent services.
+
+---
+
+# Best Practices
+
+- Design immutable events
+- Keep event names meaningful
+- Include timestamps
+- Include correlation IDs
+- Make consumers idempotent
+- Version event schemas
+- Monitor consumer lag
+- Use retries with DLQs
+- Avoid overly large payloads
+- Document every event contract
+
+---
+
+# Advantages vs Disadvantages
+
+| Advantages | Disadvantages |
+|------------|---------------|
+| Loose coupling | Eventual consistency |
+| Better scalability | Harder debugging |
+| Independent deployments | More infrastructure |
+| Better fault isolation | Duplicate events |
+| Easy to add consumers | Schema evolution |
+| Supports replay | Ordering challenges |
+
+---
+
+# Interview Cheat Sheet
+
+### When should you use Event-Driven Architecture?
+
+- Microservices
+- Asynchronous workflows
+- High scalability
+- Multiple independent consumers
+
+---
+
+### When should you avoid it?
+
+- Simple CRUD applications
+- Immediate synchronous responses are required
+- Small systems with few integrations
+
+---
+
+### What is the biggest trade-off?
+
+You gain:
+
+- Scalability
+- Decoupling
+- Availability
+
+But you lose:
+
+- Immediate consistency
+- Simplicity
+- Easier debugging
+
+---
+
+# Common Interview Questions
+
+### Why use a message broker instead of HTTP?
+
+Because producers don't need to know who consumes the event, enabling loose coupling and asynchronous processing.
+
+---
+
+### What is eventual consistency?
+
+Consumers update independently after an event is published, so different parts of the system may temporarily observe different states.
+
+---
+
+### What is the difference between Event Notification and Event-Carried State Transfer?
+
+- **Notification** → tells consumers that something happened.
+- **State Transfer** → includes enough data for consumers to process the event without calling the producer.
+
+---
+
+### Choreography vs Orchestration?
+
+- **Choreography** → services react to events independently.
+- **Orchestration** → a central coordinator manages the workflow.
+
+---
+
+### How do you debug an event-driven system?
+
+Use:
+
+- Correlation IDs
+- Distributed tracing (OpenTelemetry)
+- Centralized logging
+- Monitoring consumer lag
+- Dead Letter Queues
+
+---
+
+# Key Takeaways
+
+- Events represent **facts**, not commands.
+- Producers publish events without knowing who consumes them.
+- Consumers process events independently.
+- Event-driven systems trade **strong consistency** for **scalability and loose coupling**.
+- They are the foundation of modern microservices, CQRS, Event Sourcing, and Saga-based architectures.
 
 ## Related topics
 - [Message Queues](message-queues.md)
