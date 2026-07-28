@@ -1,128 +1,931 @@
 # SQL vs NoSQL
+
 [← Back to index](../readme.md)
 
-## Why it's asked
+## Why SQL vs NoSQL Matters
 
-Every system design interview eventually asks "what database would you use here?" The weak answer is a religious pick ("NoSQL scales better"). The strong answer maps the *access pattern* — how the data is queried, how it's shaped, how strict the invariants are — onto a storage model built for that pattern. SQL vs NoSQL isn't a maturity ladder; it's a set of different bets about what will be expensive later: joins, schema rigidity, write throughput, or horizontal scale.
+In system design interviews, the question is not:
 
-## Relational (SQL): normalize, join, enforce constraints
+> "Which database is better?"
 
-A relational database (Postgres, MySQL, SQL Server, Oracle) stores data in fixed-schema tables and lets you decompose it into normalized forms (1NF/2NF/3NF) so each fact is stored once, then reconstitute it at query time with `JOIN`.
+The real question is:
+
+> "Which database fits the application's access pattern?"
+
+SQL and NoSQL make different trade-offs.
+
+SQL optimizes for:
+
+- Data consistency
+- Relationships
+- Complex queries
+- Strong constraints
+
+NoSQL optimizes for:
+
+- Horizontal scale
+- Flexible data models
+- High throughput
+- Specific access patterns
+
+Choosing NoSQL because:
+
+```
+"It scales better"
+```
+
+is usually a weak answer.
+
+A strong answer explains:
+
+```
+What data do we store?
+How do we query it?
+How often do we update it?
+What consistency do we need?
+```
+
+---
+
+# SQL (Relational Database)
+
+Examples:
+
+- PostgreSQL
+- MySQL
+- SQL Server
+- Oracle
+
+SQL databases store data in tables with predefined schemas.
+
+Example:
+
+## Users Table
+
+```
+users
+
+id
+name
+email
+```
+
+## Orders Table
+
+```
+orders
+
+id
+user_id
+total
+```
+
+## Order Items Table
+
+```
+order_items
+
+order_id
+product
+quantity
+```
+
+Relationship:
+
+```
+Users
+
+  |
+  |
+  v
+
+Orders
+
+  |
+  |
+  v
+
+Order Items
+```
+
+---
+
+# SQL Strengths
+
+## 1. ACID Transactions
+
+SQL databases provide:
+
+- Atomicity
+- Consistency
+- Isolation
+- Durability
+
+Example:
+
+Bank transfer:
+
+```
+Account A:
+
+- $100 removed
+
+
+Account B:
+
++ $100 added
+```
+
+Either:
+
+```
+Both succeed
+```
+
+or:
+
+```
+Both rollback
+```
+
+---
+
+## 2. Strong Data Integrity
+
+The database can enforce rules.
+
+Example:
+
+Foreign key:
 
 ```sql
-CREATE TABLE orders (id BIGINT PRIMARY KEY, user_id BIGINT REFERENCES users(id), total NUMERIC);
-CREATE TABLE order_items (order_id BIGINT REFERENCES orders(id), sku TEXT, qty INT);
-
-SELECT o.id, o.total, u.email
-FROM orders o JOIN users u ON u.id = o.user_id
-WHERE o.id = 42;
+orders.user_id
+       |
+       |
+       v
+users.id
 ```
 
-What you get in exchange for the upfront schema design:
-- **ACID transactions** — a multi-table write either fully commits or fully rolls back, with isolation from concurrent transactions.
-- **Constraints enforced by the engine** — foreign keys, uniqueness, `NOT NULL`, check constraints reject bad data before it's ever stored, instead of relying on every application code path to be correct.
-- **Ad-hoc query flexibility** — you don't need to know every access pattern in advance; the query planner figures out how to satisfy a new `JOIN`/`WHERE` combination reasonably well.
-
-What it costs: joins across billions of rows on multiple machines are expensive (network round trips per join), and schema changes on huge tables need care (see [Database Migration at Scale](database-migration-at-scale.md)). Scaling writes past one primary requires sharding, which reintroduces the cross-shard-join problem manually.
-
-## NoSQL: four categories, four different bets
-
-"NoSQL" isn't one model — it's four unrelated data models that all happen to relax some relational guarantee in exchange for something else.
-
-### 1. Key-value — O(1) lookup by key, no query language
-
-**Examples: Redis, DynamoDB, Riak.** Data is an opaque blob addressed by a single key; there's no server-side query into the value's structure (or only limited support, like Redis's data-type commands).
+The database prevents:
 
 ```
-GET user:42:session   → {"cart": [...], "expires": 1700000000}
+Order without a user
 ```
 
-Wins when: the access pattern is *always* "fetch/write by exact key" — session stores, caches, feature flags, shopping carts. DynamoDB scales this to single-digit-millisecond latency at effectively unlimited horizontal scale because there's no cross-partition query to plan for.
+---
 
-### 2. Document — nested, self-contained records, per-document schema
+Other constraints:
 
-**Examples: MongoDB, Couchbase, Firestore.** Each document (typically JSON/BSON) carries its own shape; a "products" collection can have documents with different fields.
+```sql
+UNIQUE(email)
 
-```json
+NOT NULL(name)
+
+CHECK(balance >= 0)
+```
+
+---
+
+## 3. Powerful Queries
+
+SQL supports:
+
+- JOIN
+- GROUP BY
+- Aggregation
+- Filtering
+- Sorting
+
+Example:
+
+```sql
+SELECT 
+    users.email,
+    orders.total
+
+FROM users
+
+JOIN orders
+ON users.id = orders.user_id;
+```
+
+---
+
+# SQL Weaknesses
+
+## 1. Horizontal Scaling Is Harder
+
+Scaling reads:
+
+```
+Primary Database
+
+       |
+       |
+ Read Replicas
+```
+
+is easy.
+
+Scaling writes is harder.
+
+Eventually:
+
+```
+One database server
+
+        |
+        |
+        v
+
+Need sharding
+```
+
+Now joins become complicated.
+
+---
+
+## 2. Schema Changes
+
+Changing large tables can be expensive.
+
+Example:
+
+Adding a column:
+
+```
+users table
+
+100 million rows
+```
+
+requires careful migration.
+
+---
+
+# NoSQL
+
+NoSQL is not one database type.
+
+It includes several different models.
+
+Main categories:
+
+```
+1. Key-Value
+
+2. Document
+
+3. Column Family
+
+4. Graph
+```
+
+Each solves different problems.
+
+---
+
+# 1. Key-Value Database
+
+Examples:
+
+- Redis
+- DynamoDB
+
+Data is stored using a key.
+
+Example:
+
+```
+Key:
+
+user:123:session
+
+
+Value:
+
 {
-  "_id": "p_123",
-  "name": "Keyboard",
-  "variants": [{"color": "black", "price": 79}, {"color": "white", "price": 82}]
+ "cart": [
+   "phone",
+   "keyboard"
+ ]
 }
 ```
 
-Wins when: your object naturally nests (a product with variants, a blog post with comments) and you'd otherwise pay for 3-4 joins to reassemble it every read. Costs you: no cross-document transactions across shards (mitigated but not eliminated by MongoDB's multi-document ACID since 4.0, which is expensive at scale), and duplicated data if the same nested value appears in multiple documents (denormalization moves the consistency burden onto the application).
-
-### 3. Column-family (wide-column) — optimized for massive write throughput
-
-**Examples: Cassandra, HBase, Bigtable.** Rows are grouped by a partition key, and within a partition, data is organized into column families and sorted by clustering columns — physically closer to a distributed, sorted multi-map than a table.
+Access:
 
 ```
-Partition key: sensor_id=42
-  Clustering column: timestamp
-    2024-01-01T00:00 → {temp: 21.3, humidity: 40}
-    2024-01-01T00:01 → {temp: 21.4, humidity: 41}
+GET user:123:session
 ```
 
-Wins when: extremely high write volume with append-mostly access by a known key (time-series, IoT telemetry, event logs, Cassandra at Netflix for viewing history). Costs you: queries not aligned with the partition/clustering key design require a full scan or a separate materialized view; no joins, limited ad-hoc querying.
+---
 
-### 4. Graph — relationships are first-class, not foreign keys
+## Best For
 
-**Examples: Neo4j, Amazon Neptune, JanusGraph.** Nodes and edges are stored so that traversing a relationship is a pointer-chase, not a join.
-
-```cypher
-MATCH (a:User {id: 1})-[:FOLLOWS*1..3]->(b:User)
-RETURN b.name
-```
-
-Wins when: the query itself *is* the relationship — "friends of friends," fraud rings, recommendation graphs, org charts. A relational equivalent needs a self-join per hop, which gets unusable past 2-3 hops; a graph traversal stays roughly constant per hop.
-
-## NewSQL: relational guarantees at NoSQL scale
-
-**Spanner, CockroachDB, YugabyteDB, TiDB** try to remove the "pick one" framing: relational schema, SQL, ACID transactions, *and* horizontal scale via automatic sharding and a consensus protocol (Paxos/Raft) under the hood.
+When access is always:
 
 ```
-Spanner: shards data into ranges, replicates each range via Paxos across
-zones/regions, uses TrueTime (bounded clock uncertainty) to assign
-globally-ordered commit timestamps without a single bottleneck coordinator.
+Give me data by exact key
 ```
 
-The cost is operational complexity and (for cross-region deployments) commit latency — a write that must reach a Paxos quorum across regions costs more round trips than a single-region MySQL commit. NewSQL is the right answer when the interviewer's system genuinely needs both strict consistency *and* more scale than one relational primary can give — global inventory ledgers, banking systems with multi-region requirements.
+Examples:
 
-## The pragmatic default
+- Sessions
+- Cache
+- Feature flags
+- Shopping carts
 
-Most systems, even ones that will eventually be large, should start relational: Postgres/MySQL with good indexing handles far more scale than people assume (millions of rows, thousands of QPS on modest hardware), and you get flexibility to answer questions you didn't anticipate at design time. Reach for a NoSQL model only when a specific, known access pattern doesn't fit relational well — a cache, a truly schemaless document shape, write volume past what one primary+read-replicas can sustain, or a relationship-heavy query. Picking NoSQL upfront "for scale" you don't have yet trades away flexibility and constraint-enforcement for a scaling problem you may never encounter.
+---
 
-## Trade-offs summary
+## Advantages
 
-| Model | Best for | Weak at | Example systems |
-|---|---|---|---|
-| Relational | Ad-hoc queries, strong invariants, joins | Horizontal write scale, schema churn at huge scale | Postgres, MySQL, SQL Server |
-| Key-value | Exact-key lookups at massive scale/low latency | Any query not by key | Redis, DynamoDB |
-| Document | Nested, self-contained, evolving objects | Cross-document consistency, joins | MongoDB, Couchbase |
-| Column-family | Very high write throughput, time-series | Ad-hoc queries off the partition key | Cassandra, HBase, Bigtable |
-| Graph | Relationship traversal queries | Bulk analytics, non-relational lookups | Neo4j, Neptune |
-| NewSQL | Relational semantics at distributed scale | Operational complexity, cross-region latency | Spanner, CockroachDB |
+- Extremely fast
+- Easy horizontal scaling
+- Very high throughput
 
-## Common interview follow-ups
+---
 
-**Q: How do you decide between MongoDB and Postgres with JSONB columns?**
-Postgres's `JSONB` gives you schemaless flexibility for the fields that vary while keeping relational integrity, indexing, and joins for everything else — reach for MongoDB proper only when *most* of your data is document-shaped and you need its horizontal sharding model, not just a few flexible fields.
+## Weakness
 
-**Q: Can you get ACID transactions in a document store?**
-Yes, within limits — MongoDB supports multi-document ACID transactions since 4.0, but they're more expensive (they hold locks/snapshots across the transaction and don't span shards as cheaply as a single-node relational commit), so document stores are still best treated as "transactional within one document" by default.
+Poor for:
 
-**Q: Why not just always use a column-family store since it scales the most?**
-Because you pay for that scale with query flexibility — every access pattern must be known and modeled into the partition/clustering key design ahead of time (often requiring denormalized materialized views per query shape), which is a much bigger design and operational burden than a relational schema for a system that doesn't actually need Cassandra-level write throughput.
+```
+Find all users where age > 30
+```
 
-**Q: Is "eventually consistent" unique to NoSQL?**
-No — it's a property of the replication/consensus design, not the data model; Cassandra and DynamoDB default to eventual consistency for availability, but MongoDB defaults to strongly consistent reads from a primary, and Spanner (relational) offers external consistency. See [CAP Theorem](../03-consistency-distributed/cap-theorem.md).
+because there is no relational query engine.
 
-**Q: When would you pick a graph database over a relational one with a `friendships` join table?**
-When queries need variable-depth traversal ("within 3 hops") rather than a fixed number of joins — a relational self-join needs one extra join per hop and degrades badly past 2-3 hops, while a graph engine's traversal cost stays close to linear in path length regardless of depth.
+---
 
-**Q: What's the actual reason people say "NoSQL doesn't have schemas" is misleading?**
-The schema still exists — it just lives in application code and is enforced (or not) at write time instead of by the database engine; document stores don't eliminate the need to agree on a shape, they move where that agreement is checked, which trades upfront rigor for flexibility and pushes data-quality bugs later into the pipeline.
+# 2. Document Database
+
+Examples:
+
+- MongoDB
+- Couchbase
+- Firestore
+
+Stores JSON-like documents.
+
+Example:
+
+```json
+{
+  "_id": "product123",
+
+  "name": "Laptop",
+
+  "variants": [
+    {
+      "color": "black",
+      "price": 900
+    },
+    {
+      "color": "white",
+      "price": 950
+    }
+  ]
+}
+```
+
+---
+
+## Best For
+
+Data that naturally belongs together.
+
+Example:
+
+Product:
+
+```
+Product
+
+ ├── Details
+
+ ├── Images
+
+ └── Variants
+```
+
+Instead of:
+
+```
+Product Table
+
+Variant Table
+
+Image Table
+```
+
+with multiple joins.
+
+---
+
+## Advantages
+
+- Flexible schema
+- Easy object mapping
+- Good for rapidly changing data
+
+---
+
+## Weakness
+
+Data duplication.
+
+Example:
+
+Customer address copied into:
+
+```
+Order 1
+
+Order 2
+
+Order 3
+```
+
+If address changes:
+
+You update many documents.
+
+---
+
+# 3. Column-Family Database
+
+Examples:
+
+- Cassandra
+- HBase
+- Google Bigtable
+
+Designed for massive writes.
+
+Example:
+
+IoT sensor data:
+
+```
+Sensor: 1001
+
+
+10:00
+
+temperature: 22
+
+
+10:01
+
+temperature: 23
+
+
+10:02
+
+temperature: 24
+```
+
+---
+
+## Best For
+
+- Time-series data
+- Logs
+- Analytics events
+- IoT data
+
+---
+
+## Advantages
+
+- Extremely high write throughput
+- Easy horizontal scaling
+
+---
+
+## Weakness
+
+Queries must match the data model.
+
+Example:
+
+Good:
+
+```
+Find sensor data by sensor_id
+```
+
+Bad:
+
+```
+Find all sensors with temperature > 50
+```
+
+---
+
+# 4. Graph Database
+
+Examples:
+
+- Neo4j
+- Amazon Neptune
+
+Relationships are the main data.
+
+Example:
+
+Social network:
+
+```
+Alice
+
+ |
+ follows
+
+Bob
+
+ |
+ follows
+
+Charlie
+```
+
+---
+
+Query:
+
+"Find friends of friends"
+
+Graph:
+
+```
+Alice
+ |
+ Bob
+ |
+Charlie
+```
+
+is natural.
+
+---
+
+SQL alternative:
+
+```sql
+JOIN friendships
+JOIN friendships
+JOIN friendships
+```
+
+becomes expensive.
+
+---
+
+## Best For
+
+- Social networks
+- Fraud detection
+- Recommendation systems
+- Knowledge graphs
+
+---
+
+# NewSQL
+
+Examples:
+
+- Google Spanner
+- CockroachDB
+- YugabyteDB
+- TiDB
+
+Goal:
+
+Combine:
+
+```
+SQL
++
+ACID
++
+Horizontal Scaling
+```
+
+---
+
+Architecture:
+
+```
+Application
+
+     |
+     |
+
+Distributed SQL Database
+
+     |
+     |
+Multiple Nodes
+```
+
+---
+
+## Advantages
+
+You get:
+
+- SQL queries
+- Transactions
+- Distributed scaling
+
+---
+
+## Weakness
+
+More operational complexity.
+
+Cross-region writes are slower because data must reach consensus.
+
+---
+
+# SQL vs NoSQL Comparison
+
+| Feature | SQL | Key-Value | Document | Column Family | Graph | NewSQL |
+|-|-|-|-|-|-|-|
+| Schema | Fixed | None | Flexible | Fixed by query | Flexible | Fixed |
+| Transactions | Strong | Limited | Limited/Supported | Limited | Limited | Strong |
+| Joins | Excellent | No | Limited | No | Relationship based | Excellent |
+| Scaling | Vertical first | Horizontal | Horizontal | Massive scale | Relationship scale | Horizontal |
+| Query Flexibility | High | Low | Medium | Low | High for graphs | High |
+| Best Use | Business data | Cache | JSON objects | Huge writes | Relationships | Global SQL |
+
+---
+
+# Practical Decision Guide
+
+## Choose SQL When:
+
+You need:
+
+```
+Users
+Orders
+Payments
+Invoices
+Accounts
+```
+
+Because:
+
+- Data relationships matter
+- Transactions matter
+- Correctness matters
+
+Example:
+
+E-commerce checkout.
+
+---
+
+## Choose Key-Value When:
+
+You need:
+
+```
+Get this exact thing quickly
+```
+
+Examples:
+
+- Sessions
+- Cache
+- Tokens
+
+---
+
+## Choose Document When:
+
+Your data looks like:
+
+```
+A complete object
+```
+
+Examples:
+
+- Product catalog
+- CMS
+- User profiles
+
+---
+
+## Choose Column Family When:
+
+You have:
+
+```
+Millions of writes per second
+```
+
+Examples:
+
+- Logs
+- Metrics
+- IoT
+
+---
+
+## Choose Graph When:
+
+Your question is:
+
+```
+Who is connected to whom?
+```
+
+Examples:
+
+- Recommendations
+- Fraud networks
+
+---
+
+# Common Interview Questions
+
+## Q: Should I always choose NoSQL for large systems?
+
+No.
+
+Most systems should start with SQL.
+
+Example:
+
+PostgreSQL can handle:
+
+- Millions of rows
+- Thousands of queries per second
+
+without problems.
+
+Choose NoSQL only when a specific requirement demands it.
+
+---
+
+# Q: MongoDB vs PostgreSQL JSONB?
+
+PostgreSQL JSONB gives:
+
+```
+Relational database
+
++
+
+Flexible JSON fields
+```
+
+Example:
+
+```sql
+users
+
+id
+name
+metadata JSONB
+```
+
+Use MongoDB when most of your data is naturally document-based.
+
+Use PostgreSQL when relationships and transactions dominate.
+
+---
+
+# Q: Does NoSQL mean no schema?
+
+No.
+
+The schema still exists.
+
+The difference:
+
+SQL:
+
+```
+Database enforces schema
+```
+
+NoSQL:
+
+```
+Application enforces schema
+```
+
+The responsibility moves from:
+
+```
+Database
+
+        |
+
+Application
+```
+
+---
+
+# Q: Is eventual consistency only a NoSQL feature?
+
+No.
+
+Consistency depends on the database design.
+
+Examples:
+
+NoSQL:
+
+```
+MongoDB
+Strong reads from primary
+```
+
+SQL:
+
+```
+Distributed SQL systems
+May use replication delays
+```
+
+---
+
+# Q: When choose Graph over SQL?
+
+Choose Graph when queries involve variable-depth relationships.
+
+Example:
+
+```
+Find fraud network within 5 connections
+```
+
+Graph:
+
+```
+Fast traversal
+```
+
+SQL:
+
+```
+Many recursive joins
+```
+
+---
+
+# Simple Rule To Remember
+
+```
+Business Transactions
+        |
+        v
+SQL
+
+
+Exact Key Lookup
+        |
+        v
+Key-Value
+
+
+JSON/Object Data
+        |
+        v
+Document
+
+
+Massive Writes
+        |
+        v
+Column Family
+
+
+Relationship Queries
+        |
+        v
+Graph
+
+
+SQL + Global Scale
+        |
+        v
+NewSQL
+```
+
+---
+
+# Interview Answer
+
+A strong system design answer:
+
+> "I would start with a relational database unless the access pattern clearly requires another model. SQL gives strong consistency, transactions, and flexible querying. I would introduce NoSQL only for specific workloads like caching, high-volume event ingestion, document storage, or relationship-heavy queries."
 
 ## Related topics
 - [Database Sharding](database-sharding.md)

@@ -1,114 +1,722 @@
 # Distributed Locks
+
 [← Back to index](../readme.md)
 
-## What it is and why it's asked
+## What is a Distributed Lock?
 
-A local mutex works because one process holds a memory address that every thread in that process can see, and the OS scheduler guarantees only one thread enters the critical section at a time. **None of that holds across machines.** There is no shared memory, no single scheduler, and — critically — no way for a lock holder to be *certain* it is still "the" holder at the instant it acts, because a message ("I still hold the lock") takes non-zero, unbounded time to arrive.
+A normal lock inside one application is easy.
 
-Interviewers ask about distributed locks to see if you understand that the hard part isn't *acquiring* a lock (any key-value store can do `SETNX`) — it's **guaranteeing mutual exclusion under partial failure**: what happens when the lock holder pauses (GC, page fault, disk stall) for longer than the lock's TTL, wakes up believing it still holds the lock, and issues a write against a resource a *second* client has since acquired the lock for? A naive implementation gives you a lock that looks correct in the happy path and silently fails exactly when it matters — under load, under GC pressure, during a slow disk write.
-
-## Redis-based locks: SETNX + TTL, and why it's not enough alone
-
-The basic recipe:
+Example:
 
 ```
-SET lock:resource_123 <unique-token> NX PX 30000
-# NX = only set if not exists (acquire)
-# PX 30000 = auto-expire after 30s (avoid deadlock if holder crashes)
+Thread A
+   |
+   v
+Lock memory address
 
-... critical section ...
+Thread B waits
+```
 
-# release: only delete if the token still matches (Lua script, atomic)
-if redis.call("GET", KEYS[1]) == ARGV[1] then
+The operating system controls access.
+
+Only one thread enters the critical section.
+
+---
+
+## Why Distributed Locks Are Hard
+
+In distributed systems:
+
+```
+Machine A
+
+      Network
+
+Machine B
+```
+
+There is:
+
+- No shared memory
+- No common scheduler
+- No instant communication
+
+A client cannot always know:
+
+```
+Do I still own the lock?
+```
+
+because network messages can be delayed.
+
+---
+
+# Example Problem
+
+Two workers process the same job.
+
+Without a lock:
+
+```
+Worker A
+
+Process payment
+
+
+Worker B
+
+Process payment
+```
+
+Result:
+
+```
+Payment executed twice
+```
+
+A distributed lock tries to guarantee:
+
+```
+Only one worker executes
+at a time
+```
+
+---
+
+# The Real Challenge
+
+Getting a lock is easy.
+
+Example:
+
+```
+SETNX lock
+```
+
+The hard part is:
+
+> What happens when the lock holder fails?
+
+Example:
+
+```
+Client A gets lock
+
+        |
+        |
+       pause
+        |
+        |
+Client B gets lock
+
+        |
+        |
+Client A wakes up
+```
+
+Now:
+
+```
+Both think they own the lock
+```
+
+This breaks mutual exclusion.
+
+---
+
+# Redis Distributed Lock
+
+A common implementation uses:
+
+```
+SETNX + TTL
+```
+
+Example:
+
+```redis
+SET lock:order_123 random-token NX PX 30000
+```
+
+Meaning:
+
+```
+NX:
+
+Only create if lock does not exist
+
+
+PX 30000:
+
+Expire after 30 seconds
+```
+
+---
+
+# Lock Release
+
+Never simply do:
+
+```redis
+DEL lock:order_123
+```
+
+Why?
+
+Example:
+
+```
+Client A gets lock
+
+TTL expires
+
+
+Client B gets lock
+
+
+Client A sends DEL
+```
+
+Now:
+
+```
+Client B's lock is deleted
+```
+
+---
+
+Instead use a unique token.
+
+Example:
+
+Client A:
+
+```
+lock value:
+
+abc123
+```
+
+Client B:
+
+```
+lock value:
+
+xyz789
+```
+
+Release only if token matches.
+
+Example:
+
+```lua
+if redis.call("GET", KEYS[1]) == ARGV[1]
+then
     return redis.call("DEL", KEYS[1])
-else
-    return 0
 end
 ```
 
-The unique token prevents client A from accidentally releasing a lock that expired and was re-acquired by client B (without it, A's delayed `DEL` would delete B's active lock). This is a real improvement over naive `SETNX`/`DEL`, but it does **not** solve the core problem: the TTL is a guess about how long the critical section will take, and if client A is paused (GC, VM migration, swap) for longer than the TTL, the lock silently expires, client B acquires it and starts mutating the resource, and then A wakes up still believing it holds the lock — with no way for A to know that in general.
+---
 
-## Redlock and Kleppmann's critique
+# Problem With Redis TTL Locks
 
-**Redlock** (proposed by Redis' author) tries to make single-Redis-node locks safer against node failure by acquiring the same lock against a majority of N independent Redis instances (typically 5), with a shared expiry, and requiring a majority to agree within a timing budget. This addresses "what if one Redis node crashes" — but Martin Kleppmann's well-known critique (2016) shows it does **not** address the more fundamental problem: **there is no bound, in a real system, on how long a process can be paused.**
+TTL creates a dangerous situation.
 
-```
-Client A acquires Redlock (majority of 5 nodes)  →  granted, TTL = 10s
-Client A: about to write to shared storage
-Client A: GC pause / VM pause for 15s  ─────────────▶ (paused, holds no CPU)
-   ... meanwhile, lock TTL (10s) expires on all nodes ...
-Client B acquires the same Redlock (nodes now free) →  granted
-Client B writes to shared storage
-Client A wakes up, believes it still holds the lock, writes to shared storage
-  → BOTH A and B have now written — mutual exclusion violated
-```
-
-Kleppmann's point generalizes beyond GC: network delays, disk stalls (`fsync` taking seconds under load), and even NTP clock jumps (Redlock's safety argument relies on TTL comparisons against wall-clock time across independent nodes) can all produce the same violation. Redlock adds nodes for fault tolerance against crashes, but a lock built purely on **timeouts with no way for the protected resource to verify freshness** cannot guarantee mutual exclusion under an unbounded pause — no matter how many nodes participate.
-
-## Fencing tokens: the actual fix
-
-The fix isn't a "better" lock — it's making the *protected resource* reject stale writes, using a monotonically increasing number handed out by the lock service on every acquisition: a **fencing token**.
+Example:
 
 ```
-Lock service hands out an incrementing token on every acquire:
+Client A:
 
-  Client A acquires lock → token = 33
-  Client A: GC pause (long enough for lock to expire)
-  Client B acquires lock (A's expired) → token = 34
-  Client B writes to storage with token=34 → storage accepts (34 > last seen 0)
-  Client A wakes up, writes to storage with token=33
-  Storage checks: 33 < 34 (last accepted token) → REJECTS A's write
+Acquire lock
+
+TTL = 10 seconds
+
+
+Client A:
+
+Starts database update
+
+
+Client A:
+
+GC pause for 15 seconds
 ```
 
+Lock expires.
+
+---
+
+Now:
+
 ```
-      A acquires (token 33)         B acquires (token 34)
-            │                              │
-    ────────┼───────GC pause A─────────────┼──────────────▶ time
-            │                              │
-            │                     B writes (token=34) ──▶ storage accepts
-            │
-       A wakes, writes (token=33) ────────────────────────▶ storage REJECTS
-                                                            (33 < 34 already seen)
+Client B:
+
+Gets lock
+
+Updates database
 ```
 
-This requires the *storage layer itself* to understand and check tokens (e.g., a `WHERE token > last_token` guard in a SQL update, or S3/DB compare-and-swap semantics) — the lock service alone cannot enforce this by timeout tricks, because timeouts on the client side can't detect the client's own pause. Fencing tokens turn an unenforceable "trust the timer" guarantee into an enforceable "the storage layer has final say" guarantee.
+Then:
 
-## ZooKeeper / etcd: safer primitives for correctness-critical locking
+```
+Client A wakes up
 
-Because the fencing-token idea requires monotonic, globally-agreed numbers and reliable failure detection, purpose-built coordination services are generally the right tool when correctness (not just best-effort mutual exclusion) matters:
+Continues update
+```
 
-- **ZooKeeper** — a client creates an **ephemeral sequential znode** under a lock path (`/locks/resource_123/lock-0000000042`); the client with the lowest sequence number holds the lock, everyone else watches the next-lower znode and wakes up when it's deleted. Ephemeral means the znode is auto-removed if the client's session dies (heartbeat-based, not a blind TTL), and the sequence number itself *is* a usable fencing token.
-- **etcd** — similar idea via **leases**: a client acquires a lease (a TTL-backed session that must be actively renewed via keep-alives, not a fire-and-forget timer), attaches a key to it, and uses etcd's `Revision` number (a global, monotonically increasing counter bumped on every write) as the fencing token, checked with a transactional `compare-and-swap` (`etcd`'s `Txn` with a `Compare` on mod-revision) when writing to the protected resource.
-- Both differ from Redis-based locks in a critical way: liveness is tied to an actively-maintained **session** (missed heartbeats reliably expire the lock) rather than an independent, unrenewed wall-clock TTL, and both hand out a token from a single, cluster-wide, strictly increasing counter — which is exactly what a correct fencing scheme needs and which multiple independent Redis nodes can't cleanly provide.
+Now:
 
-## Trade-offs summary
+```
+A and B both modified data
+```
 
-| Approach | Mutual exclusion guarantee | Fencing token support | Complexity | Good for |
-|---|---|---|---|---|
-| Redis SETNX+TTL | Best-effort, breaks under long pauses | No (needs custom token, still racy) | Low | Best-effort deduplication, low-stakes idempotency |
-| Redlock (multi-node Redis) | Better against node crash, still breaks under GC/clock issues | No native support | Medium | Same as above, slightly more crash-tolerant |
-| ZooKeeper ephemeral sequential znodes | Strong — session-based liveness + built-in ordering | Yes (sequence number) | Medium-high (operate a ZK cluster) | Leader election, critical-section locks in infra |
-| etcd lease + revision | Strong — session-based liveness + monotonic revision | Yes (mod-revision via CAS) | Medium-high (operate an etcd cluster) | Kubernetes-style coordination, config locks |
+The lock failed.
 
-## Common interview follow-ups
+---
 
-**Q: Why doesn't adding more Redis nodes (Redlock) fix the fundamental issue Kleppmann raised?**
-Because the failure mode isn't "a node crashes" (which majority quorums do handle) — it's "the lock holder itself pauses for longer than the TTL and can't know it," which no number of additional lock-service nodes can prevent, since the problem lives in the client's own execution, not in the lock service's availability.
+# Redlock
 
-**Q: What's the minimum change needed to make a Redis-based lock safe for a critical operation?**
-Add a fencing token — an incrementing number issued at acquisition time — and make the protected resource itself reject any write whose token is lower than the highest token it has already accepted; without that check at the resource, no amount of lock-service hardening helps.
+Redlock tries to improve Redis locks.
 
-**Q: When is a "good enough" Redis lock actually fine to use?**
-When the operation is idempotent or the cost of a rare double-execution is low — e.g., deduplicating a scheduled job across replicas, or a cache-stampede guard — where an occasional double-run is a minor inefficiency, not a correctness incident.
+Instead of one Redis server:
 
-**Q: How do ZooKeeper's ephemeral znodes solve the "client paused, still thinks it holds the lock" problem better than a TTL?**
-They don't eliminate pauses, but the znode's liveness is tied to an active session heartbeat the client must maintain; combined with a fencing token (the sequence number) checked at the resource, a client that resumes after its session expired will have its stale writes rejected the same way the generic fencing-token pattern rejects them.
+```
+Redis 1
 
-**Q: Would you use a distributed lock for a leader election problem?**
-It's closely related — leader election is often implemented as "whoever holds a particular lock is the leader," but the dedicated primitives (Raft leader election, ZooKeeper leader-election recipe) add term/epoch numbers and quorum-based safety specifically tuned for that use case; see [leader election](leader-election.md).
+Redis 2
 
-**Q: What's the real-world cost of choosing ZooKeeper/etcd over a Redis lock for correctness-critical locking?**
-Operational: you now run and maintain a consensus-based cluster (odd node count, quorum sizing, backup/restore procedures) instead of reusing a cache you likely already have — a cost worth paying only when the lock genuinely guards something where double-execution is a real incident (financial operations, exclusive resource ownership), not a general-purpose mutex for everything.
+Redis 3
+
+Redis 4
+
+Redis 5
+```
+
+Client acquires lock from a majority.
+
+Example:
+
+```
+Need 3 out of 5 nodes
+```
+
+---
+
+## Why Redlock Helps
+
+It protects against:
+
+```
+One Redis node failure
+```
+
+---
+
+## Why Redlock Is Still Not Perfect
+
+The problem is not only Redis failure.
+
+The problem is:
+
+```
+Client pauses longer than TTL
+```
+
+Example:
+
+```
+Client A gets lock
+
+TTL = 10 seconds
+
+
+Client A freezes for 20 seconds
+
+
+Lock expires
+
+
+Client B gets lock
+
+
+Client A wakes up
+```
+
+Now:
+
+```
+Two owners exist
+```
+
+Adding more Redis nodes does not solve this.
+
+---
+
+# The Real Solution: Fencing Tokens
+
+A fencing token is a number that increases every time a lock is acquired.
+
+Example:
+
+```
+Client A:
+
+Gets lock
+
+Token = 100
+```
+
+Client A pauses.
+
+---
+
+Client B:
+
+```
+Gets lock
+
+Token = 101
+```
+
+Client B writes:
+
+```
+token=101
+```
+
+Storage accepts.
+
+---
+
+Client A wakes:
+
+```
+Writes token=100
+```
+
+Storage checks:
+
+```
+100 < 101
+```
+
+Reject.
+
+---
+
+The important idea:
+
+> The protected resource must reject old writers.
+
+The lock service alone cannot guarantee safety.
+
+---
+
+# Fencing Token Example
+
+```
+Lock Service
+
+
+Client A
+Token: 33
+
+
+        |
+        |
+      Pause
+
+
+Client B
+Token: 34
+
+
+
+Database:
+
+Last accepted token = 34
+
+
+A writes token 33
+
+Rejected
+```
+
+---
+
+# ZooKeeper Distributed Locks
+
+ZooKeeper provides safer locking primitives.
+
+It uses:
+
+```
+Ephemeral Sequential Nodes
+```
+
+Example:
+
+```
+/locks/order/
+
+lock-0001
+
+lock-0002
+
+lock-0003
+```
+
+The smallest number owns the lock.
+
+Example:
+
+```
+lock-0001
+
+Owner
+```
+
+---
+
+If the client dies:
+
+```
+Session expires
+```
+
+ZooKeeper removes the node automatically.
+
+---
+
+The sequence number also works as:
+
+```
+Fencing token
+```
+
+---
+
+# etcd Distributed Locks
+
+etcd uses:
+
+```
+Lease + Revision Number
+```
+
+---
+
+A client creates:
+
+```
+Lease
+```
+
+with heartbeat.
+
+Example:
+
+```
+Client must keep renewing
+```
+
+If heartbeat stops:
+
+```
+Lease expires
+
+Lock removed
+```
+
+---
+
+etcd also provides:
+
+```
+Revision number
+```
+
+which can be used as fencing tokens.
+
+---
+
+# Redis vs ZooKeeper vs etcd
+
+| Approach | Safety | Fencing Token | Complexity | Best For |
+|-|-|-|-|-|
+| Redis SETNX + TTL | Weak | No | Low | Cache locks, duplicate prevention |
+| Redlock | Better | No native | Medium | Low-risk distributed locks |
+| ZooKeeper | Strong | Yes | Medium/High | Critical coordination |
+| etcd | Strong | Yes | Medium/High | Kubernetes-style systems |
+
+---
+
+# When To Use Redis Locks
+
+Redis locks are fine when:
+
+- Operation is idempotent
+- Occasional duplicate execution is acceptable
+
+Examples:
+
+```
+Prevent duplicate email sending
+
+Avoid cache stampede
+
+Run scheduled job once
+```
+
+---
+
+# When NOT To Use Redis Locks
+
+Avoid Redis locks for:
+
+- Money transfers
+- Inventory correctness
+- Exclusive ownership
+- Critical infrastructure
+
+Because a rare lock failure can create data corruption.
+
+---
+
+# Distributed Lock vs Leader Election
+
+They are related.
+
+Leader election:
+
+```
+Who is the leader?
+```
+
+Distributed lock:
+
+```
+Who owns this resource?
+```
+
+Both require:
+
+- Agreement
+- Failure handling
+- Ownership changes
+
+For leader election, systems usually prefer:
+
+- Raft
+- ZooKeeper
+- etcd
+
+because they provide stronger guarantees.
+
+---
+
+# Common Interview Questions
+
+## Q: Why doesn't Redlock completely solve the problem?
+
+Because the main problem is not Redis failure.
+
+The problem is:
+
+```
+Client pauses longer than lock expiration
+```
+
+No number of Redis nodes can detect that safely.
+
+---
+
+## Q: How do you make a distributed lock safe?
+
+Use:
+
+```
+Fencing tokens
+```
+
+Flow:
+
+```
+Acquire lock
+
+Receive increasing token
+
+Write data with token
+
+Storage rejects old tokens
+```
+
+---
+
+## Q: Why use ZooKeeper/etcd instead of Redis?
+
+Because they provide:
+
+- Consensus-based coordination
+- Strong ordering
+- Session-based failure detection
+- Fencing tokens
+
+---
+
+## Q: Should every operation use a distributed lock?
+
+No.
+
+Locks add:
+
+- Complexity
+- Latency
+- Failure modes
+
+Prefer:
+
+- Idempotency
+- Optimistic concurrency
+- Database constraints
+
+when possible.
+
+---
+
+# Simple Rule To Remember
+
+```
+Need a simple best-effort lock
+        |
+        v
+Redis
+
+
+Need correctness under failure
+        |
+        v
+ZooKeeper / etcd
+
+
+Need multiple writers safely
+        |
+        v
+Fencing Tokens
+
+
+Need choosing a leader
+        |
+        v
+Consensus algorithms
+```
+
+---
+
+# Interview Answer
+
+> "A distributed lock is difficult because there is no shared memory and failures are ambiguous. A simple Redis SETNX lock works for best-effort cases but can fail when a client pauses beyond the TTL. For correctness-critical operations, I would use a coordination system like ZooKeeper or etcd with fencing tokens, so the protected resource can reject stale writers even if an old client wakes up later."
+
 
 ## Related topics
 - [Leader Election](leader-election.md) — often implemented as "hold this lock to be leader," with the same failure modes
