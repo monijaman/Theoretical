@@ -1,7 +1,5 @@
 # Rate Limiting
 
-> ## TL;DR
->
 > **Rate Limiting** controls how many requests a client can make within a specific time period.
 >
 > It protects your application from:

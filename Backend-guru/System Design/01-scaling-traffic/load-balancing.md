@@ -1,7 +1,6 @@
 # Load Balancing
 
-> ## TL;DR
->
+
 > A **Load Balancer** distributes incoming requests across multiple servers so that no single server becomes overloaded.
 >
 > It improves:

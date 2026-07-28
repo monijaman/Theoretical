@@ -1,7 +1,5 @@
 # Retry & Exponential Backoff
 
-> ## TL;DR
->
 > **Retry** means trying a failed request again.
 >
 > **Exponential Backoff** waits a little longer before each retry.

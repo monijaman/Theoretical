@@ -1,7 +1,5 @@
 # Reverse Proxy & API Gateway
 
-> ## TL;DR
->
 > A **Reverse Proxy** sits between clients and backend servers. It forwards requests, hides internal servers, and handles infrastructure tasks like SSL, routing, and load balancing.
 >
 > An **API Gateway** is a specialized Reverse Proxy designed specifically for APIs. In addition to routing, it handles authentication, rate limiting, API versioning, request transformation, and monitoring.

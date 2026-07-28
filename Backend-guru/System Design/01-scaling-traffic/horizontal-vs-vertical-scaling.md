@@ -1,8 +1,6 @@
 ````markdown
 # Horizontal vs Vertical Scaling
 
-> ## TL;DR
->
 > Scaling means increasing your application's capacity to handle more users or more traffic.
 >
 > There are two main approaches:

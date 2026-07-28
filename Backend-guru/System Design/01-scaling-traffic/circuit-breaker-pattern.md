@@ -1,7 +1,6 @@
 # Load Balancing
 
-> ## TL;DR
->
+
 > Load Balancing distributes incoming requests across multiple servers so that no single server becomes overloaded.
 >
 > **Goals**
