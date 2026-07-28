@@ -1,8 +1,7 @@
-````markdown
+
 # Database Replication
 
-> ## TL;DR
->
+
 > **Database Replication** is the process of maintaining multiple copies of the same database on different servers.
 >
 > It improves:

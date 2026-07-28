@@ -1,137 +1,333 @@
-# Data Lake vs Data Warehouse
+# Observability: Logs, Metrics & Traces
+
 [← Back to index](../readme.md)
 
-## Why this matters in an interview
+## What it is and why it's asked
 
-Any system that touches analytics, reporting, ML feature pipelines, or "give the BI team access to production data" eventually runs into this fork: do you dump raw data somewhere cheap and figure out structure later (data lake), or do you pay the cost up front to model, clean, and load it into a queryable engine (data warehouse)? Interviewers use this topic to see whether you understand the difference between storage-optimized and query-optimized systems, and whether you can reason about cost, latency, and governance trade-offs rather than reaching for a buzzword ("lakehouse") without understanding what problem it solves.
+Observability is the ability to answer questions about your system's internal state *that you didn't know you'd need to ask* — using only the external signals it emits. Monitoring answers questions you anticipated ("is CPU above 80%?"); observability answers the ones you didn't ("why did the 99th-percentile latency for this specific customer's checkout spike at 2:14 AM last Tuesday, and only for requests that touched the new pricing service?").
 
-## Core distinction
+Interviewers ask about this because production systems fail in ways nobody predicted, and "we have logs" is not the same as "we can debug an incident in minutes." A candidate who names the three pillars, knows what each is *bad* at, and can explain how they connect (not just that they all exist) is showing real operational maturity rather than buzzword recall.
 
-| | Data Lake | Data Warehouse |
-|---|---|---|
-| Schema | Schema-on-read | Schema-on-write |
-| Data shape | Raw, semi-structured, unstructured (JSON, logs, images, Parquet, CSV) | Structured, modeled (star/snowflake schema) |
-| Load pattern | ELT (Extract, Load, Transform) | ETL (Extract, Transform, Load) |
-| Cost model | Cheap storage (object storage), pay for compute per query | Storage + compute often bundled, historically pricier |
-| Primary users | Data engineers, data scientists, ML pipelines | Analysts, BI tools, dashboards |
-| Query performance | Variable — depends on file layout, partitioning | Consistently fast — engine optimized for SQL analytics |
-| Governance | Weak by default (easy to create a "data swamp") | Strong — enforced schema, constraints, catalogs |
+## The three pillars — and what each one is bad at
 
-### Schema-on-read vs schema-on-write
+**Logs** — discrete, timestamped events, usually with a message and structured fields. Best for: "what exactly happened on this one request/error, in detail." Bad at: aggregate questions ("what's my p99 latency across 10,000 instances?") — you'd have to scan and compute across a firehose of text, which is exactly what metrics exist to avoid.
 
-**Schema-on-write** (warehouse): you define a table schema (columns, types, constraints) before loading. The ETL job transforms and validates data to conform to that schema before it lands. Query time is fast and predictable because the engine already knows the layout and can use columnar storage, statistics, and indexes tuned to it.
+**Metrics** — numeric measurements aggregated over time (counters, gauges, histograms). Best for: trends, alerting thresholds, dashboards, cheap long-term storage (a counter is a few bytes regardless of how many events it represents). Bad at: telling you *why* — a metric says latency went up, not which specific request, user, or code path caused it.
 
-**Schema-on-read** (lake): you dump raw files (JSON, Avro, Parquet, plain text) into storage with no upfront schema enforcement. The schema is applied when a query engine reads the data — e.g., a Hive/Glue catalog maps files to a logical table at query time. This defers cost and decisions but pushes the burden onto every consumer to agree on how to interpret the data.
+**Traces** — the path of a single request as it flows through multiple services, broken into timed spans. Best for: pinpointing *where* in a multi-hop call chain the latency or error actually originated. Bad at: aggregate system health (you wouldn't build your primary alerting off individual traces) and bad at capturing state that isn't part of the request path (background job health, queue depth).
 
-```
-ETL (warehouse):        Extract → Transform → Load → Query
-                                   (schema enforced here)
+```text
+Metrics:  "p99 latency for checkout jumped from 200ms to 4s at 14:03"   ← WHAT and WHEN
 
-ELT (lake):              Extract → Load → Transform → Query
-                                          (schema enforced per-query,
-                                           or in a later curation step)
+Traces:   "...because the inventory-service span took 3.8s of that 4s"  ← WHERE
+
+Logs:     "...because inventory-service logged
+           'DB connection pool exhausted'
+           at 14:03:12"                                                  ← WHY
 ```
 
-## How it works mechanically
+None of the three is sufficient alone; the value comes from using them together and being able to pivot between them during an investigation.
 
-### Data lake
+## Structured logging: JSON logs and correlation IDs
 
-```
-   Sources                Storage (flat, cheap)         Query / Compute
- ┌──────────┐        ┌─────────────────────────┐      ┌──────────────────┐
- │ App logs │──────▶ │   S3 / GCS / ADLS       │◀────▶│ Athena / Presto  │
- │ CDC       │──────▶ │  (raw/, bronze/,        │      │ Trino / Spark    │
- │ IoT       │──────▶ │   curated/, gold/)      │      │ EMR / Databricks │
- │ 3rd-party │──────▶ │  Parquet/ORC + catalog  │      └──────────────────┘
- └──────────┘        └─────────────────────────┘
-                              ▲
-                       Glue Data Catalog / Hive
-                       Metastore (schema mapping)
+Unstructured logs like:
+
+```text
+User 4821 checkout failed
 ```
 
-- Data lands in object storage in its original or lightly-converted form (often converted to Parquet/ORC for columnar efficiency).
-- A metadata catalog (AWS Glue, Hive Metastore) tracks table definitions, partitions, and file locations without moving the data.
-- Query engines (Athena, Presto/Trino, Spark SQL) read directly from object storage, applying schema at query time.
-- Common "medallion" layering: bronze (raw) → silver (cleaned/deduped) → gold (aggregated, business-ready).
+are only searchable by text.
 
-### Data warehouse
+Structured logs emit consistent JSON:
 
-```
-   Sources          ETL/ELT pipeline           Warehouse (MPP engine)
- ┌──────────┐    ┌───────────────────┐     ┌───────────────────────┐
- │ OLTP DBs │───▶│ Fivetran/Airflow/ │────▶│ Snowflake / Redshift / │──▶ BI tools
- │ SaaS APIs│───▶│ dbt (transform)   │     │ BigQuery               │   (Looker,
- └──────────┘    └───────────────────┘     └───────────────────────┘    Tableau)
-```
-
-- Massively parallel processing (MPP) engines store data column-oriented, pre-aggregated, and partitioned for fast SQL scans.
-- Strong schema enforcement, constraints, and often a dimensional model (fact/dimension tables).
-- Compute and storage are billed separately in modern cloud warehouses (Snowflake, BigQuery), letting you scale query concurrency independently of data volume.
-
-## Real-world examples
-
-- **AWS S3 + Glue + Athena**: classic lake stack. S3 is the storage layer, Glue Crawler infers schema and populates the Data Catalog, Athena runs serverless SQL (Presto engine) directly against S3 objects. Pay per query (per TB scanned) — no cluster to manage.
-- **Snowflake**: warehouse-as-a-service. Separates storage (its own compressed columnar format) from compute (virtual warehouses you can resize independently). Supports semi-structured data (VARIANT columns for JSON) which blurs the line toward lakehouse.
-- **Amazon Redshift**: classic MPP warehouse, node-based clusters, columnar storage, `COPY` command for bulk ETL loads; Redshift Spectrum lets it query data sitting in S3 directly (lake-warehouse bridge).
-- **Databricks + Delta Lake**: the canonical "lakehouse" — adds a transaction log (ACID) on top of Parquet files in object storage, giving lake economics with warehouse-like reliability (schema enforcement, time travel, `MERGE` statements).
-- **Google BigQuery**: warehouse with lake-like flexibility — separates storage/compute, can query external tables directly in GCS.
-
-## Lakehouse convergence
-
-The "lakehouse" pattern (Delta Lake, Apache Iceberg, Apache Hudi) emerged to close the gap:
-
-- Adds a **transaction log** (metadata layer) over plain files in object storage, giving ACID guarantees, schema enforcement/evolution, and time travel — things only warehouses used to offer.
-- Keeps the **cheap, open, decoupled storage** of a lake (plain Parquet files anyone can read, no vendor lock-in).
-- Enables both BI-style SQL queries and ML/Spark workloads against the *same* copy of data, avoiding the classic "lake for data science, warehouse for BI" duplication.
-
-```
-Iceberg/Delta table = Parquet files (data) + transaction log (metadata)
-                       ─────────────────────────────────────────────
-                       snapshot 1 → snapshot 2 → snapshot 3 (time travel)
+```json
+{
+  "timestamp": "2026-07-14T14:03:12.442Z",
+  "level": "error",
+  "service": "inventory-service",
+  "message": "DB connection pool exhausted",
+  "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "span_id": "00f067aa0ba902b7",
+  "user_id": "4821",
+  "order_id": "ord_9f2a1",
+  "pool_wait_ms": 3700
+}
 ```
 
-## Trade-offs
+The most important field is the **correlation ID** (typically the `trace_id`).
 
-- **Use a lake when**: data is highly varied/unstructured, volume is huge and cost-sensitive, consumers include ML/data science who want raw access, or you don't yet know all future query patterns.
-- **Use a warehouse when**: you need consistent low-latency SQL for dashboards, strong governance/schema contracts, and your primary consumers are analysts running repeatable BI queries.
-- **Lake downsides**: easy to become a "data swamp" (no governance, duplicate/undocumented datasets); query performance depends heavily on file format and partitioning discipline; without a lakehouse layer, no ACID transactions (concurrent writers can corrupt reads).
-- **Warehouse downsides**: schema rigidity slows ingestion of novel data; historically higher storage cost per TB; scaling raw ingestion of unstructured data (images, logs) is awkward.
-- **Lakehouse downsides**: added architectural complexity (managing table format versions, compaction jobs); still maturing tooling compared to decades-old warehouse ecosystems; performance for pure BI workloads can lag a purpose-built warehouse for very high-concurrency dashboards.
+Every service handling the same request logs the same `trace_id`, allowing one query to retrieve every related log entry across your distributed system.
 
-## Illustrative snippet — Athena querying a lake table
+Without correlation IDs, engineers end up manually correlating timestamps across multiple services—a slow and error-prone process.
 
-```sql
--- Table defined once in Glue Catalog, backed by Parquet files in S3
-CREATE EXTERNAL TABLE orders (
-  order_id string,
-  user_id string,
-  amount double,
-  created_at timestamp
-)
-PARTITIONED BY (dt string)
-STORED AS PARQUET
-LOCATION 's3://data-lake/gold/orders/';
+## Metrics: types, and the RED/USE methods
 
--- Schema-on-read: Athena applies this schema only at query time
-SELECT dt, SUM(amount) FROM orders WHERE dt = '2026-07-01' GROUP BY dt;
+Three core metric types:
+
+### Counter
+
+Monotonically increasing values.
+
+Examples:
+
+- Total requests
+- Total errors
+- Total logins
+
+Useful when viewed as a rate.
+
+```text
+http_requests_total
 ```
+
+### Gauge
+
+Values that increase and decrease.
+
+Examples:
+
+- CPU usage
+- Memory usage
+- Queue depth
+- Active database connections
+
+### Histogram
+
+Stores distributions rather than single values.
+
+Examples:
+
+- Request latency
+- Response size
+- Query execution time
+
+Histograms enable percentiles such as:
+
+- p50
+- p95
+- p99
+
+### RED Method
+
+For request-driven services:
+
+- **Rate**
+- **Errors**
+- **Duration**
+
+If you only expose three metrics for a service, these should usually be them.
+
+### USE Method
+
+For infrastructure resources:
+
+- **Utilization**
+- **Saturation**
+- **Errors**
+
+Example:
+
+```text
+RED
+
+Requests/sec : 1200
+Error Rate   : 0.3%
+p99 Latency  : 220ms
+
+USE (DB Pool)
+
+Utilization : 95%
+Saturation  : 40 requests waiting
+Errors      : 12 connection timeouts/min
+```
+
+RED tells you the service is unhealthy.
+
+USE tells you which resource is causing it.
+
+## The cardinality explosion problem
+
+Every unique metric label combination creates a new time series.
+
+Good:
+
+```text
+http_requests_total{
+  method="GET",
+  status="200"
+}
+```
+
+Bad:
+
+```text
+http_requests_total{
+  user_id="4821823"
+}
+```
+
+Even worse:
+
+```text
+http_requests_total{
+  request_id="a1b2c3"
+}
+```
+
+Millions of users or request IDs create millions of time series, overwhelming monitoring systems.
+
+**Rule of thumb:**
+
+Use low-cardinality labels for metrics.
+
+Use high-cardinality values (user IDs, request IDs, emails, trace IDs) in logs and traces instead.
+
+## How the three pillars connect
+
+A typical production investigation looks like this:
+
+```text
+1. Metric Alert
+
+Checkout p99 latency > 2s
+
+        │
+        ▼
+
+2. Trace
+
+checkout-service
+    │
+    ▼
+inventory-service (3.8s)
+    │
+    ▼
+payment-service (60ms)
+
+        │
+        ▼
+
+3. Logs
+
+trace_id = 4bf92f3577b34da6...
+
+"DB connection pool exhausted"
+
+        │
+        ▼
+
+Root cause:
+Database connection pool saturation
+```
+
+Metrics tell you **something is wrong**.
+
+Traces tell you **where**.
+
+Logs tell you **why**.
+
+## Common observability stack
+
+### Metrics
+
+- Prometheus
+- Grafana
+- CloudWatch
+- Datadog
+- New Relic
+
+### Logs
+
+- ELK Stack (Elasticsearch + Logstash + Kibana)
+- Fluent Bit / Fluentd
+- Grafana Loki
+
+### Traces
+
+- Jaeger
+- Zipkin
+- AWS X-Ray
+- OpenTelemetry Collector
+
+### Commercial platforms
+
+- Datadog
+- New Relic
+
+These combine metrics, logs, traces, dashboards, alerting, and APM into a unified experience.
+
+## Trade-offs summary
+
+| Pillar | Storage Cost | Best For | Cardinality Tolerance |
+|---|---|---|---|
+| Logs | High | Detailed debugging | High |
+| Metrics | Low | Dashboards, trends, alerts | Low |
+| Traces | Medium-High | Request flow and latency analysis | High (usually sampled) |
 
 ## Common interview follow-ups
 
-**Q: How do you prevent a data lake from becoming a "data swamp"?**
-Enforce a layered structure (bronze/silver/gold), maintain a data catalog with ownership and documentation, apply schema validation at the silver layer even though raw ingestion is schema-less, and set retention/lifecycle policies so stale raw data gets archived or deleted.
+### Q: If you could only implement one pillar first?
 
-**Q: Why would you pick Delta Lake/Iceberg over just querying raw Parquet files with Athena?**
-Raw Parquet in S3 has no transaction guarantees — concurrent writers can leave partial files, and there's no way to atomically swap a set of files or roll back a bad write. A table format adds a metadata/transaction log giving atomic commits, schema evolution, and time travel, at the cost of extra tooling to manage compaction and log cleanup.
+Structured logging with correlation IDs.
 
-**Q: How does compute/storage separation in Snowflake/BigQuery change cost and scaling behavior versus Redshift's classic node model?**
-In Redshift's older architecture, storage and compute live on the same nodes, so scaling for more storage means paying for more compute you may not need. Snowflake/BigQuery decouple them: you store data once and spin up independent, differently-sized compute clusters (or serverless slots) per workload, so a heavy nightly ETL job and lightweight dashboard queries don't contend for the same resources.
+It's inexpensive, immediately useful, and forms the foundation for traces and cross-service debugging.
 
-**Q: How would you migrate a system currently on a data warehouse to a lakehouse without downtime?**
-Dual-write or CDC-replicate warehouse tables into Delta/Iceberg tables in parallel, validate query parity (row counts, aggregate checksums) against the warehouse, gradually cut over BI tools table-by-table, and keep the warehouse as a read fallback until confidence is high — this is the same phased-cutover pattern used in database migrations generally.
+---
 
-**Q: When would you deliberately choose ETL over ELT even with cheap lake storage available?**
-When downstream consumers require strict, validated schemas immediately (e.g., regulated financial reporting) and you can't tolerate malformed or PII-laden raw data sitting even briefly in a shared lake — transforming/redacting before load reduces compliance and data-quality blast radius.
+### Q: How do you prevent metric cardinality explosions?
+
+- Restrict metric labels.
+- Never use user IDs or request IDs as labels.
+- Push high-cardinality information into logs or traces.
+- Monitor the number of active time series.
+
+---
+
+### Q: What's the difference between metric-based and log-based alerts?
+
+**Metric alerts**
+
+- Fast
+- Cheap
+- Good for thresholds
+- Example: error rate > 1%
+
+**Log alerts**
+
+- More expensive
+- Better for detecting specific exception patterns or messages
+- Usually used for investigation rather than primary paging
+
+---
+
+### Q: Why not derive metrics from logs?
+
+It's possible, but expensive.
+
+Computing latency percentiles or request rates from raw logs requires scanning huge volumes of data, while metrics are already aggregated and optimized for this purpose.
+
+---
+
+### Q: How does sampling affect observability?
+
+- Metrics are generally **not sampled**.
+- Logs may sample routine successful requests while keeping all errors.
+- Traces are commonly sampled because storing every request is expensive.
+
+---
+
+### Q: Dashboards look healthy, but users complain. What could be happening?
+
+Aggregate metrics can hide localized problems.
+
+Examples:
+
+- One region is failing.
+- One customer tier is affected.
+- One endpoint is slow.
+- One dependency is timing out.
+
+Use dimensions, traces, and Real User Monitoring (RUM) to investigate these cases instead of relying solely on aggregate dashboards.
 
 ## Related topics
 

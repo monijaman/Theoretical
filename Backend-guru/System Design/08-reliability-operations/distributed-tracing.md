@@ -13,7 +13,7 @@ Interviewers ask about this to see if you understand *why* microservices archite
 - **Span** — one unit of work within that trace — typically one service handling one operation (an HTTP call, a DB query, a queue publish). Each span has its own `span_id`, a start time, a duration, and a `parent_span_id` pointing to whoever called it, which is what lets a tracing backend reconstruct the nesting.
 - **Context propagation** — the mechanism that carries `trace_id` + current `span_id` across process boundaries, usually as HTTP headers (the W3C `traceparent` header is the current standard) or message-queue metadata, so the *next* service knows which trace it's part of and which span is its parent.
 
-```
+```text
 Trace: 4bf92f3577b34da6a3ce929d0e0e4736
                                                      (waterfall view — width = duration)
 API Gateway        [span: root, 420ms                                    ]
@@ -41,7 +41,7 @@ Recording a full trace for every single request is expensive at scale (storage a
 
 **Tail-based sampling** — the decision is deferred until the *entire* trace is complete, so it can consider the full picture (did any span error? was total latency above a threshold?) before deciding to keep or discard it. This reliably catches the rare slow/failed requests that head-based sampling mostly misses, at the cost of needing to buffer every span of every trace somewhere (usually at a collector layer) until the trace finishes, which is more memory- and infrastructure-intensive.
 
-```
+```text
 Head-based (decide at t=0, before outcome known):
   1,000 requests → sample 1% → 10 traces kept
   Of those 10: ~9 are fast/normal, ~0-1 might happen to be the slow one
@@ -59,7 +59,7 @@ A common real-world compromise: sample close to 100% of *interesting* requests (
 
 **OpenTelemetry (OTel)** — a CNCF project formed by merging OpenTracing and OpenCensus — is now the de facto standard for instrumenting traces (and increasingly metrics and logs too, unifying with the observability pillars described in `observability-logs-metrics-traces.md`). Its value is decoupling *instrumentation* from *backend*:
 
-```
+```text
 Your service code
       │  (OpenTelemetry SDK: auto-instrumentation + manual spans)
       ▼

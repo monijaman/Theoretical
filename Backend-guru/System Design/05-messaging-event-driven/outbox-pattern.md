@@ -1,4 +1,3 @@
-````md
 # Outbox Pattern
 [← Back to index](../readme.md)
 
