@@ -235,17 +235,3 @@ You understand a topic when you can:
 The goal is not merely to call an AI API. The goal is to design, deploy, evaluate, secure, and operate an AI-enabled system that solves a real business problem.
 
 
-📌 TOP COMMANDS & RESOURCES MENTIONED:
-
-System Call Tracing (strace)
-Docs: https://www.youtube.com/redirect?event=video_description&redir_token=QUM4Zm9rUjQ5TVN4dkNydGxiWTk1c0syZDlQeHxBR3JiS2FscXJBTGw0RG1hQ0hQRnZwRXB3YXM2SGRKaUMxeDBJWVdCX1Rud0p3Nkk5TXdiUEZsV3dYYXh0SHFIT3c1SEpiVFFvSE9Sd2thS2ZrS2d5ZUdUZThjSjVwT2xqXzlY&q=https%3A%2F%2Fman7.org%2Flinux%2Fman-pages%2Fman1%2Fstrace.1.html&v=wRw2H16-pRc
-
-Network Socket Diagnostics (ss)
-Docs: https://www.youtube.com/redirect?event=video_description&redir_token=QUM4Zm9rUS01MjJqcWJHTGpLY3BjeWRwTTZQcnxBR3JiS2FreUJ1RzFKUm5Ec1lFWmFTOTc5UGtORXIyUlhqNkt6eXZCbEl5UldRMUNuNHM5SzJ1MHRXcWp2T1NsamxScWJMNzlpODdla1l5VVBlYUNBOUNwX2xLbWUzLUxlcWlN&q=https%3A%2F%2Fman7.org%2Flinux%2Fman-pages%2Fman8%2Fss.8.html&v=wRw2H16-pRc
-
-PostgreSQL Query Performance (EXPLAIN ANALYZE)
-Docs: https://www.youtube.com/redirect?event=video_description&redir_token=QUM4Zm9rVEFIQmZCTmNmRFpZdjlPUmpYUmlnOXxBR3JiS2FsZ0J1YmNadTVweWtveFdZdjZLNTRrUnVnYTh0WmRwYXZudGJqOC1zbXZMNjRxOEhZMzF6MWpwTFV2QjVvQlR1YnRHTHRnSDV2SGpFZEpybFl3d0RDU2xMaVBjRGZ2&q=https%3A%2F%2Fwww.postgresql.org%2Fdocs%2Fcurrent%2Fusing-explain.html&v=wRw2H16-pRc
-
-System Performance Profiling
-Resource: Brendan Gregg's Linux Performance Guide
-Docs: https://www.youtube.com/redirect?event=video_description&redir_token=QUM4Zm9rVC1KNjBVbVctQlRhdl9WbEJpMDdVMnxBR3JiS2FueFVfczNhZDhhNWdRbEM0b2lRT1dwZGRZNmlYODFCb21FUDlaY0Zua1lpbUtlT1Ayd1dhbWRfUzVYU1VXaXZaU056aExBVDdsN0Rfa3lHZzU0TTFlRkVJRUhyaFRK&q=https%3A%2F%2Fwww.brendangregg.com%2Flinuxperf.html&v=wRw2H16-pRc
