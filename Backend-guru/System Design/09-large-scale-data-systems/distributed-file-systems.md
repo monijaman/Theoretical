@@ -9,7 +9,7 @@ Before object storage ate the world, "how do you store more data than fits on on
 
 HDFS (Hadoop Distributed File System) splits the concerns of **metadata** (what files exist, which blocks they're made of, where those blocks live) from **data** (the actual block bytes) across two node types.
 
-```
+```text
                     ┌─────────────────────┐
                     │      NameNode        │
                     │  (metadata only)     │
@@ -47,7 +47,7 @@ In classic Hadoop 1.x, there was exactly one NameNode. If it crashed, the entire
 
 **HDFS High Availability (HA) NameNode** fixed this (Hadoop 2.x+):
 
-```
+```text
         Active NameNode  ──── shared edit log ────  Standby NameNode
         (serves all            (JournalNodes,          (replays edit log
          metadata ops)          quorum-based)            continuously, hot-standby)
@@ -72,7 +72,7 @@ HDFS's default block size (128MB, historically 64MB) is enormous compared to a l
 
 ## How this differs from object storage
 
-```
+```text
 HDFS / DFS                                  Object storage (S3)
 ───────────────────────────                 ───────────────────────────
 Hierarchical namespace                       Flat namespace (bucket + key)
@@ -115,22 +115,22 @@ The deepest architectural difference is **data locality**: HDFS was built so com
 
 ## Common interview follow-ups
 
-**Q: Why does the NameNode need so much memory, and what happens as the cluster grows?**
+**Q: Why does the NameNode need so much memory, and what happens as the cluster grows?**  
 The NameNode keeps the entire namespace (every file, directory, and block-location mapping) in RAM for fast metadata operations, so total memory bounds total file+block count cluster-wide, regardless of how many DataNodes you add for raw storage capacity — this is why the "small files problem" is a memory scaling issue, not a disk one, and why very large HDFS deployments obsess over keeping file counts down (e.g., using Hadoop Archives or compaction jobs).
 
-**Q: How does HDFS decide where to place block replicas?**
+**Q: How does HDFS decide where to place block replicas?**  
 It's rack-aware: by default it places one replica on the writer's local node (or a random node if off-cluster), a second replica on a different rack, and a third replica on a different node in that second rack — this balances write bandwidth (fewer cross-rack hops needed) against fault tolerance (surviving a full rack/switch failure).
 
-**Q: If HDFS HA solves the NameNode SPOF, why do people still say object storage is simpler operationally?**
+**Q: If HDFS HA solves the NameNode SPOF, why do people still say object storage is simpler operationally?**  
 HA NameNode requires running and monitoring an active/standby pair, a JournalNode quorum, and a failover controller (ZooKeeper) — real infrastructure you have to operate correctly; S3-style object storage's decentralized metadata design means there's no equivalent component to keep highly available at all, since no single node resolves the whole namespace, which is a meaningfully smaller operational surface.
 
-**Q: How would you migrate an existing HDFS-based Hadoop pipeline to run against S3 instead?**
+**Q: How would you migrate an existing HDFS-based Hadoop pipeline to run against S3 instead?**  
 Point Spark/Hive at `s3a://` paths instead of `hdfs://` paths (most engines abstract the filesystem behind a URI scheme), validate that job performance holds up despite losing data locality (often masked by fast cloud networking), and keep HDFS as fast ephemeral scratch space for intermediate shuffle data within a job even after the source/sink data lives in S3.
 
-**Q: Why is block size so much larger in HDFS than a typical local filesystem?**
+**Q: Why is block size so much larger in HDFS than a typical local filesystem?**  
 HDFS is optimized for large sequential reads/writes by big batch jobs rather than small random I/O, so large blocks (128MB) both reduce the number of metadata entries the NameNode must track per file and amortize the fixed cost of a disk seek over far more sequentially-read bytes — the trade-off is that small files waste block space and namespace memory disproportionately.
 
-**Q: What's the practical difference in how a client reads a file in HDFS vs. S3?**
+**Q: What's the practical difference in how a client reads a file in HDFS vs. S3?**  
 In HDFS, the client asks the NameNode for the block locations of a file, then opens direct connections to the relevant DataNodes to stream block bytes; in S3, the client sends a single HTTP GET for a key directly to the storage service, and there's no separate "ask for locations first" round trip because routing is handled by consistent hashing internally, invisible to the client.
 
 ## Related topics

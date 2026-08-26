@@ -1,132 +1,623 @@
 # Cache Eviction Policies
 [← Back to index](../readme.md)
 
-## What this is and why it matters
+---
 
-A cache is finite memory in front of effectively infinite data. Once it's full, adding a new entry means something else has to go — the eviction policy decides *what*. Get this wrong and your cache thrashes (constantly evicting things that were about to be reused), which is worse than having no cache at all because you pay the memory/CPU cost of caching without the hit-rate benefit. Interviewers probe this to check you understand access-pattern-dependent trade-offs, not just "LRU is the default."
+# What Are Cache Eviction Policies?
 
-## LRU — Least Recently Used
+A cache has **limited memory**, while the underlying database or storage is effectively unlimited.
 
-Evict the entry that hasn't been accessed for the longest time. Implemented with a hash map (key -> node) plus a doubly linked list ordered by recency; every access moves the node to the front, eviction pops from the back — both O(1).
+When the cache becomes full and a new item needs to be stored, **something must be removed**. The rule that decides which item gets removed is called the **cache eviction policy**.
+
+Choosing the wrong policy can dramatically reduce cache efficiency, causing frequent cache misses and unnecessary database queries.
+
+> **Interview takeaway:** There is no universally "best" eviction policy. The right choice depends entirely on the application's access pattern.
+
+---
+
+# Why It Matters
+
+A good eviction policy helps you:
+
+- Increase cache hit rate
+- Reduce database load
+- Improve application latency
+- Prevent cache pollution
+- Make better use of limited memory
+
+Poor eviction can actually make performance worse than having no cache at all because you're paying the cost of caching without getting the benefit.
+
+---
+
+# 1. LRU (Least Recently Used)
+
+## Idea
+
+Remove the item that **hasn't been accessed for the longest time**.
+
+The assumption is:
+
+> If something hasn't been used recently, it's less likely to be used again soon.
+
+---
+
+## Example
 
 ```
-MRU end                                    LRU end
-[ D ] <-> [ C ] <-> [ A ] <-> [ B ]  -> evict B next
+MRU                                    LRU
 
-access(A):
-[ A ] <-> [ D ] <-> [ C ] <-> [ B ]
+[D] ⇄ [C] ⇄ [A] ⇄ [B]
+
+Next eviction → B
 ```
+
+After accessing **A**:
+
+```
+[A] ⇄ [D] ⇄ [C] ⇄ [B]
+
+Next eviction → B
+```
+
+The most recently accessed item always moves to the front.
+
+---
+
+## Typical Implementation
+
+LRU is usually implemented using:
+
+- Hash Map → O(1) lookup
+- Doubly Linked List → O(1) insert/remove
+
+This gives:
+
+| Operation | Time |
+|-----------|------|
+| Get | O(1) |
+| Put | O(1) |
+| Evict | O(1) |
+
+---
+
+## Python Example
 
 ```python
+from collections import OrderedDict
+
 class LRUCache:
     def __init__(self, capacity):
         self.cap = capacity
-        self.od = OrderedDict()
+        self.cache = OrderedDict()
 
     def get(self, key):
-        if key not in self.od:
+        if key not in self.cache:
             return None
-        self.od.move_to_end(key)
-        return self.od[key]
+
+        self.cache.move_to_end(key)
+        return self.cache[key]
 
     def put(self, key, value):
-        if key in self.od:
-            self.od.move_to_end(key)
-        self.od[key] = value
-        if len(self.od) > self.cap:
-            self.od.popitem(last=False)   # evict least-recently-used
+        if key in self.cache:
+            self.cache.move_to_end(key)
+
+        self.cache[key] = value
+
+        if len(self.cache) > self.cap:
+            self.cache.popitem(last=False)
 ```
 
-- Good fit: temporal locality (a user's recent orders, session data, recently viewed products).
-- Weak spot: a single large sequential scan (e.g., a batch job reading every row) can flush the entire cache of genuinely hot data — this is the classic "cache pollution by scan" problem.
+---
 
-## LFU — Least Frequently Used
+## Best For
 
-Evict the entry with the lowest access *count*, not recency. Needs a frequency counter per key plus an efficient way to find the min — typically a hash map of key->count alongside a hash map of count->OrderedSet of keys (O(1) LFU, as used in Redis's approximated LFU).
+- Session cache
+- User profiles
+- Shopping carts
+- Recently viewed products
+- Recently opened documents
 
-- Good fit: stable popularity distributions (a "top 100 products" cache, celebrity profiles) where being accessed once recently shouldn't outrank being accessed constantly.
-- Weak spot: new items start at frequency 1 and get evicted quickly even if they're about to become hot ("cache warm-up problem" / new-item bias); old popular items can get stuck forever even after they stop being relevant unless counts decay over time.
+These workloads exhibit **temporal locality**.
 
-Redis mitigates the decay problem with `lfu-decay-time`, which periodically halves counters so stale popularity fades.
+---
 
-## FIFO — First In, First Out
+## Weakness
 
-Evict whatever was inserted earliest, regardless of access pattern. Simplest to implement (a queue), cheapest in CPU, but ignores usage entirely — a key inserted first and read constantly gets evicted at the same time as one inserted first and never touched again.
+Large sequential scans can destroy cache quality.
 
-- Good fit: rarely used alone in production caches; more relevant for buffer/queue-like structures or where all items have genuinely equal value and a simple TTL-like rotation is enough (e.g., rotating logs, fixed-size ring buffers).
+Example:
 
-## ARC — Adaptive Replacement Cache
+A batch job reads 5 million rows once.
 
-Combines recency and frequency by maintaining two LRU lists — one for items seen once ("recency", T1) and one for items seen more than once ("frequency", T2) — plus two "ghost" lists (B1, B2) that track recently evicted keys without storing their values. The ghost-list hit rate is used to *adaptively* shift the target size between T1 and T2, so the cache tunes itself toward whichever regime (recency-heavy or frequency-heavy) the current workload actually needs.
+Every row becomes "recent," pushing truly hot items out of the cache.
+
+This is called:
+
+> **Cache Pollution**
+
+---
+
+# 2. LFU (Least Frequently Used)
+
+## Idea
+
+Remove the item that has been accessed the **fewest number of times**.
+
+Instead of asking:
+
+> "When was it used?"
+
+LFU asks:
+
+> "How often is it used?"
+
+---
+
+## Example
+
+| Item | Access Count |
+|------|-------------:|
+| A | 100 |
+| B | 65 |
+| C | 8 |
+| D | 1 |
+
+If space is needed:
 
 ```
-T1 (recent, seen once)  <---- balance shifts based on ghost hits ----> T2 (frequent, seen 2+)
-B1 (ghost of evicted T1)                                               B2 (ghost of evicted T2)
+Evict D
 ```
 
-ARC was developed at IBM and used in ZFS's page cache; it was patented (expired 2015-ish), which is historically why open-source projects like Redis and Memcached shipped LRU/LFU instead of ARC despite ARC's generally superior hit rates in mixed workloads.
+---
 
-- Good fit: workloads that shift between scan-heavy and hot-key-heavy over time, where a fixed LRU or LFU would need manual retuning.
-- Cons: more bookkeeping overhead (four lists instead of one/two), more complex to implement and reason about.
+## Implementation
 
-## TTL-based Expiration
+A typical LFU implementation stores:
 
-Orthogonal to the above — TTL isn't a *replacement* policy, it's a *staleness* policy: entries expire after N seconds regardless of memory pressure, and are usually combined with LRU/LFU as the actual eviction mechanism for when memory fills up before TTL expiry.
+- Hash Map (key → frequency)
+- Frequency buckets
+- Ordered set inside each bucket
+
+This allows O(1) operations.
+
+---
+
+## Best For
+
+Stable popularity patterns such as:
+
+- Trending products
+- Celebrity pages
+- Frequently requested API responses
+- Popular blog posts
+
+---
+
+## Weakness
+
+New items start with frequency = 1.
+
+They may be evicted before having enough time to become popular.
+
+This is called the:
+
+> **Cache Warm-up Problem**
+
+Another issue:
+
+Old popular items can stay forever even after nobody accesses them.
+
+---
+
+## Redis Solution
+
+Redis gradually decreases frequency counters using:
 
 ```
-SET session:abc123 "..." EX 1800     # expires in 30 min, whether or not cache is full
+lfu-decay-time
 ```
 
-- Lazy expiration: checked on access (if expired, treat as miss and delete).
-- Active expiration: background sweep periodically scans and removes expired keys (Redis samples a random subset of keys with a TTL, ~10 times/sec, and removes expired ones — this bounds average latency impact vs. scanning everything).
+Old popularity slowly fades, allowing newer hot items to replace them.
 
-TTL is essential wherever correctness requires bounded staleness (auth tokens, price quotes, rate-limit counters) independent of how much memory is free.
+---
 
-## Redis eviction policies (maxmemory-policy)
+# 3. FIFO (First In, First Out)
 
-Redis is the most common interview reference point because it exposes eviction policy as a single config knob, `maxmemory-policy`, applied once `maxmemory` is reached:
+## Idea
 
-| Policy | Behavior |
-|---|---|
-| `noeviction` | Reject writes with an error once full; reads still work. Default. Safe but can break producers. |
-| `allkeys-lru` | Evict least-recently-used key across the whole keyspace. |
-| `allkeys-lfu` | Evict least-frequently-used key across the whole keyspace (Redis 4.0+). |
-| `allkeys-random` | Evict a random key. Cheap, surprisingly effective for uniform access patterns. |
-| `volatile-lru` | LRU, but only among keys that have a TTL set. |
-| `volatile-lfu` | LFU, but only among keys that have a TTL set. |
-| `volatile-ttl` | Evict the key with the nearest expiry first, among keys with a TTL. |
-| `volatile-random` | Random eviction among keys that have a TTL set. |
+Evict the item that entered the cache first.
 
-`volatile-*` policies are used when some keys must never be evicted except by explicit delete (e.g., persistent config data mixed in the same instance as ephemeral session cache) — keys without a TTL are untouchable, so eviction pressure only falls on the volatile subset.
+Access history is ignored completely.
 
-Redis's LRU/LFU are approximated, not exact: it samples a small number of random keys (`maxmemory-samples`, default 5) and evicts the best candidate among the sample rather than tracking a perfect global order, trading a small accuracy loss for O(1) memory overhead per key instead of a full linked-list pointer per entry.
+---
 
-## Trade-off summary
+## Example
 
-| Policy | Tracks | Best for | Weakness |
-|---|---|---|---|
-| LRU | Recency | Temporal locality | Scans evict hot data |
-| LFU | Frequency | Stable popularity | Slow to adapt to new hot items |
-| FIFO | Insertion order | Simplicity, equal-value items | Ignores usage entirely |
-| ARC | Recency + frequency, adaptive | Mixed/shifting workloads | Implementation complexity |
-| TTL | Absolute time | Bounded staleness requirements | Not memory-aware by itself |
+Insertion order:
 
-## Common interview follow-ups
+```
+A
+B
+C
+D
+```
 
-**Q: Why might LRU perform worse than random eviction in some workloads?**
-A large one-off sequential scan (batch export, full-table backfill) touches every key once, pushing genuinely hot keys out of the MRU position and evicting them — "cache pollution." Pure random eviction is immune to this because it doesn't reward recency of a scan. Some systems (like PostgreSQL's buffer pool) use scan-resistant variants (2Q, clock-sweep with a "recently used" bit) specifically to guard against this.
+Cache becomes full.
 
-**Q: How does Redis implement approximate LRU cheaply?**
-Instead of a full linked list (which costs two pointers per key), Redis stores a 24-bit access-time field per key and, on eviction, samples a handful of random keys (default 5) and evicts the oldest among that sample. Increasing `maxmemory-samples` trades CPU for closer-to-true-LRU accuracy.
+Next insertion:
 
-**Q: When would you pick LFU over LRU?**
-When popularity is stable and long-tailed — e.g., caching product detail pages where a small set of items are perpetually hot — LFU avoids evicting them just because a burst of one-off requests for cold items temporarily front-ran them in recency order, which is exactly the failure mode LRU has against scans.
+```
+Evict A
+```
 
-**Q: What's the risk of `noeviction` in production Redis?**
-Once memory fills, all write commands start failing with `OOM command not allowed`, which can cascade into application errors if the write path isn't defensively coded — worth alerting on `used_memory` approaching `maxmemory` well before this triggers, and pairing with capacity planning rather than relying on eviction to "just handle it."
+Even if A is accessed thousands of times.
 
-**Q: How do TTL and eviction policy interact when both are configured?**
-They're independent mechanisms: TTL removes a key at (or after) its expiry time regardless of memory pressure; the eviction policy only kicks in when `maxmemory` is hit, and only chooses among eligible keys (all keys, or just those with a TTL, depending on policy). A key can be evicted for memory pressure well before its TTL would have expired it naturally.
+---
+
+## Implementation
+
+Simple queue.
+
+Very low overhead.
+
+---
+
+## Best For
+
+- Circular buffers
+- Log rotation
+- Streaming systems
+- Fixed-size queues
+
+---
+
+## Weakness
+
+Doesn't consider:
+
+- Recency
+- Frequency
+
+Therefore, it's rarely used as the primary cache policy.
+
+---
+
+# 4. ARC (Adaptive Replacement Cache)
+
+## Idea
+
+ARC automatically balances between:
+
+- Recent items
+- Frequently used items
+
+Unlike LRU or LFU, it adapts to workload changes.
+
+---
+
+## Structure
+
+```
+Recent Cache (T1)
+
+↓
+
+Frequently Used Cache (T2)
+
+↓
+
+Ghost Lists
+
+B1
+B2
+```
+
+The ghost lists don't store data.
+
+They only remember which keys were recently evicted.
+
+Using ghost hits, ARC automatically adjusts how much memory should be dedicated to recency versus frequency.
+
+---
+
+## Why It's Good
+
+Works well when workloads change.
+
+Example:
+
+Morning:
+
+- Many repeated requests
+
+Afternoon:
+
+- Large analytics scan
+
+Night:
+
+- Popular products again
+
+ARC adapts automatically without manual tuning.
+
+---
+
+## Downsides
+
+- More complicated
+- Four internal lists
+- More memory overhead
+- Harder to implement
+
+---
+
+## Interesting Fact
+
+ARC was created by IBM.
+
+Because of patent restrictions (now expired), many open-source systems used LRU/LFU instead.
+
+---
+
+# 5. TTL (Time-To-Live)
+
+## Idea
+
+TTL is **not an eviction policy**.
+
+It controls **how long data stays valid**.
+
+---
+
+Example:
+
+```
+SET session:123 "..." EX 1800
+```
+
+The key expires after:
+
+```
+1800 seconds
+```
+
+Whether or not the cache is full.
+
+---
+
+## Lazy Expiration
+
+Expired keys are removed only when accessed.
+
+```
+Read key
+
+↓
+
+Expired?
+
+↓
+
+Delete it
+```
+
+Simple but expired data may remain unused.
+
+---
+
+## Active Expiration
+
+A background task periodically removes expired keys.
+
+Redis samples keys with TTL several times per second and deletes expired ones.
+
+This prevents unlimited buildup of expired entries.
+
+---
+
+## Best For
+
+- Login sessions
+- Authentication tokens
+- OTPs
+- Rate limiting
+- Price caches
+- API responses
+
+TTL guarantees bounded staleness.
+
+---
+
+# Redis Eviction Policies
+
+When Redis reaches:
+
+```
+maxmemory
+```
+
+it applies the configured eviction policy.
+
+| Policy | Description |
+|---------|-------------|
+| `noeviction` | Reject new writes once memory is full |
+| `allkeys-lru` | Evict least recently used key |
+| `allkeys-lfu` | Evict least frequently used key |
+| `allkeys-random` | Evict a random key |
+| `volatile-lru` | LRU among keys with TTL only |
+| `volatile-lfu` | LFU among keys with TTL only |
+| `volatile-random` | Random key with TTL |
+| `volatile-ttl` | Evict key closest to expiration |
+
+---
+
+## allkeys vs volatile
+
+### allkeys
+
+Every key is eligible for eviction.
+
+```
+A
+B
+C
+D
+
+Any key may be removed.
+```
+
+---
+
+### volatile
+
+Only keys with TTL can be evicted.
+
+```
+Config
+(User Data)
+↓
+
+Never Evicted
+
+Session Cache
+↓
+
+Can Be Evicted
+```
+
+Useful when permanent configuration and temporary cache share the same Redis instance.
+
+---
+
+# Approximate LRU in Redis
+
+Redis does **not** maintain a perfect LRU linked list.
+
+Instead, it:
+
+1. Randomly samples a few keys (default = 5)
+2. Chooses the oldest among those samples
+3. Evicts it
+
+This greatly reduces memory overhead while providing behavior close to true LRU.
+
+You can increase accuracy using:
+
+```
+maxmemory-samples
+```
+
+Higher values improve eviction quality but use more CPU.
+
+---
+
+# Comparison
+
+| Policy | Tracks | Best For | Weakness |
+|---------|--------|----------|----------|
+| LRU | Recency | Session data, recent activity | Sequential scans can pollute cache |
+| LFU | Frequency | Popular content | Slow to adapt to changing popularity |
+| FIFO | Insertion order | Queues, buffers | Ignores actual usage |
+| ARC | Recency + Frequency | Mixed workloads | Complex implementation |
+| TTL | Time | Data freshness | Doesn't manage memory alone |
+
+---
+
+# Which One Should You Choose?
+
+| Scenario | Recommended Policy |
+|----------|--------------------|
+| User sessions | LRU |
+| Shopping cart | LRU |
+| Product catalog | LFU |
+| Trending pages | LFU |
+| Streaming buffer | FIFO |
+| Mixed workload | ARC |
+| Authentication tokens | TTL + LRU |
+| Rate limiting | TTL |
+| API response cache | TTL + LRU |
+
+---
+
+# Common Interview Questions
+
+## Why can LRU perform worse than random eviction?
+
+A large sequential scan marks every item as recently used.
+
+This pushes genuinely hot data out of the cache.
+
+Random eviction is unaffected because it ignores recency.
+
+This problem is known as:
+
+> **Cache Pollution**
+
+---
+
+## How does Redis implement LRU efficiently?
+
+Instead of maintaining an exact global LRU list, Redis:
+
+- Samples a small number of random keys
+- Picks the least recently used among the sample
+- Evicts that key
+
+This provides near-LRU behavior with much lower memory overhead.
+
+---
+
+## When should you choose LFU over LRU?
+
+Choose LFU when data popularity is stable.
+
+Examples:
+
+- Product pages
+- Celebrity profiles
+- Frequently requested APIs
+
+LFU preserves consistently popular items even if they haven't been accessed very recently.
+
+---
+
+## What is the risk of `noeviction`?
+
+Once Redis reaches `maxmemory`, write operations begin failing with:
+
+```
+OOM command not allowed
+```
+
+If applications don't handle these failures properly, it can cause cascading production errors.
+
+---
+
+## How do TTL and eviction work together?
+
+They solve different problems.
+
+**TTL**
+
+Removes data because it has become stale.
+
+**Eviction Policy**
+
+Removes data because memory is full.
+
+A key can be evicted long before its TTL expires if the cache needs space.
+
+---
+
+# Key Takeaways
+
+- **LRU** → Keeps recently used items.
+- **LFU** → Keeps frequently used items.
+- **FIFO** → Removes the oldest inserted item.
+- **ARC** → Automatically balances recency and frequency.
+- **TTL** → Controls data freshness, not memory management.
+- Redis combines TTL with an eviction policy to manage both staleness and memory efficiently.
+```
 
 ## Related topics
 - [Caching Strategies](caching-strategies.md)

@@ -1,140 +1,368 @@
 # Outbox Pattern
 [← Back to index](../readme.md)
 
-## What it is and why it's asked
+## What it is and why interviewers ask about it
 
-A service commonly needs to do two things atomically: write to its own database, and publish a message telling the rest of the system what happened. The trouble is that the database and the message broker are two separate systems with no shared transaction — you cannot wrap a Postgres `COMMIT` and a Kafka `produce` in one atomic unit. Whichever one you do second can fail after the first has already succeeded, and now the system is silently inconsistent. The outbox pattern is the standard, boring, production-proven answer to this, and interviewers ask about it because "just publish the event after you commit" is the wrong answer that sounds right, and knowing why it's wrong is the actual signal.
+Many services need to perform two actions whenever something important happens:
+
+1. Save a business change to the database.
+2. Publish an event so other services know about it.
+
+The problem is that these happen in **two different systems**. Your database transaction cannot atomically include a message broker like Kafka or RabbitMQ. If either operation succeeds while the other fails, the system becomes inconsistent.
+
+The Outbox Pattern solves this by making the database the only thing involved in the business transaction. The event is stored inside the same transaction and published later by a separate process.
+
+Interviewers ask about this because the obvious solution—"commit the database, then publish the event"—looks correct until you think about failures.
+
+---
 
 ## The dual-write problem
 
-```
-Naive approach:
-  1. db.commit(order)              <-- succeeds
-  2. broker.publish(OrderPlaced)   <-- crashes / network blip / broker down
+Suppose an order is created.
 
-Result: order exists in the DB, but no one downstream ever finds out.
-Inventory is never reserved, billing never charges the card — silent data loss.
-```
+### Database first
 
-Flipping the order doesn't fix it, it just moves the failure mode:
-
-```
-  1. broker.publish(OrderPlaced)   <-- succeeds
-  2. db.commit(order)              <-- crashes / constraint violation / rollback
-
-Result: consumers react to an order that was never actually committed.
-Inventory reserves stock for an order that doesn't exist.
+```text
+1. Save order to database        ✓ Success
+2. Publish OrderPlaced event     ✗ Broker unavailable
 ```
 
-There is no ordering of "write to DB" and "publish to broker" as two independent calls that is safe, because between them there is always a window where one has happened and the other hasn't, and a crash in that window is a real, non-theoretical event at any meaningful scale.
+Result:
 
-## The transactional outbox: same transaction, one database
+- The order exists.
+- No other service knows it exists.
+- Inventory is never reserved.
+- Billing never charges.
+- Analytics never updates.
 
-The fix is to stop treating "publish a message" as a call to a second system at all, at the moment the business transaction happens. Instead, write a row describing the event to an **outbox table in the same database**, in the **same local transaction** as the business change — a single-database transaction is atomic by definition, so this eliminates the dual-write entirely.
+The event has been lost.
+
+### Broker first
+
+```text
+1. Publish OrderPlaced event     ✓ Success
+2. Save order to database        ✗ Transaction rolls back
+```
+
+Result:
+
+- Inventory reserves stock.
+- Billing charges the customer.
+- The order doesn't actually exist.
+
+Now downstream systems reacted to something that never happened.
+
+Neither ordering is safe because a crash can always occur between the two operations.
+
+---
+
+## The transactional outbox
+
+Instead of publishing immediately, write the event into an **Outbox** table during the same database transaction as the business data.
 
 ```sql
 BEGIN;
-  INSERT INTO orders (id, customer_id, total, status) VALUES (...);
-  INSERT INTO outbox (id, aggregate_id, event_type, payload, created_at)
-    VALUES (gen_random_uuid(), 'order-123', 'OrderPlaced', '{...}'::jsonb, now());
+
+INSERT INTO orders (...);
+
+INSERT INTO outbox (
+    id,
+    aggregate_id,
+    event_type,
+    payload,
+    created_at
+)
+VALUES (...);
+
 COMMIT;
 ```
 
-Either both rows land, or neither does — normal ACID guarantees on a single database, no cross-system atomicity required. The event hasn't reached the broker yet, but it's durably recorded that it *must* reach the broker, which is the actual atomicity guarantee the system needs.
+The transaction now contains both pieces of information.
 
+```text
+            Single Database Transaction
+
++-----------------------------------------------+
+|                                               |
+|  Orders Table       Outbox Table              |
+|                                               |
+|  Order #123         OrderPlaced Event         |
+|                                               |
++-----------------------------------------------+
+                    │
+                    │ committed together
+                    ▼
+          Relay publishes event later
 ```
-                     ONE local transaction
-             +----------------------------------+
-Business  -->|  orders table   +   outbox table  |
-change       +----------------------------------+
-                            |
-                    (separate step, async)
-                            v
-                   relay reads outbox --> publishes to broker
-```
 
-## The relay: getting events from the outbox to the broker
+If the transaction commits:
 
-A second process — the **relay** — is responsible for reading unpublished rows from the outbox and actually publishing them, then marking them published (or deleting them). Two common implementations:
+- the order exists,
+- the event is guaranteed to exist.
 
-**Polling relay** — a worker periodically queries for unpublished rows and publishes them:
+If the transaction rolls back:
+
+- neither exists.
+
+No inconsistent state is possible.
+
+---
+
+## The relay process
+
+Publishing is performed by a completely separate component called the **relay**.
+
+Its job is simple:
+
+1. Read unpublished outbox rows.
+2. Publish them to the broker.
+3. Mark them as published (or delete them).
+
+### Polling relay
+
+The simplest implementation periodically checks the table.
+
 ```python
-def relay_tick():
-    rows = db.query("SELECT * FROM outbox WHERE published_at IS NULL ORDER BY created_at LIMIT 100")
-    for row in rows:
-        broker.publish(row.event_type, row.payload)
-        db.execute("UPDATE outbox SET published_at = now() WHERE id = %s", row.id)
-```
-Simple to build and reason about, but adds polling latency (seconds, tunable) and load on the DB from repeated polling queries.
+while True:
+    events = load_unpublished_events()
 
-**CDC-based relay (Debezium)** — instead of polling, a change-data-capture connector tails the database's write-ahead log / binlog directly and streams every insert into the outbox table straight to the broker, near-instantly and without adding query load:
-```
-Postgres WAL --> Debezium connector --> Kafka Connect --> Kafka topic
-   (row inserted into `outbox` is picked up from the replication stream, not via SQL polling)
-```
-This is the more common production setup at scale (used heavily at companies doing event-driven microservices with Kafka) because it has lower latency and doesn't compete with application traffic for database resources. The trade-off is operational: you're now running and monitoring a CDC pipeline (Debezium + Kafka Connect) as critical infrastructure.
-
-Either way, once a row is published, it's typically deleted or archived from the outbox (it's a transient staging table, not permanent storage — that job belongs to the broker or, if full history matters, to an [event store](event-sourcing.md)).
-
-## Delivery is still at-least-once — the consumer must be idempotent
-
-The outbox pattern guarantees the event *will* eventually be published (durability across a crash), not that it will be published exactly once. A relay can crash after publishing but before marking the row as done, and will republish it on restart; a broker can redeliver on a consumer timeout. This composes with the same guarantee discussed in [Message Queues](message-queues.md): outbox delivery is **at-least-once**, and every downstream consumer must be idempotent (dedupe by event ID, or use naturally idempotent operations) for the overall pipeline to be correct.
-
-```
-Guarantee chain:
-  DB write + outbox row  -->  atomic (single local transaction)
-  outbox row  -->  broker   -->  at-least-once (relay/broker retry on failure)
-  broker  -->  consumer      -->  at-least-once (redelivery on timeout/crash)
-
-Net result: "exactly-once business effect" via at-least-once delivery + idempotent consumer,
-never via a stronger delivery guarantee alone.
+    for event in events:
+        broker.publish(event)
+        mark_as_published(event)
 ```
 
-## Contrast with two-phase commit (2PC)
+Advantages:
 
-2PC is the "textbook" alternative: a distributed transaction coordinator asks both the database and the broker to *prepare* (vote yes/no), then tells both to *commit* only if both voted yes. It gives a stronger-sounding guarantee but is rarely used in practice for this problem:
+- Simple
+- Easy to understand
+- Works almost everywhere
 
-| | Outbox pattern | 2PC (XA transactions) |
+Disadvantages:
+
+- Adds polling delay
+- Continuously queries the database
+
+---
+
+### CDC (Change Data Capture)
+
+Instead of polling, a CDC tool such as Debezium watches the database's write-ahead log.
+
+```text
+Postgres WAL
+      │
+      ▼
+ Debezium
+      │
+      ▼
+ Kafka Connect
+      │
+      ▼
+ Kafka Topic
+```
+
+Advantages:
+
+- Near real-time
+- No polling queries
+- Lower database load
+
+Disadvantages:
+
+- More infrastructure
+- Operational complexity
+- Requires CDC tooling
+
+For smaller systems, polling is usually sufficient. High-throughput platforms often use CDC.
+
+---
+
+## Delivery is still at-least-once
+
+The Outbox Pattern guarantees the event is **never lost**, but it does **not** guarantee it is published only once.
+
+Example:
+
+```text
+Relay publishes event
+        │
+        ▼
+Broker receives event
+        │
+Relay crashes before updating Outbox
+```
+
+When the relay restarts, it sees the event as unpublished and sends it again.
+
+Duplicate delivery is expected.
+
+Therefore consumers must always be **idempotent**.
+
+Typical approaches include:
+
+- Store processed event IDs.
+- Use UPSERT operations.
+- Use naturally idempotent updates.
+- Ignore duplicate event IDs.
+
+The complete guarantee becomes:
+
+```text
+Database Transaction
+        │
+        ▼
+Outbox Record (atomic)
+        │
+        ▼
+Broker (at-least-once)
+        │
+        ▼
+Idempotent Consumer
+        │
+        ▼
+Correct business outcome
+```
+
+Exactly-once business behavior comes from:
+
+- atomic database writes,
+- reliable retries,
+- idempotent consumers.
+
+Not from the broker itself.
+
+---
+
+## Outbox Pattern vs. Two-Phase Commit (2PC)
+
+Another theoretical solution is Two-Phase Commit (2PC), where both the database and broker participate in one distributed transaction.
+
+| Feature | Outbox Pattern | 2PC |
 |---|---|---|
-| Requires broker to support distributed transactions | No — broker only needs normal publish | Yes — broker must implement an XA/2PC participant |
-| Blocking behavior | None — relay retries independently | Coordinator or participant crash mid-protocol can leave resources locked, blocking |
-| Performance | Low overhead (one extra table write) | Higher latency — multiple network round trips per transaction, held locks |
-| Kafka support | N/A — not needed | Effectively unsupported; Kafka does not participate in XA |
-| Operational maturity | Widely used, well-understood failure modes | Rarely used in modern distributed systems; considered legacy for this problem |
-| Failure recovery | Simple — republish unpublished/unconfirmed outbox rows | Requires a recovery coordinator to resolve in-doubt transactions |
+| Distributed transaction | No | Yes |
+| Broker XA support required | No | Yes |
+| Performance | Fast | Slower |
+| Blocking during failures | No | Yes |
+| Kafka compatible | Yes | No (Kafka doesn't support XA) |
+| Production adoption | Very common | Rare |
 
-2PC's blocking nature and poor fit with modern brokers (most, including Kafka, don't support XA at all) is why virtually every real-world "how do I atomically write to my DB and publish an event" problem is solved with the transactional outbox instead.
+Modern distributed systems overwhelmingly prefer the Outbox Pattern because it is simpler, faster, and works with virtually every message broker.
 
-## Trade-offs summary
+---
 
-| | Naive dual-write | Transactional outbox |
+## Trade-offs
+
+| | Naive Dual Write | Outbox Pattern |
 |---|---|---|
-| Atomicity | None — two independent operations | Guaranteed at the DB-write step (single local transaction) |
-| Failure mode | Silent inconsistency (lost or phantom events) | Event durably recorded even if publish is delayed |
-| Delivery guarantee to broker | Best-effort, can be zero | At-least-once (relay retries until published) |
-| Added infrastructure | None | Outbox table + relay process (polling or CDC/Debezium) |
-| Latency to downstream consumers | Immediate (when it works) | Small added delay (poll interval, or near-real-time with CDC) |
-| Operational cost | Low, but fragile | Extra table to maintain/prune, relay to monitor, possibly a CDC pipeline |
+| Atomicity | None | Guaranteed within the database |
+| Lost events | Possible | Prevented |
+| Duplicate events | Rare | Expected |
+| Consumer requirement | None | Must be idempotent |
+| Infrastructure | None | Outbox + relay |
+| Reliability | Low | High |
+| Complexity | Low | Moderate |
 
-## Common interview follow-ups
+---
 
-**Q: Why not just publish to the broker first and roll back the DB write if publishing fails?**
-Because you can't "un-publish" a message once it's in flight to a broker — other consumers may already have read and acted on it before you decide to roll back. Atomicity has to be anchored on the side that supports real rollback (the local DB transaction), not the side that doesn't.
+## When should you use it?
 
-**Q: What happens if the relay publishes an event twice?**
-That's expected and fine as long as downstream consumers are idempotent — the outbox pattern's guarantee is at-least-once delivery, not exactly-once, so duplicate delivery is a normal, designed-for case rather than a bug.
+Use the Outbox Pattern when a service:
 
-**Q: How do you avoid the outbox table growing forever?**
-Periodically delete or archive rows once the relay confirms publish (and after any retention window you want for debugging), or use a lightweight TTL/cleanup job — the outbox is meant to be a transient staging area, not long-term storage; if you need permanent history, that's the job of an [event store](event-sourcing.md), not the outbox table.
+- owns its own database,
+- publishes events,
+- communicates asynchronously,
+- participates in event-driven architecture,
+- feeds CQRS read models,
+- integrates with Kafka, RabbitMQ, SQS, or similar brokers.
 
-**Q: How does the outbox pattern interact with ordering guarantees?**
-Ordering within an aggregate is typically preserved by publishing outbox rows in `created_at`/sequence order and routing by the same partition key (e.g., `aggregate_id`) the business entity uses, so a downstream Kafka partition sees events for one entity in the order they were committed — same ordering rules as discussed in [Message Queues](message-queues.md).
+It is one of the foundational reliability patterns in microservice architectures.
 
-**Q: Is CDC (Debezium) strictly better than polling for the relay?**
-It's lower latency and lower DB load, but it adds a piece of infrastructure (Kafka Connect + Debezium, tied to the DB's replication log format) that needs its own monitoring and upgrade path. For lower-throughput services, a simple polling relay is often the pragmatic choice; CDC earns its complexity at higher event volume or when near-real-time propagation actually matters to the business.
+---
 
-**Q: Where does the outbox pattern fit relative to CQRS and event sourcing?**
-It's the plumbing that makes non-event-sourced systems able to feed [CQRS](cqrs-pattern.md) read models or other services reliably: the write DB stays a normal current-state table, but the outbox guarantees that every state change is eventually and reliably turned into an event, which is the same downstream contract that a full event-sourced system gets natively from its event store.
+# Common interview follow-ups
+
+### Q: Why can't I publish after committing the database?
+
+Because the application might crash immediately after the commit. The database change survives, but the event is lost forever.
+
+---
+
+### Q: Why not publish first?
+
+Because publishing cannot be rolled back. Other services may already process the event before the database transaction fails.
+
+---
+
+### Q: What if the relay publishes twice?
+
+That's normal.
+
+Consumers must be idempotent so duplicate events have no additional business effect.
+
+---
+
+### Q: Does the Outbox Pattern guarantee exactly-once delivery?
+
+No.
+
+It guarantees reliable **at-least-once** delivery.
+
+Exactly-once business behavior is achieved by combining retries with idempotent consumers.
+
+---
+
+### Q: How do you prevent the Outbox table from growing forever?
+
+After successful publication:
+
+- delete processed rows,
+- archive old rows,
+- or run scheduled cleanup jobs.
+
+The Outbox is temporary storage, not permanent history.
+
+---
+
+### Q: How is event ordering preserved?
+
+Publish events in commit order and partition by the aggregate identifier (for example, `order_id`).
+
+This keeps all events for the same entity in order while allowing unrelated entities to be processed in parallel.
+
+---
+
+### Q: When should I use CDC instead of polling?
+
+Use polling when:
+
+- event volume is moderate,
+- a few seconds of delay is acceptable,
+- operational simplicity matters.
+
+Use CDC when:
+
+- propagation must be nearly real-time,
+- event volume is high,
+- polling becomes inefficient,
+- Kafka and Debezium are already part of the platform.
+
+---
+
+### Q: How does the Outbox Pattern relate to Event Sourcing and CQRS?
+
+The Outbox Pattern is designed for traditional CRUD systems.
+
+The database remains the source of truth, while the outbox guarantees every committed change eventually becomes an event.
+
+Those events can then:
+
+- update CQRS read models,
+- notify other microservices,
+- feed analytics pipelines,
+- trigger workflows.
+
+In Event Sourcing, the event log itself is already the source of truth, so a separate outbox is often unnecessary.
+````
 
 ## Related topics
 - [Event Sourcing](event-sourcing.md)

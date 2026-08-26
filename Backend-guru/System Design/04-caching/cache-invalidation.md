@@ -1,158 +1,784 @@
 # Cache Invalidation
 [← Back to index](../readme.md)
 
-## What this is and why it's asked
+---
 
-"There are only two hard things in Computer Science: cache invalidation and naming things." The joke lands in interviews because it's true for a specific reason: caching itself is easy (put data somewhere fast), but *knowing when that copy is wrong* is a distributed-systems problem in disguise. The cache and the source of truth are two separate pieces of state that can diverge the instant a write happens anywhere, and every invalidation strategy is really a different answer to "how much staleness can we tolerate, and who is responsible for noticing it's gone stale?"
+# What is Cache Invalidation?
 
-Interviewers use this topic to see whether you can reason about the write path, not just the read path — cache-aside and friends (see `caching-strategies.md`) describe how a cache gets *populated*; invalidation describes how it stops lying once the underlying data changes.
+Caching speeds up reads by storing a copy of data closer to the application.
 
-## TTL-based expiry
+The challenge is **keeping that cached copy correct** when the original data changes.
 
-The simplest strategy: every cached entry carries an expiration time, after which it's treated as a miss regardless of whether the underlying data actually changed.
+This is called **cache invalidation**.
 
-```
-SET product:42 "{...}" EX 60      # stale after 60s, no matter what
-```
+> **Interview takeaway:** Caching is easy. Knowing **when cached data is no longer valid** is the difficult part.
 
-- Pros: no coordination required at all — the cache never needs to be told about a write; trivially correct in the sense that staleness is bounded and known in advance.
-- Cons: staleness window always exists (up to the full TTL) even when nothing changed; picking the TTL is a guess — too long and users see stale data, too short and you lose most of the hit-rate benefit and hammer the DB.
-- Almost always used as a *backstop* layered under one of the strategies below, not as the only mechanism — e.g., a write-triggered delete plus a 5-minute TTL safety net in case the delete message is ever lost.
+---
 
-## Explicit invalidation on write
+# Why It Matters
 
-The application (or the cache library, under write-through) actively tells the cache a key is no longer valid at the moment the write happens, instead of waiting for a timer.
+Imagine this flow:
 
-```
-Write path (cache-aside, delete-on-write):
-  App -> DB.write(key, value)
-  App -> Cache.delete(key)          // next read is a guaranteed miss -> repopulate from DB
-
-Write path (write-through, update-on-write):
-  App -> Cache.set(key, value)
-           Cache -> DB.write(key, value)   // synchronous
+```text
+Database
+    │
+    ▼
+ Cache
+    │
+    ▼
+ User
 ```
 
-Deleting is preferred over updating the cache in place for the same reason covered in `caching-strategies.md`: a slow write can race a fast one and leave a *newer-looking but actually stale* value sitting in the cache. Delete-then-lazily-reload collapses that race into "worst case, one extra DB read," which is far easier to reason about than "worst case, permanently wrong data until the next unrelated write."
+The cache and the database are **two separate copies** of the same data.
 
-Write-behind (write-back) complicates this further: because the DB write is deferred and batched, any *other* cache node that isn't the one holding the buffered write can serve genuinely stale data until the flush happens — which is why write-behind systems usually funnel all reads through the same cache tier rather than allowing reads to bypass it.
+If the database changes but the cache doesn't, users receive stale data.
 
-## Event-driven invalidation (pub/sub fan-out)
+Every invalidation strategy answers one question:
 
-Once you have more than one cache node — or a cache tier plus per-instance local caches — a single `Cache.delete(key)` call against one node doesn't invalidate the others. Event-driven invalidation solves this by publishing an invalidation event that every interested node subscribes to.
+> **How do we make sure the cache stops serving outdated data?**
 
-```
-        Write happens
-              |
-              v
-      App publishes: INVALIDATE product:42
-              |
-     +--------+--------+--------+
-     v                 v        v
- Cache node A     Cache node B  Local in-process
- deletes key      deletes key   caches (via Redis
-                                 Keyspace Notifications
-                                 or a Kafka topic) also
-                                 evict on receipt
-```
+---
 
-- **Redis Keyspace Notifications** publish a pub/sub message on every key expiry/delete/set, which other services can subscribe to and react to (e.g., evict a local L1 cache when the shared L2 Redis entry changes).
-- **Kafka/SNS-SQS fan-out** is the pattern for invalidating caches across many service instances or even across services: a "product updated" event is published once, and every consumer (each holding its own local cache) evicts the relevant key independently. This is the same fan-out shape as `event-driven-architecture.md` — invalidation is just one more event type flowing through the bus.
-- **CDN purge APIs** (Cloudflare, Fastly, CloudFront) are the same idea at a different layer: a purge request is a targeted invalidation event pushed to every edge PoP holding a copy, discussed further in `cdn-architecture.md`.
+# Common Cache Invalidation Strategies
 
-The trade-off is latency and reliability: fan-out isn't instantaneous, and if a node misses the event (network blip, was down, restarted mid-flight) it needs a fallback — which is exactly why event-driven invalidation is almost never the *only* line of defense; it's paired with a TTL backstop so a missed event self-heals within a bounded window instead of staying wrong forever.
+1. TTL (Time-To-Live)
+2. Explicit Invalidation
+3. Event-Driven Invalidation
+4. Cache Stampede Prevention
+5. Versioned Cache Keys
 
-## Cache stampede / dogpile problem
+---
 
-When a single hot key expires (or is invalidated), every concurrent request that was reading it misses at the same instant and falls through to the database simultaneously — a "stampede" that can take down the DB even though the cache was doing its job a millisecond earlier.
+# 1. TTL (Time-To-Live)
 
-```
-Key "homepage:trending" expires at T
-   |
-   +-- Request 1 misses -> queries DB  \
-   +-- Request 2 misses -> queries DB   |  1000s of identical
-   +-- Request 3 misses -> queries DB   |  queries hit DB
-   +-- ...                              |  at the same instant
-   +-- Request N misses -> queries DB  /
+## Idea
+
+Each cache entry has an expiration time.
+
+After that time passes, the entry is considered invalid.
+
+---
+
+## Example
+
+```redis
+SET product:42 "{...}" EX 60
 ```
 
-**Request coalescing / single-flight locking**: the first request to miss acquires a short-lived lock (`SET lock:key NX PX 5000` in Redis) and is the only one allowed to query the DB and repopulate the cache; every other concurrent request either waits briefly and retries the cache read, or is served the (slightly) stale value while the winner refills it.
+The cached product automatically expires after **60 seconds**.
+
+---
+
+## Timeline
+
+```text
+Time
+
+0s ---------------------- 60s
+
+Cache Valid
+
+↓
+
+Expires
+
+↓
+
+Next request loads from DB
+```
+
+---
+
+## Advantages
+
+- Extremely simple
+- No coordination required
+- Automatically removes stale data
+- Easy to implement
+
+---
+
+## Disadvantages
+
+Even if the product changes after 5 seconds...
+
+```text
+Database
+
+Updated
+
+↓
+
+Cache
+
+Still serves old data
+
+↓
+
+Until TTL expires
+```
+
+Users may see stale data for up to the full TTL duration.
+
+Choosing the correct TTL is difficult.
+
+- Long TTL → better performance but more stale data
+- Short TTL → fresher data but more database traffic
+
+---
+
+## Best Practice
+
+TTL is usually **not used alone**.
+
+Instead:
+
+- Delete cache immediately on writes
+- Keep a TTL as a safety net
+
+This ensures stale data eventually disappears even if an invalidation event is missed.
+
+---
+
+# 2. Explicit Invalidation
+
+## Idea
+
+Whenever data changes, immediately remove or update the cache.
+
+Instead of waiting for TTL, the application actively invalidates the cache.
+
+---
+
+## Delete-on-Write (Cache-Aside)
+
+```text
+Client
+
+↓
+
+Application
+
+↓
+
+Update Database
+
+↓
+
+Delete Cache
+
+↓
+
+Next Read
+
+↓
+
+Cache Miss
+
+↓
+
+Reload From Database
+```
+
+---
+
+## Example
+
+```text
+DB.update(product)
+
+↓
+
+Cache.delete(product)
+```
+
+The next request reloads fresh data into the cache.
+
+---
+
+## Update-on-Write (Write-Through)
+
+```text
+Application
+
+↓
+
+Cache.set()
+
+↓
+
+Database.write()
+```
+
+Both cache and database are updated together.
+
+---
+
+## Why Delete is Often Better
+
+Imagine two concurrent updates:
+
+```text
+Update A
+
+↓
+
+Update B
+
+↓
+
+Slow network
+
+↓
+
+Cache accidentally ends with older value
+```
+
+Updating the cache directly can introduce race conditions.
+
+Deleting the cache avoids this issue.
+
+Worst case:
+
+- One additional database query
+
+Instead of:
+
+- Serving incorrect data.
+
+---
+
+## Advantages
+
+- Very fresh data
+- Simple logic
+- Works well with cache-aside
+
+---
+
+## Disadvantages
+
+If cache deletion fails,
+
+the stale value remains until TTL expires.
+
+---
+
+# 3. Event-Driven Invalidation
+
+## Problem
+
+One cache server is easy.
+
+Many cache servers are harder.
+
+```text
+Client
+
+↓
+
+Load Balancer
+
+↓
+
+Cache A
+
+Cache B
+
+Cache C
+```
+
+Deleting a key from Cache A doesn't remove it from B or C.
+
+---
+
+## Solution
+
+Publish an invalidation event.
+
+Every cache server subscribes and removes the key.
+
+---
+
+## Architecture
+
+```text
+Database Updated
+
+↓
+
+Publish Event
+
+INVALIDATE product:42
+
+↓
+
+───────────────┬───────────────┬───────────────
+
+Cache A      Cache B      Cache C
+
+Delete       Delete       Delete
+```
+
+---
+
+## Technologies
+
+Common implementations include:
+
+- Redis Pub/Sub
+- Redis Keyspace Notifications
+- Apache Kafka
+- Amazon SNS
+- Amazon SQS
+- RabbitMQ
+
+---
+
+## CDN Example
+
+CDNs use the same idea.
+
+```text
+Origin
+
+↓
+
+Purge Request
+
+↓
+
+Cloudflare
+
+↓
+
+Every Edge Server
+
+Deletes Cached File
+```
+
+---
+
+## Advantages
+
+- Scales to many cache nodes
+- Near real-time invalidation
+- Good for distributed systems
+
+---
+
+## Disadvantages
+
+Messages can be:
+
+- Delayed
+- Lost
+- Delivered late
+
+Therefore event-driven invalidation is almost always combined with TTL.
+
+TTL acts as a backup.
+
+---
+
+# 4. Cache Stampede (Dogpile Problem)
+
+## Problem
+
+Suppose a very popular cache entry expires.
+
+```text
+Homepage
+
+↓
+
+1 Million Requests
+
+↓
+
+Cache Entry Expires
+```
+
+Now every request misses simultaneously.
+
+---
+
+## Result
+
+```text
+Request 1 → Database
+
+Request 2 → Database
+
+Request 3 → Database
+
+...
+
+Request 1000 → Database
+```
+
+Thousands of identical queries overload the database.
+
+This is called a:
+
+> **Cache Stampede** (or **Dogpile Effect**)
+
+---
+
+# Solution 1 — Request Coalescing
+
+Only one request is allowed to refresh the cache.
+
+Everyone else waits.
+
+```text
+Request 1
+
+Gets Lock
+
+↓
+
+Database Query
+
+↓
+
+Updates Cache
+
+↓
+
+Releases Lock
+
+↓
+
+Other Requests Read Cache
+```
+
+---
+
+## Redis Lock
+
+```redis
+SET lock:product42 1 NX PX 5000
+```
+
+Meaning:
+
+- NX → create only if absent
+- PX → automatically expire after 5 seconds
+
+This prevents deadlocks.
+
+---
+
+## Python Example
 
 ```python
-def get_with_coalescing(key):
-    val = cache.get(key)
-    if val is not None:
-        return val
+def get_with_lock(key):
+    value = cache.get(key)
+
+    if value:
+        return value
+
     if cache.set(f"lock:{key}", 1, nx=True, px=5000):
         try:
-            val = db.query(key)
-            cache.set(key, val, ex=60)
-            return val
+            value = db.query(key)
+            cache.set(key, value, ex=60)
+            return value
         finally:
             cache.delete(f"lock:{key}")
     else:
         time.sleep(0.05)
-        return get_with_coalescing(key)   # retry, likely a hit now
+        return get_with_lock(key)
 ```
 
-**Probabilistic early expiration** (used by Facebook's Memcached-fronting layer, described as "XFetch"): instead of a hard expiry, each read has a small, increasing probability of proactively recomputing the value *before* it actually expires, with the probability scaled by how expensive the recompute is and how close to expiry the entry is. This spreads the refresh load across many earlier reads instead of concentrating it in the instant of expiry.
+---
 
+# Solution 2 — Early Refresh
+
+Instead of waiting until expiration,
+
+refresh the cache **slightly before** it expires.
+
+```text
+TTL
+
+300 sec
+
+↓
+
+Refresh at
+
+290 sec
+
+↓
+
+Users never experience a massive miss.
 ```
-score = (now - last_delta * beta * ln(random()))
-if score >= expiry_time:
-    recompute early, even though not technically expired yet
+
+Facebook popularized this idea (often referred to as **XFetch**).
+
+---
+
+# Solution 3 — Jittered TTL
+
+Suppose every key expires at exactly:
+
+```text
+300 seconds
 ```
 
-**Jittered TTLs**: instead of every related key sharing the exact same TTL (all set at cache-warm time with `EX 300`), add random jitter (`EX 300 + random(-30, 30)`) so thousands of keys don't expire in the same second — this is the cheapest mitigation and is often applied even when other techniques are also in place.
+Thousands expire together.
 
-## Versioned / keyed invalidation
+Instead:
 
-Instead of actively deleting or updating a key when data changes, bake a version identifier into the cache key itself, so old versions simply become unreferenced and expire naturally (or get evicted under memory pressure) rather than requiring an active invalidation step at all.
-
-```
-Naive key:      product:42
-Versioned key:  product:42:v17
-
-On update:
-  bump version counter for product 42 (e.g. in DB or a Redis INCR: product:42:version)
-  new reads compute key as product:42:v18 and miss -> repopulate
-  old key product:42:v17 is never explicitly deleted — it just ages out via TTL/LRU
+```text
+300 ± Random(30)
 ```
 
-This pattern generalizes to whole-dataset cache busting: static asset URLs fingerprinted with a content hash (`app.a3f9c1.js`) are the same idea applied to CDN caching — instead of purging `app.js` everywhere, you simply ship a new URL, and browsers/CDNs that never saw the new filename can't possibly serve a stale copy. It trades a small amount of wasted cache space (orphaned old versions sitting around until eviction) for eliminating the entire class of "did the invalidation actually reach every node" reliability problem.
+Some expire at:
 
-- Pros: no fan-out messaging needed, no risk of a missed invalidation event leaving a stale copy indefinitely; works well across CDNs/browsers you don't control directly.
-- Cons: requires threading a version/hash through every reader and writer consistently; doesn't reclaim memory/storage immediately (old versions linger until TTL/eviction), and a version-lookup itself (e.g., `product:42:version`) can become a hot key that needs its own caching story.
+- 271
+- 288
+- 304
+- 319
 
-## Trade-offs summary
+This spreads database load across time.
 
-| Strategy | Staleness bound | Coordination needed | Failure mode if it breaks |
-|---|---|---|---|
-| TTL expiry | Up to full TTL | None | Silent staleness within TTL window (safe, bounded) |
-| Explicit invalidation on write | Near-zero (single node) | Write path must call cache | Stale forever if the delete/update call is lost |
-| Event-driven (pub/sub) fan-out | Small (network + processing delay) | Message bus + subscribers on every node | A node that misses the event stays stale until TTL backstop |
-| Stampede mitigation (locking/XFetch/jitter) | N/A (protects DB, not correctness) | Lock coordination or probabilistic logic | Without it: DB overload at the instant of expiry |
-| Versioned keys | Zero (old key is simply never read again) | Version counter must be bumped and threaded through reads | Stale reads only if a reader caches the old version number itself |
+---
 
-## Common interview follow-ups
+# 5. Versioned Cache Keys
 
-**Q: Why is cache invalidation considered one of the "two hard things" in CS?**
-Because it isn't a local problem — the cache and the source of truth are separate copies of state that can be mutated independently, and any strategy that keeps them in sync has to answer what happens when the invalidation signal itself is delayed, duplicated, or lost, which is the same class of problem as consensus and distributed replication generally.
+## Idea
 
-**Q: How do you invalidate a cache that's replicated across many regions?**
-The same event-driven fan-out pattern, but you also have to account for cross-region replication lag on the invalidation event itself — most CDNs solve this by treating purge as an eventually-consistent operation with a published SLA (seconds to tens of seconds) rather than promising instant global consistency; see `cdn-architecture.md` for the purge-latency trade-off in detail.
+Instead of deleting cache entries,
 
-**Q: What's the difference between a stampede and normal cache misses?**
-Normal misses are spread out over time and the DB is sized to handle the steady-state miss rate; a stampede is many misses for the *same key* arriving within milliseconds of each other because they were all waiting on the same expiry event, which multiplies load on one DB row/query far beyond what capacity planning assumed.
+change the cache key.
 
-**Q: Why prefer versioned keys over active invalidation for CDN-cached static assets?**
-Because you don't control every intermediate cache (browser, corporate proxy, ISP cache, CDN edge) and can't guarantee a purge reaches all of them quickly; a new filename guarantees correctness by construction; no cache anywhere can serve a version-17 asset under a version-18 URL because that URL was never associated with the old content.
+---
 
-**Q: Can you combine versioned keys with a TTL?**
-Yes, and it's common — the version bump gives you correctness (new readers never see stale data), while a modest TTL on the old versioned keys reclaims cache memory instead of relying purely on LRU/LFU eviction pressure to eventually clear them out.
+## Example
 
-**Q: What would you do if invalidation events could arrive out of order?**
-Attach a monotonic version or timestamp to each event and have consumers ignore any invalidation older than the last one they've already applied, otherwise a late-arriving stale "invalidate to v3" event could clobber a newer v5 state — this is the same last-write-wins reasoning used in AP systems, covered in `../03-consistency-distributed/cap-theorem.md`.
+Without versioning:
+
+```text
+product:42
+```
+
+With versioning:
+
+```text
+product:42:v17
+```
+
+After an update:
+
+```text
+product:42:v18
+```
+
+The application now requests the new key.
+
+The old cache is simply ignored.
+
+---
+
+## Workflow
+
+```text
+Update Product
+
+↓
+
+Increase Version
+
+↓
+
+New Cache Key
+
+↓
+
+Cache Miss
+
+↓
+
+Load Fresh Data
+
+↓
+
+Old Cache Eventually Expires
+```
+
+---
+
+## Advantages
+
+- No invalidation messages
+- No race conditions
+- Great for distributed systems
+- Excellent for CDNs
+
+---
+
+## Static Assets Example
+
+Instead of:
+
+```text
+app.js
+```
+
+Use:
+
+```text
+app.a3f9c1.js
+```
+
+When the application changes:
+
+```text
+app.b8d4ff.js
+```
+
+Browsers and CDNs automatically fetch the new file.
+
+No purge required.
+
+---
+
+## Disadvantages
+
+Old cache entries remain until:
+
+- TTL expires
+- Memory eviction occurs
+
+Extra storage is temporarily consumed.
+
+---
+
+# Strategy Comparison
+
+| Strategy | Freshness | Coordination | Common Failure |
+|-----------|-----------|--------------|----------------|
+| TTL | Bounded by TTL | None | Temporary stale data |
+| Explicit Invalidation | Near immediate | Application must delete/update cache | Delete failure leaves stale data |
+| Event-Driven | Near immediate | Message broker required | Missed events leave stale cache until TTL |
+| Stampede Prevention | Doesn't affect freshness | Locking or probabilistic refresh | Database overload if not implemented |
+| Versioned Keys | Immediate correctness | Version management | Old versions occupy memory |
+
+---
+
+# Which Strategy Should You Use?
+
+| Scenario | Recommended Strategy |
+|----------|----------------------|
+| User sessions | TTL + Explicit Delete |
+| Product catalog | Explicit Delete + TTL |
+| Social media feed | Event-Driven + TTL |
+| CDN static assets | Versioned Keys |
+| Microservices | Event Bus + TTL |
+| High-traffic homepage | Request Coalescing + Jittered TTL |
+| Frequently updated APIs | Explicit Invalidation |
+| Distributed cache cluster | Event-Driven + TTL |
+
+---
+
+# Common Interview Questions
+
+## Why is cache invalidation considered difficult?
+
+Because there are multiple copies of the same data.
+
+Whenever the database changes, every cached copy must eventually become invalid.
+
+In distributed systems, invalidation messages may be delayed, duplicated, or lost.
+
+---
+
+## How do you invalidate caches across multiple servers?
+
+Use an event bus.
+
+Typical choices include:
+
+- Redis Pub/Sub
+- Kafka
+- SNS/SQS
+- RabbitMQ
+
+Each server receives the invalidation event and removes the cached entry.
+
+---
+
+## What is a cache stampede?
+
+Many requests miss the same cache entry simultaneously after it expires.
+
+Instead of one database query,
+
+thousands of identical queries overload the database.
+
+---
+
+## How do you prevent cache stampedes?
+
+Common techniques include:
+
+- Request coalescing (single-flight locking)
+- Early refresh
+- Jittered TTLs
+- Serving stale data while refreshing
+
+---
+
+## Why use versioned keys for static assets?
+
+You don't control every browser, proxy, or CDN cache.
+
+Changing the filename guarantees clients fetch the new version.
+
+Example:
+
+```text
+app.v17.js
+
+↓
+
+app.v18.js
+```
+
+No cache can accidentally serve the old file under the new URL.
+
+---
+
+## Can versioned keys and TTL be used together?
+
+Yes.
+
+Versioning guarantees correctness.
+
+TTL eventually removes old, unused cache entries to reclaim memory.
+
+---
+
+## What if invalidation events arrive out of order?
+
+Include a version number or timestamp in every event.
+
+Consumers ignore any event older than the latest version they have already processed.
+
+This prevents stale invalidation messages from overwriting newer data.
+
+---
+
+# Key Takeaways
+
+- **TTL** automatically expires cached data after a fixed duration.
+- **Explicit invalidation** removes cache immediately after writes.
+- **Event-driven invalidation** keeps multiple cache nodes synchronized.
+- **Request coalescing, early refresh, and jittered TTLs** prevent cache stampedes.
+- **Versioned cache keys** eliminate many invalidation problems by changing the cache key instead of deleting it.
+- In production systems, multiple strategies are usually combined—for example, **Explicit Invalidation + TTL**, or **Event-Driven Invalidation + TTL**—to balance performance, correctness, and reliability.
 
 ## Related topics
 - [Caching Strategies](caching-strategies.md)

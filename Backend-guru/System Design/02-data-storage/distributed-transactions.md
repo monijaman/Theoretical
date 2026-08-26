@@ -1,141 +1,842 @@
 # Distributed Transactions
+
 [← Back to index](../readme.md)
 
-## Why it's asked
+## Why Distributed Transactions Matter
 
-A single-database transaction is easy: `BEGIN`, do work, `COMMIT` or `ROLLBACK`, and the engine's WAL/MVCC machinery guarantees atomicity for free. The moment "the order" touches three separate services each with their own database — payments, inventory, shipping — there is no single engine that can atomically commit or roll back all three. Interviewers ask this to see whether you reach for 2PC (textbook-correct, operationally fragile) or the Saga pattern (the thing almost everyone actually runs in production), and whether you understand *why* the industry moved away from the former.
+A normal database transaction is simple:
 
-## The problem in one picture
+```sql
+BEGIN;
 
-```
-Order placed → must atomically:
-   1. Payments service:  charge $50
-   2. Inventory service: decrement stock by 1
-   3. Shipping service:  create shipment record
+UPDATE account 
+SET balance = balance - 100;
 
-Each service owns its own database. There is no cross-database BEGIN/COMMIT.
-If step 2 fails after step 1 succeeded, the customer is charged with no order.
+COMMIT;
 ```
 
-## Two-Phase Commit (2PC)
+The database guarantees:
 
-2PC is the classical protocol for atomically committing a transaction across multiple independent resources, coordinated by a single **transaction coordinator**.
+- Either everything happens ✅
+- Or nothing happens ❌
 
-```
-Phase 1 — Prepare (vote):
-  Coordinator → Participant A: "can you commit?"   A: locks resources, writes to its own log, replies "yes"
-  Coordinator → Participant B: "can you commit?"   B: locks resources, writes to its own log, replies "yes"
-  Coordinator → Participant C: "can you commit?"   C: replies "no" (e.g. out of stock)
+This is called **ACID atomicity**.
 
-Phase 2 — Commit/Abort (decide):
-  If ALL participants voted yes → Coordinator tells everyone: COMMIT
-  If ANY participant voted no   → Coordinator tells everyone: ABORT (rollback)
-```
+---
 
-```
-        Coordinator
-       /     |      \
-   PREPARE PREPARE PREPARE
-      │       │       │
-   [vote:Y] [vote:Y] [vote:N]
-      │       │       │
-      └───────┴───────┘
-              │
-        one "no" vote → ABORT sent to all
-```
+## The Problem in Microservices
 
-Every participant locks its rows/resources for the entire window between voting "yes" and receiving the final decision — this is the core problem.
+In a microservice architecture, one business action often touches multiple services.
 
-### The coordinator failure / blocking problem
-
-If the coordinator crashes after collecting all "yes" votes but before sending the final `COMMIT`/`ABORT`, every participant is stuck holding its locks indefinitely — it voted "yes" (meaning it *promised* to commit if told to) and cannot unilaterally decide to abort, because the coordinator might come back and say commit. This is 2PC's fundamental **blocking** flaw: a single coordinator failure can freeze resources across every participant until the coordinator recovers (or a human intervenes), during which those rows are unavailable for other transactions. Distributed database internals (Spanner, CockroachDB) solve this by replacing the single coordinator with a replicated/Paxos-backed one, but a plain 2PC across independently-owned microservices has no such safety net — which is exactly why microservice architectures avoid it.
-
-## Why microservices avoid 2PC in practice
-
-- **Locks held across a network round trip, across service boundaries you don't control** — if the inventory service is slow or down, the payments service's rows stay locked, and lock duration is now dependent on another team's service's uptime.
-- **Tight coupling** — 2PC requires every participant to speak the same coordination protocol (XA, typically) and be available simultaneously; this reintroduces exactly the synchronous, availability-coupled dependency chain that microservices are meant to avoid.
-- **Poor fit for heterogeneous stores** — XA-style 2PC assumes participants support prepare/commit semantics; a lot of modern infrastructure (most NoSQL stores, message queues, third-party payment APIs) simply doesn't implement it.
-- **Doesn't compose with availability goals** — a system built to survive individual service outages can't also have a rule that any one service being briefly unavailable can freeze transactions everywhere else.
-
-## The Saga pattern: the practical alternative
-
-A saga breaks the distributed transaction into a sequence of local transactions, each committed independently and immediately (no cross-service locks held), with a **compensating transaction** defined for each step to semantically undo it if a later step fails.
+Example: Buying a product.
 
 ```
-Step 1: Payments.charge($50)         — commits immediately
-Step 2: Inventory.decrementStock(1)  — commits immediately
-Step 3: Shipping.createShipment()    — FAILS
+Customer clicks Buy
 
-Compensation runs backward:
-  Undo step 2: Inventory.restoreStock(1)
-  Undo step 1: Payments.refund($50)
+        |
+        |
+        +--> Payment Service
+        |        |
+        |        Database
+        |
+        +--> Inventory Service
+        |        |
+        |        Database
+        |
+        +--> Shipping Service
+                 |
+                 Database
 ```
 
-Compensations are not a database rollback — they're new, forward-moving transactions that semantically reverse an already-committed effect (a refund, not "undo the charge"), so sagas trade strict atomicity for **eventual** consistency: there's a window where the charge has happened but the order hasn't fully completed, visible to anyone reading state mid-saga.
+Each service owns its own database.
 
-### Choreography vs orchestration
-
-**Choreography** — no central coordinator; each service listens for events and reacts, publishing its own event when done.
+There is no global:
 
 ```
-Payments (charge) --event: PaymentCompleted--> Inventory (decrement) --event: StockReserved--> Shipping (ship)
-                                                     │ fails
-                                            --event: StockReservationFailed--> Payments (refund)
-```
-Pro: fully decoupled, no single point of control. Con: the overall flow is implicit, spread across every service's event handlers — hard to see "what's the current state of order #42" without tracing events across services, and adding a new step means touching multiple services' listeners.
-
-**Orchestration** — a central saga orchestrator explicitly calls each step and explicitly invokes compensations on failure.
-
-```
-                    Saga Orchestrator
-                 /        │         \
-        charge()    decrementStock()   createShipment()
-                 \        │         /
-              (on failure, orchestrator calls compensations in reverse)
-```
-Pro: the flow is explicit, in one place, easy to reason about and monitor (a state machine you can inspect: `PAYMENT_DONE`, `INVENTORY_DONE`, `COMPENSATING`). Con: the orchestrator is a new component to build/operate, and a naive implementation can become a de facto coordinator with its own availability requirements (mitigated by making it stateless/re-driveable from persisted saga state, e.g. via an [outbox pattern](../05-messaging-event-driven/outbox-pattern.md)).
-
-Most production systems past a handful of saga steps choose orchestration, because implicit choreographed flows become genuinely hard to debug once there are more than 3-4 services involved.
-
-## TCC: Try-Confirm-Cancel
-
-TCC is a refinement of the saga idea for cases where you need a middle "reserved but not committed" state instead of committing immediately and compensating later.
-
-```
-Try:     Inventory reserves 1 unit (marks it held, not yet decremented from sellable stock)
-Confirm: Inventory converts the reservation into an actual decrement (all Try steps succeeded)
-Cancel:  Inventory releases the reservation (any Try step failed)
+BEGIN TRANSACTION
 ```
 
-This avoids the "compensate a fully-committed side effect" awkwardness of plain sagas — a Cancel is often cheaper and less error-prone than an after-the-fact undo (e.g., "release a hold" vs. "issue a refund and hope the customer doesn't notice the temporary charge"). The cost is that every participant must implement three explicit operations instead of one, more code and more failure modes to test, which is why TCC shows up mostly in payments/booking-style domains where "reserve then confirm" is already a natural business concept (seat holds, inventory holds).
+across all services.
 
-## Trade-offs summary
+---
 
-| | 2PC | Saga (choreography) | Saga (orchestration) | TCC |
-|---|---|---|---|---|
-| Atomicity | Strong (all-or-nothing) | Eventual (compensation-based) | Eventual (compensation-based) | Eventual, with a "reserved" middle state |
-| Locks held across services? | Yes, for the whole protocol | No | No | Briefly, as an explicit reservation |
-| Coordinator single point of failure? | Yes (blocking on crash) | No central coordinator | Yes, but stateless/re-driveable | Depends on implementation |
-| Failure handling | Automatic rollback | Explicit compensating transactions | Explicit compensating transactions | Explicit cancel operations |
-| Operational complexity | Low to design, high risk in practice | Spread across services, hard to trace | Centralized, easier to monitor | Highest (3 ops per participant) |
-| Common in microservices? | Rare | Common | Common, often preferred at scale | Payments/booking-specific |
+## Example Failure
 
-## Common interview follow-ups
+Order flow:
 
-**Q: Why is a saga "eventually consistent" instead of consistent?**
-Because each local transaction commits independently and immediately visible to readers, there's a real window where some steps have happened and others haven't (payment charged, order not yet marked complete) — any correctness-sensitive read during that window sees a transitional, not final, state, which the application must be designed to tolerate (e.g., an order status of "processing" rather than exposing partial completion as final).
+```
+1. Payment Service
+   Charge $50
 
-**Q: What happens if a compensating transaction itself fails?**
-This is the hard part of saga design in practice — compensations must be retried (usually via a durable queue with retry/backoff) until they succeed, and truly un-compensatable actions (an email already sent, a non-refundable charge) need a fallback like manual intervention or an alert; sagas are only as reliable as their compensation logic's own retry guarantees.
+2. Inventory Service
+   Reduce stock
 
-**Q: Can sagas guarantee isolation like a real ACID transaction would?**
-No — this is the other property sagas give up beyond atomicity: intermediate states are visible to concurrent transactions, which can cause anomalies (e.g., another process seeing stock decremented before the order is confirmed); mitigations include semantic locks (marking a record "pending" so other flows treat it specially) or accepting the anomaly as a documented business trade-off.
+3. Shipping Service
+   Create shipment
+```
 
-**Q: When would 2PC still be the right call?**
-Within a single database engine's own internals across shards it controls (Spanner, CockroachDB use 2PC-like protocols internally, backed by Paxos/Raft to avoid the blocking problem), or in tightly-coupled, low-service-count systems where all participants are under one team's operational control and strict atomicity is worth the availability cost — it's the cross-team, cross-availability-domain case where it breaks down.
+Suppose:
 
-**Q: How do you make an orchestrator not become a new single point of failure?**
-Persist saga state durably (often via the same [outbox pattern](../05-messaging-event-driven/outbox-pattern.md) used for reliable event publishing) so a crashed orchestrator instance can be replaced and resume from the last recorded step, rather than holding saga progress only in memory.
+```
+Payment:
+SUCCESS ✅
+
+Inventory:
+SUCCESS ✅
+
+Shipping:
+FAILED ❌
+```
+
+Now:
+
+```
+Customer paid
+but order cannot complete
+```
+
+A normal database rollback cannot help because:
+
+```
+Payment DB
+Inventory DB
+Shipping DB
+
+are independent systems
+```
+
+This is the distributed transaction problem.
+
+---
+
+# Solution 1: Two-Phase Commit (2PC)
+
+Two-Phase Commit tries to make multiple databases behave like one transaction.
+
+It introduces a:
+
+```
+Transaction Coordinator
+```
+
+Architecture:
+
+```
+                 Coordinator
+
+              /       |       \
+
+        Payment   Inventory   Shipping
+           DB         DB          DB
+```
+
+---
+
+# Phase 1: Prepare Phase
+
+The coordinator asks every service:
+
+> "Can you commit?"
+
+---
+
+## Payment Service
+
+Request:
+
+```
+Can you charge $50?
+```
+
+Response:
+
+```
+YES
+```
+
+The service:
+
+- Locks required records
+- Writes transaction information
+- Waits for final decision
+
+---
+
+## Inventory Service
+
+Request:
+
+```
+Can you reduce stock?
+```
+
+Response:
+
+```
+YES
+```
+
+The service:
+
+- Locks inventory
+- Writes transaction log
+- Waits
+
+---
+
+## Shipping Service
+
+Request:
+
+```
+Can you create shipment?
+```
+
+Response:
+
+```
+NO
+```
+
+Example:
+
+```
+Courier unavailable
+```
+
+---
+
+# Phase 2: Commit or Abort
+
+Coordinator checks responses.
+
+Example:
+
+```
+Payment      YES
+Inventory    YES
+Shipping     NO
+```
+
+Because one service failed:
+
+```
+ABORT
+```
+
+Coordinator sends:
+
+```
+Payment:
+Rollback
+
+Inventory:
+Rollback
+
+Shipping:
+Nothing
+```
+
+---
+
+# The Major Problem With 2PC
+
+## Coordinator Failure
+
+Imagine:
+
+```
+Payment      YES
+Inventory    YES
+Shipping     YES
+```
+
+The coordinator receives all responses.
+
+Before sending:
+
+```
+COMMIT
+```
+
+the coordinator crashes.
+
+Now services are stuck.
+
+Example:
+
+```
+Payment:
+
+"I promised to commit"
+
+
+Inventory:
+
+"I promised to commit"
+
+
+Shipping:
+
+"I promised to commit"
+```
+
+They cannot decide:
+
+```
+COMMIT?
+```
+
+or
+
+```
+ROLLBACK?
+```
+
+So they keep locks.
+
+---
+
+## Blocking Problem
+
+Resources remain unavailable:
+
+```
+Payment records locked
+
+Inventory rows locked
+
+Shipping records locked
+```
+
+until the coordinator recovers.
+
+This is the fundamental weakness of 2PC.
+
+---
+
+# Why Microservices Avoid 2PC
+
+Microservices usually avoid 2PC because:
+
+## 1. Long Lock Duration
+
+Locks remain while waiting for network communication.
+
+Example:
+
+```
+Inventory service slow
+
+        |
+        v
+
+Payment records stay locked
+```
+
+---
+
+## 2. Tight Coupling
+
+Every participant must support the same protocol.
+
+Example:
+
+```
+Payment
+Inventory
+Shipping
+```
+
+must all understand:
+
+```
+prepare()
+commit()
+rollback()
+```
+
+---
+
+## 3. Poor Availability
+
+A single unavailable service can block the entire transaction.
+
+Example:
+
+```
+Shipping Service Down
+
+        |
+        v
+
+Order cannot complete
+```
+
+---
+
+# Solution 2: Saga Pattern
+
+Saga breaks one distributed transaction into multiple local transactions.
+
+Each service commits independently.
+
+Instead of rollback:
+
+```
+Undo with compensation
+```
+
+---
+
+Example:
+
+```
+Step 1:
+Payment.charge($50)
+
+SUCCESS
+
+
+Step 2:
+Inventory.reserve()
+
+SUCCESS
+
+
+Step 3:
+Shipping.create()
+
+FAILED
+```
+
+Now we compensate.
+
+---
+
+## Compensation
+
+A compensation is not a database rollback.
+
+It is a new business transaction that reverses the previous action.
+
+Example:
+
+Original:
+
+```
+Charge $50
+```
+
+Compensation:
+
+```
+Refund $50
+```
+
+Not:
+
+```
+Delete payment record
+```
+
+because money movement already happened.
+
+---
+
+Flow:
+
+```
+Shipping Failed
+
+        |
+        v
+
+Restore Inventory
+
+        |
+        v
+
+Refund Payment
+```
+
+---
+
+# Types of Saga
+
+There are two common approaches.
+
+---
+
+# 1. Choreography Saga
+
+No central controller.
+
+Services communicate using events.
+
+Example:
+
+```
+Payment Service
+
+charge()
+
+      |
+      |
+PaymentCompleted Event
+
+      |
+      v
+
+Inventory Service
+
+reserve()
+
+      |
+      |
+StockReserved Event
+
+      |
+      v
+
+Shipping Service
+
+ship()
+```
+
+---
+
+## Advantages
+
+- Highly decoupled
+- No central coordinator
+
+---
+
+## Disadvantages
+
+The workflow becomes difficult to understand.
+
+Example:
+
+```
+Payment Service
+       |
+       |
+       +--> Inventory
+       |
+       +--> Fraud
+       |
+       +--> Notification
+       |
+       +--> Analytics
+```
+
+Finding the state of an order becomes difficult.
+
+---
+
+# 2. Orchestration Saga
+
+A central orchestrator controls the workflow.
+
+Architecture:
+
+```
+              Saga Orchestrator
+
+
+        /          |          \
+
+   Payment    Inventory    Shipping
+```
+
+The orchestrator executes:
+
+```
+1. Charge payment
+
+2. Reserve inventory
+
+3. Create shipment
+```
+
+If shipping fails:
+
+```
+1. Cancel inventory
+
+2. Refund payment
+```
+
+---
+
+## Advantages
+
+- Easy to monitor
+- Easy to debug
+- Workflow is explicit
+- Easier retry handling
+
+Example:
+
+Saga state:
+
+```
+Order ID: 123
+
+Payment:
+COMPLETED
+
+Inventory:
+COMPLETED
+
+Shipping:
+FAILED
+
+Compensation:
+RUNNING
+```
+
+---
+
+Most production systems prefer:
+
+```
+Saga Orchestration
+```
+
+for complex workflows.
+
+---
+
+# TCC: Try-Confirm-Cancel
+
+TCC is a special type of Saga.
+
+It introduces a temporary reservation state.
+
+Common examples:
+
+- Airline seats
+- Hotel rooms
+- Inventory reservation
+
+---
+
+## Try
+
+Reserve resource.
+
+Example:
+
+```
+Seat A10
+
+Status:
+HELD
+```
+
+---
+
+## Confirm
+
+Everything succeeds.
+
+Convert reservation into final state.
+
+```
+Seat A10
+
+Status:
+SOLD
+```
+
+---
+
+## Cancel
+
+Something failed.
+
+Release reservation.
+
+```
+Seat A10
+
+Status:
+AVAILABLE
+```
+
+---
+
+## Why Use TCC?
+
+Normal Saga:
+
+```
+Charge money
+
+Failure:
+
+Refund money
+```
+
+TCC:
+
+```
+Reserve first
+
+Failure:
+
+Release reservation
+```
+
+Cancellation is often simpler.
+
+---
+
+# Comparison Table
+
+| Feature | 2PC | Saga | TCC |
+|---|---|---|---|
+| Atomicity | Strong | Eventual | Eventual |
+| Rollback | Automatic | Compensation | Cancel operation |
+| Locks | Yes | No | Reservation |
+| Availability | Lower | Higher | Medium |
+| Complexity | Medium | Medium | High |
+| Microservices Usage | Rare | Very Common | Specific cases |
+
+---
+
+# Common Interview Questions
+
+## Why is Saga eventually consistent?
+
+Because each service commits separately.
+
+Example:
+
+```
+Payment:
+Completed
+
+
+Order:
+Processing
+```
+
+For a short period, the system is in an intermediate state.
+
+---
+
+## What if compensation fails?
+
+Example:
+
+```
+Refund API fails
+```
+
+Solutions:
+
+- Retry queues
+- Exponential backoff
+- Dead letter queues
+- Manual intervention
+
+Example:
+
+```
+Refund Pending
+
+Retry 1
+
+Retry 2
+
+Retry 3
+
+Alert finance team
+```
+
+---
+
+## Does Saga provide isolation?
+
+No.
+
+Intermediate states can be visible.
+
+Example:
+
+```
+Inventory reserved
+
+Payment failed
+```
+
+Possible solutions:
+
+- Pending states
+- Semantic locks
+- Business rules
+
+---
+
+## When Should You Use 2PC?
+
+Use 2PC when:
+
+- All systems are controlled by one organization
+- Strong atomicity is required
+- Participants support the protocol
+
+Examples:
+
+- Distributed databases
+- Internal database systems
+
+Avoid it for:
+
+- Independent microservices
+- Third-party APIs
+- Payment providers
+
+---
+
+# Simple Rule to Remember
+
+```
+Single Database
+        |
+        v
+ACID Transaction
+
+
+Multiple Microservices
+        |
+        v
+Saga Pattern
+
+
+Need Temporary Reservation
+        |
+        v
+TCC
+
+
+Need Strict Atomicity
+        |
+        v
+2PC
+```
+
+---
+
+# Interview Answer
+
+For modern microservices:
+
+> "We usually avoid 2PC because it introduces blocking and tight coupling. Instead, we use the Saga pattern with local transactions and compensating actions. For complex workflows, orchestration-based Saga is preferred because the workflow state is easier to manage, monitor, and recover."
 
 ## Related topics
 - [Database Migration at Scale](database-migration-at-scale.md)

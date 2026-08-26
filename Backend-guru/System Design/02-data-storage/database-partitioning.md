@@ -1,134 +1,878 @@
 # Database Partitioning
+
 [← Back to index](../readme.md)
 
-## Why it matters
+## Why This Topic Matters
 
-"Partitioning" and "sharding" get used interchangeably in casual conversation, and interviewers will specifically probe whether you know they're not the same thing. Partitioning is a single-node technique — splitting one logical table into smaller physical pieces inside the same database instance to make maintenance and queries cheaper. Sharding is a multi-node technique — splitting data across separate machines to scale beyond one node's capacity. You can, and often should, use both at once: shard across machines, then partition within each shard.
+Database partitioning is often confused with sharding.
 
-## What it is
+Many engineers say:
 
-A partitioned table looks like one table to the application (one name, one schema), but the database engine physically stores its rows in multiple separate partitions, each with its own storage, and can route or prune queries to only the partitions that matter.
+> "We partitioned our database."
+
+But they may actually mean sharding.
+
+They are different concepts.
+
+The key difference:
+
+| | Partitioning | Sharding |
+|-|-|-|
+| Scope | Single database server | Multiple database servers |
+| Purpose | Improve query performance and maintenance | Scale beyond one machine |
+| Data location | Same database instance | Different machines |
+| Complexity | Lower | Higher |
+
+A system can use both:
 
 ```
-Logical table: orders
-                │
-    ┌───────────┼───────────┬───────────┐
-    ▼           ▼           ▼           ▼
-orders_2024_q1 orders_2024_q2 orders_2024_q3 orders_2024_q4
- (Jan-Mar)      (Apr-Jun)      (Jul-Sep)      (Oct-Dec)
-       all physically stored on the SAME database instance
+Application
+
+      |
+      ↓
+
+Sharding
+(split across machines)
+
+      |
+      ↓
+
+Partitioning
+(split tables inside each database)
 ```
 
-Contrast with sharding, where each piece lives on a **different** instance/machine:
+---
+
+# What Is Database Partitioning?
+
+Partitioning splits one large table into smaller physical pieces.
+
+To the application:
 
 ```
-                Logical table: orders
-                        │
-        ┌───────────────┼───────────────┐
-        ▼                                ▼
-   Shard 1 (Machine A)              Shard 2 (Machine B)
-   [orders_2024_q1, orders_2024_q2] [orders_2024_q3, orders_2024_q4]
+orders
 ```
 
-## Partitioning strategies
+still looks like one table.
 
-### Range partitioning
-Rows go to a partition based on a value range of the partition key — most common for time-series data (`created_at`).
+Internally:
+
+```
+                 orders
+
+                    |
+     --------------------------------
+
+     |              |              |
+
+orders_2024_q1  orders_2024_q2  orders_2024_q3
+
+```
+
+All partitions live:
+
+```
+Inside the same database instance
+```
+
+---
+
+# Why Use Partitioning?
+
+Large tables create problems:
+
+Example:
+
+```
+orders table
+
+5 billion rows
+```
+
+Problems:
+
+- Queries scan too much data
+- Indexes become huge
+- Backups take longer
+- Deletes become expensive
+- Maintenance becomes slower
+
+Partitioning helps by dividing the workload.
+
+---
+
+# Partitioning vs Sharding Example
+
+## Partitioning
+
+One database:
+
+```
+PostgreSQL Server
+
+        |
+        ↓
+
+orders table
+
+        |
+        |
+        ├── orders_january
+        ├── orders_february
+        └── orders_march
+```
+
+Everything is on one machine.
+
+---
+
+## Sharding
+
+Multiple databases:
+
+```
+Application
+
+      |
+      ↓
+
+Router
+
+
+      |
+      |
+ -----------------
+
+ |               |
+
+Shard 1          Shard 2
+
+Server A         Server B
+
+
+Users 1-5M       Users 5M-10M
+```
+
+Data is distributed across machines.
+
+---
+
+# Types of Partitioning
+
+There are three common strategies:
+
+1. Range partitioning
+2. List partitioning
+3. Hash partitioning
+
+---
+
+# 1. Range Partitioning
+
+Rows are divided by value ranges.
+
+Most common for:
+
+- Time-series data
+- Logs
+- Events
+- Transactions
+
+Example:
 
 ```sql
 CREATE TABLE orders (
-  id BIGINT, created_at DATE, ...
-) PARTITION BY RANGE (created_at);
-
-CREATE TABLE orders_2024_q1 PARTITION OF orders
-  FOR VALUES FROM ('2024-01-01') TO ('2024-04-01');
-CREATE TABLE orders_2024_q2 PARTITION OF orders
-  FOR VALUES FROM ('2024-04-01') TO ('2024-07-01');
+    id BIGINT,
+    created_at DATE
+)
+PARTITION BY RANGE(created_at);
 ```
 
-Old partitions can be dropped instantly (e.g., "delete data older than 2 years" becomes `DROP TABLE orders_2022_q1` — an O(1) metadata operation instead of a slow `DELETE` that has to scan and generate WAL for millions of rows).
-
-### List partitioning
-Rows go to a partition based on a discrete set of values — e.g., partition by `country_code IN ('US','CA')` vs `country_code IN ('DE','FR')`. Good for categorical splits like region or tenant tier.
-
-### Hash partitioning
-`hash(key) % N` decides the partition, used when there's no natural range/list split and you just want to spread I/O evenly across partitions (and often across separate physical disks/tablespaces).
-
-### Composite partitioning
-Partition by range, then sub-partition each range by hash — e.g., partition `orders` by month, then sub-partition each month by `hash(customer_id)` to spread each month's write load across multiple physical partitions.
-
-## Partition pruning
-
-The query planner looks at the `WHERE` clause and, if it references the partition key, skips scanning partitions that can't possibly contain matching rows.
+Create partitions:
 
 ```sql
-SELECT * FROM orders WHERE created_at >= '2024-07-01' AND created_at < '2024-08-01';
--- planner touches ONLY orders_2024_q3, skips q1/q2/q4 entirely
+orders_2024_q1
+
+Jan - Mar
+
+
+orders_2024_q2
+
+Apr - Jun
 ```
 
-```
-EXPLAIN output (conceptual):
-  Append
-    -> Seq Scan on orders_2024_q3   -- only this one scanned
-    (orders_2024_q1, q2, q4 pruned before execution)
-```
-
-Without a filter on the partition key, the planner falls back to scanning every partition (equivalent to scanning the whole logical table) — so, just like a shard key, the partition key should match your actual query patterns or you get none of the benefit.
-
-## How partitioning composes with sharding
-
-They operate at different layers and stack naturally:
+Data:
 
 ```
-                        Application
-                             │
-                     Shard router (by tenant_id)
-                             │
-        ┌────────────────────┼────────────────────┐
-        ▼                                          ▼
-   Shard 1 (Machine A)                        Shard 2 (Machine B)
-   tenants A-M                                tenants N-Z
-        │                                          │
-   table "events" partitioned                 table "events" partitioned
-   BY RANGE(created_at) locally                BY RANGE(created_at) locally
-   [events_jan, events_feb, ...]                [events_jan, events_feb, ...]
+Order created:
+
+2024-02-10
+
+↓
+
+orders_2024_q1
 ```
 
-A large multi-tenant analytics platform, for example, might shard by `tenant_id` across a dozen Postgres instances (to scale write throughput and isolate noisy tenants) and, independently, partition each shard's `events` table by month (to make retention/deletion cheap and keep indexes small). The two decisions are made for different reasons and don't have to use the same key.
+---
 
-## Real-world examples
+# Why Range Partitioning Is Useful
 
-- **PostgreSQL declarative partitioning**: native `PARTITION BY RANGE/LIST/HASH` since PG 10, with partition pruning at plan time and execution time (`enable_partition_pruning`), used heavily for time-series retention.
-- **MySQL partitioning**: `PARTITION BY RANGE/LIST/HASH/KEY`, commonly paired with Vitess sharding — MySQL partitioning handles intra-node splits, Vitess handles inter-node splits.
-- **Cassandra**: technically calls its shard key a "partition key" — this is a common source of terminology confusion. Cassandra's "partition" is actually closer to what this doc calls a shard (it determines which physical node owns the data via consistent hashing); within a partition, data is further organized by "clustering columns," which is closer to intra-node ordering than partitioning in the relational sense.
-- **BigQuery / Snowflake**: automatically partition (and cluster) large tables by ingestion time or a specified column, pruning partitions transparently to avoid full scans on massive analytical tables — you don't manage physical partition files but you still choose the partitioning column for pruning benefit.
+Deleting old data becomes easy.
 
-## Trade-offs
+Without partitioning:
 
-| Aspect | Partitioning (single node) | Sharding (multi node) |
-|---|---|---|
-| Scales | Query/maintenance efficiency, index size | Total storage capacity, write throughput, node count |
-| Failure domain | One instance — partitioning doesn't add availability | Each shard is an independent failure domain |
-| Cross-partition queries | Cheap (same instance, same query engine) | Expensive (network fan-out / scatter-gather) |
-| Adding more | Add a partition — local DDL operation | Add a shard — data movement across machines (see sharding's resharding pain) |
-| Typical driver | Retention/archival, query pruning, VACUUM/index maintenance size | Capacity limits, write throughput, tenant isolation |
+```sql
+DELETE FROM logs
+WHERE created_at < '2022-01-01';
+```
 
-## Common interview follow-ups
+Database must:
 
-**Q: If partitioning doesn't add capacity, why bother?**
-Because a lot of the pain of huge tables isn't raw storage — it's maintenance operations (index rebuilds, vacuum, backups) and query planning getting slower as one table grows; splitting into partitions keeps each physical piece small enough that these operations stay fast, and lets you drop old data in O(1) instead of a scanning `DELETE`.
+```
+Find millions of rows
 
-**Q: Can partition pruning fail silently and hurt performance?**
-Yes — if the query doesn't filter on the partition key (or filters on an expression the planner can't statically resolve, like a function call on the column), the planner scans every partition; this shows up as a query that used to be fast suddenly scanning 10x the rows after a refactor changed how the date filter is constructed.
+↓
 
-**Q: How would you migrate an unpartitioned multi-billion-row table to a partitioned one with no downtime?**
-Create the new partitioned table alongside the old one, backfill historical data into partitions in batches, dual-write new rows to both, verify row counts/checksums match, then atomically rename tables in a single transaction — the same expand-contract pattern used for any zero-downtime schema change.
+Delete each row
 
-**Q: When would you shard without partitioning, or partition without sharding?**
-Partition-only fits a single large but not-yet-write-bottlenecked table needing cheaper retention/maintenance (e.g., a logging table on one beefy Postgres instance); shard-only fits smaller tables per shard that don't need internal splitting but the overall dataset/write-rate exceeds one machine, like a multi-tenant SaaS where each tenant's table is modest in size.
+↓
 
-**Q: Does the partition key have to be the same as the shard key?**
-No, and usually it shouldn't be — the shard key is chosen to distribute load/capacity across machines (e.g., `tenant_id`), while the partition key is chosen for query pruning and lifecycle management within a shard (e.g., `created_at`); conflating them can force an awkward compromise on both goals.
+Generate WAL/logs
+```
+
+Slow.
+
+---
+
+With partitioning:
+
+```
+DROP TABLE logs_2022;
+```
+
+Database removes metadata.
+
+Almost instant.
+
+---
+
+# 2. List Partitioning
+
+Partition based on specific values.
+
+Example:
+
+Country-based data:
+
+```
+users
+
+        |
+        |
+ ------------------
+
+ |                |
+
+US users       Europe users
+```
+
+Example:
+
+```sql
+PARTITION BY LIST(country);
+```
+
+Partitions:
+
+```
+users_us
+
+country IN ('US')
+
+
+users_europe
+
+country IN ('DE','FR','UK')
+```
+
+Useful for:
+
+- Regions
+- Tenant groups
+- Categories
+
+---
+
+# 3. Hash Partitioning
+
+Hash decides where data goes.
+
+Example:
+
+```text
+hash(customer_id) % 4
+```
+
+Result:
+
+```
+Customer 101
+
+hash(101)
+
+↓
+
+partition 2
+```
+
+Customer 202:
+
+```
+hash(202)
+
+↓
+
+partition 1
+```
+
+---
+
+Why use hash partitioning?
+
+When you want:
+
+- Even data distribution
+- Balanced storage
+- Balanced writes
+
+There is no natural range.
+
+---
+
+# Composite Partitioning
+
+You can combine strategies.
+
+Example:
+
+Large order system:
+
+First:
+
+```
+Partition by month
+```
+
+Then:
+
+```
+Hash by customer_id
+```
+
+Structure:
+
+```
+orders
+
+ |
+ |
+ +-- January
+ |       |
+ |       +-- Hash partition 1
+ |       +-- Hash partition 2
+ |
+ |
+ +-- February
+         |
+         +-- Hash partition 1
+         +-- Hash partition 2
+```
+
+Benefits:
+
+- Easy data deletion by month
+- Even write distribution
+
+---
+
+# Partition Pruning
+
+The biggest performance benefit.
+
+The database can skip partitions that do not contain relevant data.
+
+Example:
+
+Query:
+
+```sql
+SELECT *
+FROM orders
+WHERE created_at >= '2024-07-01'
+AND created_at < '2024-08-01';
+```
+
+Database knows:
+
+```
+Need July data only
+```
+
+So:
+
+```
+Scan:
+
+orders_july
+
+
+Skip:
+
+orders_january
+orders_february
+orders_march
+...
+```
+
+This is called:
+
+```
+Partition pruning
+```
+
+---
+
+# Without Partition Pruning
+
+Example:
+
+Query:
+
+```sql
+SELECT *
+FROM orders
+WHERE customer_id=100;
+```
+
+But partition key is:
+
+```
+created_at
+```
+
+Database does not know where the customer data exists.
+
+It may scan:
+
+```
+January partition
+
++
+
+February partition
+
++
+
+March partition
+
++
+
+...
+```
+
+No performance benefit.
+
+---
+
+# Choosing a Partition Key
+
+A good partition key should:
+
+## 1. Match Query Patterns
+
+Good:
+
+Table:
+
+```
+events
+```
+
+Queries:
+
+```sql
+WHERE created_at BETWEEN ...
+```
+
+Partition:
+
+```
+created_at
+```
+
+---
+
+Bad:
+
+Partition:
+
+```
+country
+```
+
+Queries:
+
+```sql
+WHERE event_id=123
+```
+
+No pruning benefit.
+
+---
+
+## 2. Have Good Distribution
+
+Avoid:
+
+```
+status
+```
+
+Example:
+
+```
+active = 99%
+
+inactive = 1%
+```
+
+One partition becomes huge.
+
+---
+
+# Combining Partitioning and Sharding
+
+Large systems often use both.
+
+Example:
+
+Multi-tenant SaaS:
+
+```
+Application
+
+       |
+       ↓
+
+Shard Router
+
+       |
+ -----------------------
+
+ |                     |
+
+Shard 1              Shard 2
+
+Tenant A-M           Tenant N-Z
+
+
+Each shard:
+
+events table
+
+      |
+      ↓
+
+Partition by month
+```
+
+---
+
+The reasons are different:
+
+## Sharding solves:
+
+"One machine is not enough."
+
+Example:
+
+```
+10TB data
+
+needs
+
+multiple servers
+```
+
+---
+
+## Partitioning solves:
+
+"This table is too large to manage efficiently."
+
+Example:
+
+```
+One 10TB table
+
+split into
+
+monthly partitions
+```
+
+---
+
+# Real-World Examples
+
+## PostgreSQL
+
+Supports:
+
+```sql
+PARTITION BY RANGE
+
+PARTITION BY LIST
+
+PARTITION BY HASH
+```
+
+Common use:
+
+- Logs
+- Events
+- Time-series data
+
+---
+
+## MySQL
+
+Supports:
+
+```
+RANGE
+
+LIST
+
+HASH
+
+KEY
+```
+
+Often combined with sharding systems.
+
+---
+
+## Cassandra
+
+Important terminology difference:
+
+Cassandra uses:
+
+```
+partition key
+```
+
+but it means something closer to:
+
+```
+shard key
+```
+
+It decides:
+
+```
+Which node stores the data
+```
+
+Not relational table partitioning.
+
+---
+
+## BigQuery / Snowflake
+
+Analytical databases automatically manage partitions.
+
+Example:
+
+Partition by:
+
+```
+event_date
+```
+
+Query:
+
+```sql
+WHERE event_date='2026-01-01'
+```
+
+Only scans:
+
+```
+one partition
+```
+
+Reducing cost.
+
+---
+
+# Partitioning Trade-offs
+
+| Feature | Partitioning | Sharding |
+|-|-|-|
+| Goal | Better management/performance | Scale capacity |
+| Machines | One | Multiple |
+| Query complexity | Low | High |
+| Cross data queries | Easy | Expensive |
+| Maintenance | Easier | Harder |
+| Failure isolation | No | Yes |
+
+---
+
+# Common Interview Questions
+
+## Q: If partitioning does not add more servers, why use it?
+
+Because huge tables create maintenance problems.
+
+Partitioning improves:
+
+- Query speed through pruning
+- Index management
+- Backup operations
+- Data deletion
+- Vacuum/maintenance
+
+---
+
+## Q: Can partition pruning fail?
+
+Yes.
+
+Example:
+
+Partition key:
+
+```
+created_at
+```
+
+Query:
+
+```sql
+WHERE customer_id=10
+```
+
+Database cannot know which partition contains the data.
+
+It scans everything.
+
+---
+
+## Q: How do you migrate a huge table to partitions?
+
+Use expand-contract:
+
+1. Create new partitioned table
+2. Copy old data gradually
+3. Dual write new changes
+4. Verify data
+5. Switch application
+6. Remove old table
+
+Same pattern as zero-downtime schema migration.
+
+---
+
+## Q: When would you partition but not shard?
+
+Example:
+
+A logging system:
+
+```
+One powerful PostgreSQL server
+
++
+
+Huge events table
+```
+
+Need:
+
+- Easier retention
+- Faster queries
+
+But one server is enough.
+
+---
+
+## Q: When would you shard but not partition?
+
+Example:
+
+SaaS application:
+
+```
+100 tenants
+
+Each tenant has small data
+```
+
+Need:
+
+```
+Multiple databases
+```
+
+but each table is manageable.
+
+---
+
+## Q: Should partition key and shard key be the same?
+
+Usually no.
+
+They solve different problems.
+
+Example:
+
+Shard key:
+
+```
+tenant_id
+```
+
+Reason:
+
+Spread tenants across machines.
+
+Partition key:
+
+```
+created_at
+```
+
+Reason:
+
+Efficient time-based queries.
+
+---
+
+# Key Takeaways
+
+Remember:
+
+1. Partitioning splits one table inside one database.
+2. Sharding splits data across multiple databases.
+3. They solve different scaling problems.
+4. Range partitioning is common for time-series data.
+5. Partition pruning is the main performance benefit.
+6. The partition key should match query patterns.
+7. Partitioning helps maintenance and retention.
+8. Large systems often use both sharding and partitioning.
+9. A bad partition key gives little or no benefit.
+10. Partitioning improves manageability; sharding improves capacity.
 
 ## Related topics
 

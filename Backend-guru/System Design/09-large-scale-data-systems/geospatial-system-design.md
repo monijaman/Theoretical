@@ -25,7 +25,7 @@ The fix is to divide the earth's surface into a grid of cells, assign every loca
 
 Geohash interleaves the bits of latitude and longitude into a single base-32 string, where **shared prefixes mean spatial proximity**:
 
-```
+```text
 lat = 37.7749, lng = -122.4194  (San Francisco)
         │
         ▼  interleave lat/lng bits, base32-encode
@@ -48,7 +48,7 @@ Geohash's rectangular grid distorts near the poles (longitude lines converge) an
 - **Google S2**: projects the earth onto a cube (6 faces), then recursively subdivides each face into a quad-tree, giving cells of roughly uniform physical area everywhere on earth (unlike lat/lng grids, which shrink toward the poles) and no distortion problems near the poles.
 - **Uber H3**: uses a **hexagonal** grid instead of square cells. Hexagons have a key advantage for proximity search: every neighboring cell is equidistant from the center cell (a square cell's diagonal neighbor is farther away than its edge neighbor), which makes "check the ring of neighbors" logic simpler and more uniform — directly useful for Uber's driver-matching, where you want a consistent search radius regardless of direction.
 
-```
+```text
 Square grid (geohash)              Hexagonal grid (H3)
 ┌───┬───┬───┐                          ⬡ ⬡ ⬡
 │   │   │   │                         ⬡ ⬡ ⬡ ⬡
@@ -63,7 +63,7 @@ Square grid (geohash)              Hexagonal grid (H3)
 
 A running example ties the index choice to a real system: matching a rider to nearby available drivers.
 
-```
+```text
                     ┌─────────────────────────────┐
   Driver app  ─────▶│  Location ingestion service  │  (every few seconds,
   (GPS ping)         └──────────────┬───────────────┘   each driver pings
@@ -71,10 +71,10 @@ A running example ties the index choice to a real system: matching a rider to ne
                                     ▼
                      ┌───────────────────────────┐
                      │  Geo-index store           │
-                     │  (Redis GEO / H3 cell →     │
-                     │   set of driver IDs, or      │
-                     │   in-memory quad-tree)       │
-                     └──────────────┬───────────────┘
+                     │  (Redis GEO / H3 cell →    │
+                     │   set of driver IDs, or    │
+                     │   in-memory quad-tree)     │
+                     └──────────────┬──────────────┘
                                     │
   Rider requests ride  ────────────▶│  compute rider's cell + ring of
                                     │  neighbor cells, fetch candidate
@@ -102,7 +102,7 @@ For systems that don't need Uber-scale driver-ping throughput, a relational data
 
 Cell size is the central tuning knob, and it trades off in both directions:
 
-```
+```text
 Smaller cells                          Larger cells
 ──────────────                          ─────────────
 + precise "nearby" match                + fewer cells to check per query
@@ -129,22 +129,22 @@ Pick cell size relative to expected query radius and point density: a rideshare 
 
 ## Common interview follow-ups
 
-**Q: Why does Uber use hexagons (H3) instead of the simpler square-based geohash?**
+**Q: Why does Uber use hexagons (H3) instead of the simpler square-based geohash?**  
 Every hexagon has exactly 6 neighbors, all equidistant from its center, whereas a square grid's diagonal neighbors are farther away than its edge neighbors — this asymmetry complicates "check the ring around me" logic and biases matching toward drivers that happen to sit on an edge-adjacent cell rather than true nearest ones, which hexagons avoid.
 
-**Q: How do you handle the boundary problem where two nearby points fall in different cells?**
+**Q: How do you handle the boundary problem where two nearby points fall in different cells?**  
 Query not just the point's own cell but its full ring of immediate neighbor cells (8 for a square grid, 6 for hexagonal), so points just across a boundary are still captured; the trade-off is more cells fetched per query, which is why cell size should roughly match the expected search radius so the neighbor ring alone covers it.
 
-**Q: Would you use a grid index or a k-d tree/R-tree for this problem?**
+**Q: Would you use a grid index or a k-d tree/R-tree for this problem?**  
 Grid indexes (geohash/H3) are simpler, support fast upserts (critical for constantly-moving points like drivers), and turn lookups into simple key equality/prefix queries; tree structures (k-d tree, R-tree) can give tighter exact-nearest-neighbor results and handle non-uniform density more gracefully but are more expensive to rebalance under high write rates — which is why moving-point systems (driver locations) lean grid-based and mostly-static datasets (store locations, property boundaries) lean tree-based (PostGIS's R-tree/GiST).
 
-**Q: How would you scale this to a global user base rather than one city?**
+**Q: How would you scale this to a global user base rather than one city?**  
 Shard the geo-index by a coarse geographic key (e.g., region or country, or the top-level S2/H3 cell), since queries are inherently local — a rider in Tokyo never needs to search cells in São Paulo — so this is a natural, low-skew sharding key, unlike, say, sharding by user ID which offers no locality benefit for this workload.
 
-**Q: Why not just compute Euclidean/Haversine distance to every point and sort?**
+**Q: Why not just compute Euclidean/Haversine distance to every point and sort?**  
 That's O(N) per query against every driver in the system regardless of how far away they are, which doesn't scale past a small fleet; grid indexing prunes to a small local candidate set in roughly O(1)/O(log N) before any distance math runs at all, and only that small set needs the more expensive real-distance or routing-ETA calculation.
 
-**Q: How fresh does the driver location index need to be, and what does that imply architecturally?**
+**Q: How fresh does the driver location index need to be, and what does that imply architecturally?**  
 Driver positions update every few seconds and matching needs sub-second responsiveness, so the index has to live in a low-latency, high-write in-memory store (Redis GEO or an equivalent in-memory grid) rather than a disk-backed relational index rebuilt periodically — this pushes the design toward the same near-real-time, eventually-slightly-stale trade-off seen in search indexes (see [Search Architecture / Elasticsearch](search-architecture-elasticsearch.md)).
 
 ## Related topics

@@ -1,123 +1,1252 @@
 # Database Sharding
+
 [← Back to index](../readme.md)
 
-## Why it matters
+## Why This Topic Matters
 
-Replication scales reads and survivability, but not write throughput or dataset size — every replica still holds the *entire* dataset and the leader still handles *every* write. Sharding (horizontal partitioning across independent nodes) is how you scale past what a single machine's disk, memory, or write throughput can handle. Interviewers use sharding questions to see whether you understand that it's a one-way door: picking the wrong shard key is a production incident six months later, not a config change.
+A single database server has limits:
 
-## What it is
+- CPU
+- Memory
+- Disk capacity
+- Write throughput
 
-Sharding splits a dataset by rows across multiple independent database instances (shards), each owning a disjoint subset of the data and typically running its own leader-follower replication set underneath. Unlike a read replica, a shard is not a full copy — it's a fraction of the data.
-
-```
-                        Application / Router
-                                │
-             shard_key = hash(user_id) or range lookup
-                                │
-        ┌───────────────────────┼───────────────────────┐
-        ▼                       ▼                       ▼
-    Shard 0                 Shard 1                 Shard 2
-  (users 0-999)          (users 1000-1999)       (users 2000-2999)
-  [leader+replicas]      [leader+replicas]       [leader+replicas]
-```
-
-## Shard keys
-
-The shard key (partition key) determines which shard a row lives on. Choosing it well is the whole game:
-
-- Must have high cardinality (many distinct values) so data spreads evenly.
-- Should match your dominant query pattern — most queries should be satisfiable by hitting one shard, not fanning out to all of them (a "scatter-gather" query).
-- Should avoid **hot shards**: e.g., sharding a social app by `signup_date` means the newest shard gets all the write traffic from new signups; sharding by `celebrity_user_id` means one shard gets crushed by their follower activity.
-
-## Sharding strategies
-
-### 1. Range-based sharding
-
-Rows are assigned to shards by contiguous key ranges (`A-M` → shard 1, `N-Z` → shard 2; or `user_id 0-1M` → shard 1).
+Replication helps with:
 
 ```
-Shard A: keys [0, 1000)
-Shard B: keys [1000, 2000)
-Shard C: keys [2000, 3000)
+More reads
+Higher availability
 ```
 
-- Pro: efficient range queries (e.g., "all orders in March") stay on one shard.
-- Con: prone to hot shards if writes cluster at one end of the range (monotonically increasing IDs, timestamps).
-
-### 2. Hash-based sharding
-
-`shard = hash(key) % N`, spreading rows uniformly regardless of value patterns.
-
-- Pro: even distribution, no hot ranges.
-- Con: range queries now scatter across every shard; naive `% N` means **every row must move** if you add a shard.
-
-### 3. Consistent hashing
-
-Instead of `hash(key) % N`, map both shards and keys onto a hash ring (0 to 2^32-1). A key belongs to the first shard clockwise from its hash position. Adding/removing a shard only reshuffles the keys between it and its ring neighbors — not the whole dataset.
+But replication does **not** solve:
 
 ```
-                    0
-              ┌───────────┐
-       Shard D│           │ Shard A
-              │    ring    │
-       Shard C│           │ Shard B
-              └───────────┘
-             key → hash → walk clockwise → owning shard
+Too much data
+
+or
+
+Too many writes
 ```
 
-Virtual nodes (each physical shard owns many points on the ring) smooth out uneven load that a single point per shard would cause. This is the mechanism behind DynamoDB's original design, Cassandra, and most CDN/cache hash-ring implementations.
+Why?
 
-### 4. Directory-based (lookup table) sharding
+Because every replica contains the same data.
 
-A separate mapping service/table stores `key → shard` explicitly instead of computing it.
-
-- Pro: maximum flexibility — rebalance by moving individual entries, put VIP customers on dedicated hardware.
-- Con: the directory is itself a critical, must-be-fast, must-be-highly-available service and a potential bottleneck/SPOF.
-
-## Resharding — the painful part
-
-Adding shards to relieve a hot or full shard means physically moving data:
+Example:
 
 ```
-Before:  Shard0 [A-M]           Shard1 [N-Z]
-Split Shard0 →
-After:   Shard0 [A-F]  Shard2 [G-M]   Shard1 [N-Z]
+Primary Database
+
+10 TB data
+
+        |
+        |
+ -----------------
+
+Replica 1      Replica 2
+
+10 TB          10 TB
 ```
 
-This requires: copying rows to the new shard, keeping both old and new in sync during the migration (dual writes or a change-data-capture pipeline), atomically flipping the routing table, and backfilling without downtime — this is the same expand/contract problem as schema migrations, applied to data placement. See [Database Migration at Scale](database-migration-at-scale.md).
+The write still goes to one primary.
 
-## Real-world examples
+---
 
-- **Vitess** (runs YouTube's, and now Slack's/Square's, MySQL fleet): shards MySQL horizontally, adds a query routing layer (VTGate) that speaks the MySQL protocol so apps don't need to know shard topology, and provides online resharding (`Reshard` workflows) that copies data with VReplication (CDC-based) before cutting over.
-- **MongoDB sharding**: `mongos` routers, config servers holding the chunk-to-shard map, and shards that are themselves replica sets. Chunks (contiguous key ranges) are automatically split and rebalanced across shards by the balancer.
-- **Citus** (Postgres extension, now part of Azure Cosmos DB for PostgreSQL): distributes Postgres tables across worker nodes by a distribution column, co-locating related tables on the same shard so joins on the shard key stay local; the coordinator node plans and routes distributed queries.
-- **DynamoDB**: partitions by hash of the partition key across storage nodes transparently; you never see the shard map, but you still design your partition key to avoid hot partitions (their equivalent of a hot shard).
+# What Is Sharding?
 
-## Trade-offs
+Sharding splits data horizontally across multiple database servers.
 
-| Strategy | Pros | Cons | Good fit |
-|---|---|---|---|
-| Range | Efficient range scans, simple to reason about | Hot shards on sequential keys | Time-series with rotation, analytics |
-| Hash | Even load distribution | Range queries scatter-gather; naive rehash on resize | High write-throughput OLTP with point lookups |
-| Consistent hashing | Minimal data movement on resize | Slightly uneven without virtual nodes; still scatters ranges | Systems that scale nodes frequently (caches, Dynamo-style stores) |
-| Directory-based | Maximum control, per-tenant placement | Directory becomes a critical dependency | Multi-tenant SaaS with uneven tenant sizes |
+Instead of:
 
-## Common interview follow-ups
+```
+One huge database
 
-**Q: How do you pick a shard key for a multi-tenant SaaS product?**
-Shard by `tenant_id` so each tenant's data lives on one shard, making every tenant query single-shard; watch for a small number of huge "whale" tenants that overload one shard, which usually needs a directory-based override to isolate them onto dedicated shards.
+10 TB
+```
 
-**Q: What breaks when you need a query that spans shards, like a global leaderboard?**
-You either fan out to every shard and merge results in the application (scatter-gather, higher latency, more failure surface) or maintain a separate denormalized aggregate (a secondary index or a stream-built materialized view) that isn't sharded the same way.
+you create:
 
-**Q: How does resharding happen without downtime?**
-Dual-write or CDC-stream new writes to both old and new shard layouts, backfill historical data in the background, verify consistency, then atomically switch the routing/config map — conceptually identical to the expand-contract pattern used for schema changes.
+```
+Shard 1
 
-**Q: Sharding vs partitioning — what's the actual difference?**
-Sharding distributes data across separate machines/database instances; partitioning (in the single-node sense) subdivides a table within one database instance. They compose: you can partition a table by date *within* each shard that's already split by tenant. See [Database Partitioning](database-partitioning.md).
+3 TB
 
-**Q: What's a hot shard and how do you detect/fix it?**
-A shard receiving disproportionate traffic (e.g., a viral user, monotonically increasing IDs concentrating recent writes) — detect via per-shard QPS/CPU metrics, fix by choosing a better-distributed key, adding a random suffix ("salting") to spread writes, or splitting that shard's range further.
+
+Shard 2
+
+4 TB
+
+
+Shard 3
+
+3 TB
+```
+
+Each shard owns only part of the data.
+
+---
+
+# Sharding Architecture
+
+Typical design:
+
+```
+                 Application
+
+                      |
+                      ↓
+
+                Query Router
+
+                      |
+        --------------------------------
+
+        ↓              ↓              ↓
+
+     Shard 1        Shard 2        Shard 3
+
+     Users          Users          Users
+
+     1-1M           1M-2M          2M-3M
+```
+
+The application usually does not directly know where data lives.
+
+A router decides:
+
+```
+Which shard owns this data?
+```
+
+---
+
+# Sharding vs Replication
+
+They solve different problems.
+
+| Feature | Replication | Sharding |
+|-|-|-|
+| Copies data? | Yes | No |
+| Improves reads? | Yes | Sometimes |
+| Improves writes? | No | Yes |
+| Increases storage capacity? | No | Yes |
+| Multiple machines? | Yes | Yes |
+
+Example:
+
+Replication:
+
+```
+Same users table
+
+Primary
+Replica
+Replica
+```
+
+Sharding:
+
+```
+Shard 1
+
+Users 1-1M
+
+
+Shard 2
+
+Users 1M-2M
+```
+
+---
+
+# Shard Key
+
+The shard key decides where a row is stored.
+
+Example:
+
+Users table:
+
+```
+users
+
+id
+name
+email
+```
+
+Shard key:
+
+```
+user_id
+```
+
+Example:
+
+```
+hash(user_id)
+
+        ↓
+
+Shard number
+```
+
+---
+
+# Choosing a Good Shard Key
+
+Shard key selection is one of the hardest database decisions.
+
+A bad shard key creates production problems.
+
+---
+
+## 1. High Cardinality
+
+Good shard keys have many unique values.
+
+Good:
+
+```
+user_id
+
+10 million unique users
+```
+
+Bad:
+
+```
+country
+
+200 countries
+```
+
+Why?
+
+Because data may become uneven.
+
+Example:
+
+```
+US shard
+
+90% data
+
+
+Other countries
+
+10% data
+```
+
+---
+
+## 2. Even Distribution
+
+A good shard key spreads:
+
+- Data size
+- Requests
+- Writes
+
+Example:
+
+Good:
+
+```
+hash(user_id)
+```
+
+Distribution:
+
+```
+Shard 1: 33%
+
+Shard 2: 34%
+
+Shard 3: 33%
+```
+
+---
+
+Bad:
+
+```
+signup_date
+```
+
+Because:
+
+```
+2026 users
+
+        ↓
+
+Newest shard gets all writes
+```
+
+Result:
+
+```
+Hot shard
+```
+
+---
+
+## 3. Match Query Patterns
+
+Most queries should hit one shard.
+
+Good:
+
+Query:
+
+```sql
+Get orders for customer 123
+```
+
+Shard key:
+
+```
+customer_id
+```
+
+Database knows:
+
+```
+Customer 123
+
+↓
+
+Shard 2
+```
+
+---
+
+Bad:
+
+Query:
+
+```sql
+Find all customers named John
+```
+
+Need:
+
+```
+Shard 1 search
+
++
+
+Shard 2 search
+
++
+
+Shard 3 search
+```
+
+This is called:
+
+```
+Scatter-gather query
+```
+
+---
+
+# Sharding Strategies
+
+There are four common approaches.
+
+---
+
+# 1. Range-Based Sharding
+
+Data is divided by ranges.
+
+Example:
+
+```
+User IDs:
+
+0 - 1,000,000
+
+        ↓
+
+Shard 1
+
+
+1,000,001 - 2,000,000
+
+        ↓
+
+Shard 2
+```
+
+Architecture:
+
+```
+Shard 1
+
+[0 - 1000]
+
+
+Shard 2
+
+[1001 - 2000]
+
+
+Shard 3
+
+[2001 - 3000]
+```
+
+---
+
+## Advantages
+
+Easy to understand.
+
+Range queries are fast.
+
+Example:
+
+```
+Find users 1000-2000
+```
+
+Only one shard.
+
+---
+
+## Disadvantages
+
+Hot shards.
+
+Example:
+
+Auto-increment IDs:
+
+```
+Newest users
+
+1000000
+1000001
+1000002
+```
+
+All writes go to:
+
+```
+Latest shard
+```
+
+---
+
+# 2. Hash-Based Sharding
+
+Use a hash function.
+
+Example:
+
+```
+hash(user_id) % number_of_shards
+```
+
+Example:
+
+```
+hash(100)
+
+↓
+
+Shard 2
+```
+
+---
+
+## Advantages
+
+Data spreads evenly.
+
+Avoids hot ranges.
+
+---
+
+## Disadvantages
+
+Range queries become expensive.
+
+Example:
+
+Find:
+
+```
+Users 1-10000
+```
+
+May require:
+
+```
+Shard 1
+
++
+
+Shard 2
+
++
+
+Shard 3
+```
+
+---
+
+## Resizing Problem
+
+With:
+
+```
+hash(user_id) % 3
+```
+
+If you add another shard:
+
+```
+hash(user_id) % 4
+```
+
+Almost every row changes location.
+
+This causes massive data movement.
+
+---
+
+# 3. Consistent Hashing
+
+Consistent hashing solves the resizing problem.
+
+Instead of:
+
+```
+hash(key) % N
+```
+
+we create a ring.
+
+```
+             0
+
+        Shard A
+
+
+   Shard D       Shard B
+
+
+        Shard C
+```
+
+Both:
+
+- Data keys
+- Shards
+
+are placed on the ring.
+
+A key belongs to the next shard clockwise.
+
+---
+
+Example:
+
+```
+User hash:
+
+500
+
+
+Move clockwise:
+
+↓
+
+Shard B owns it
+```
+
+---
+
+# Adding a New Shard
+
+Normal hashing:
+
+```
+Add shard
+
+↓
+
+Move almost everything
+```
+
+Consistent hashing:
+
+```
+Add shard
+
+↓
+
+Move only nearby keys
+```
+
+Much less data movement.
+
+---
+
+# Virtual Nodes
+
+A single point per shard can create imbalance.
+
+Example:
+
+```
+Shard A
+
+owns huge area
+
+
+Shard B
+
+owns tiny area
+```
+
+Solution:
+
+Virtual nodes.
+
+Instead of:
+
+```
+Shard A = 1 point
+```
+
+Use:
+
+```
+Shard A = 100 virtual points
+```
+
+Benefits:
+
+- Better distribution
+- Easier balancing
+
+Used in systems like:
+
+- Cassandra
+- Dynamo-style databases
+- Distributed caches
+
+---
+
+# 4. Directory-Based Sharding
+
+Instead of calculating:
+
+```
+hash(customer_id)
+```
+
+use a lookup table.
+
+Example:
+
+```
+Customer ID
+
+        ↓
+
+Shard Directory
+
+
+Customer 101 → Shard 1
+
+Customer 202 → Shard 3
+```
+
+---
+
+## Advantages
+
+Very flexible.
+
+You can:
+
+- Move individual customers
+- Isolate large customers
+- Create dedicated shards
+
+Example:
+
+```
+Normal customers
+
+↓
+
+Shared shards
+
+
+Enterprise customer
+
+↓
+
+Dedicated shard
+```
+
+---
+
+## Disadvantages
+
+The directory becomes critical.
+
+Need:
+
+- High availability
+- Fast lookup
+- Backup strategy
+
+---
+
+# Hot Shards
+
+A hot shard happens when one shard receives too much traffic.
+
+Example:
+
+Social network:
+
+Shard key:
+
+```
+celebrity_user_id
+```
+
+One celebrity:
+
+```
+100 million followers
+```
+
+Result:
+
+```
+Shard 5
+
+CPU 100%
+
+Requests overloaded
+```
+
+---
+
+# Detecting Hot Shards
+
+Monitor per shard:
+
+```
+CPU usage
+
+Memory
+
+Disk IO
+
+Queries/sec
+
+Write rate
+
+Latency
+```
+
+Example:
+
+```
+Shard 1:
+
+CPU 40%
+
+
+Shard 2:
+
+CPU 45%
+
+
+Shard 3:
+
+CPU 99%
+```
+
+Shard 3 is hot.
+
+---
+
+# Fixing Hot Shards
+
+Options:
+
+## 1. Better Shard Key
+
+Change:
+
+```
+celebrity_id
+```
+
+to:
+
+```
+user_id
+```
+
+---
+
+## 2. Add Random Suffix (Salting)
+
+Instead of:
+
+```
+celebrity_123
+```
+
+Use:
+
+```
+celebrity_123_1
+
+celebrity_123_2
+
+celebrity_123_3
+```
+
+Spread writes.
+
+---
+
+## 3. Split the Shard
+
+Move part of the data:
+
+Before:
+
+```
+Shard A
+
+All users
+```
+
+After:
+
+```
+Shard A
+
+Users 1-5M
+
+
+Shard B
+
+Users 5M-10M
+```
+
+---
+
+# Resharding
+
+Adding shards is difficult.
+
+Example:
+
+Before:
+
+```
+Shard 1
+
+Users A-M
+
+
+Shard 2
+
+Users N-Z
+```
+
+Need:
+
+```
+Add Shard 3
+```
+
+New:
+
+```
+Shard 1
+
+A-F
+
+
+Shard 3
+
+G-M
+
+
+Shard 2
+
+N-Z
+```
+
+---
+
+# How Resharding Works
+
+Typical process:
+
+## Step 1
+
+Create new shard.
+
+```
+Shard 3
+```
+
+---
+
+## Step 2
+
+Copy existing data.
+
+```
+Old shard
+
+      ↓
+
+New shard
+```
+
+---
+
+## Step 3
+
+Capture new writes.
+
+Options:
+
+- Dual writes
+- Change Data Capture (CDC)
+
+---
+
+## Step 4
+
+Verify data.
+
+Check:
+
+```
+Counts
+
+Checksums
+
+Consistency
+```
+
+---
+
+## Step 5
+
+Switch routing.
+
+Before:
+
+```
+User 500
+
+↓
+
+Shard 1
+```
+
+After:
+
+```
+User 500
+
+↓
+
+Shard 3
+```
+
+---
+
+# Real-World Examples
+
+## Vitess
+
+Used for large MySQL deployments.
+
+Architecture:
+
+```
+Application
+
+      |
+
+VTGate router
+
+      |
+
+MySQL shards
+```
+
+Provides:
+
+- Query routing
+- Online resharding
+- Shard management
+
+---
+
+## MongoDB Sharding
+
+Architecture:
+
+```
+Application
+
+      |
+
+mongos router
+
+      |
+
+----------------
+
+Shard 1
+
+Shard 2
+
+Shard 3
+```
+
+Uses:
+
+- Config servers
+- Chunk migration
+- Automatic balancing
+
+---
+
+## Citus (PostgreSQL)
+
+Distributes PostgreSQL tables.
+
+Example:
+
+```
+Coordinator
+
+      |
+
+Workers
+
+Worker 1
+Worker 2
+Worker 3
+```
+
+Good for:
+
+- Analytics
+- Multi-tenant applications
+
+---
+
+## DynamoDB
+
+AWS hides the shard management.
+
+You choose:
+
+```
+Partition key
+```
+
+AWS decides:
+
+```
+Which storage node
+```
+
+Still:
+
+Bad partition keys create:
+
+```
+Hot partitions
+```
+
+---
+
+# Sharding Strategy Comparison
+
+| Strategy | Advantages | Disadvantages | Best For |
+|-|-|-|-|
+| Range | Simple, fast ranges | Hot shards | Time-based data |
+| Hash | Even distribution | Hard range queries | High-write systems |
+| Consistent Hash | Easy scaling | More complexity | Distributed systems |
+| Directory | Maximum control | Directory dependency | Multi-tenant SaaS |
+
+---
+
+# Common Interview Questions
+
+## Q: How do you choose a shard key?
+
+Answer:
+
+Look for:
+
+1. High cardinality
+2. Even distribution
+3. Query patterns
+4. Avoid hot spots
+
+Example:
+
+For SaaS:
+
+```
+tenant_id
+```
+
+because tenant queries stay on one shard.
+
+---
+
+## Q: What if a query needs data from all shards?
+
+Example:
+
+```
+Global leaderboard
+```
+
+Options:
+
+### Scatter-gather
+
+```
+Query all shards
+
+↓
+
+Merge results
+```
+
+Problem:
+
+- Higher latency
+- More failures
+
+---
+
+### Maintain Aggregates
+
+Create:
+
+```
+Leaderboard table
+
+or
+
+Materialized view
+```
+
+updated through events.
+
+---
+
+## Q: How do you reshard without downtime?
+
+Use:
+
+```
+Copy data
+
++
+
+Capture new writes
+
++
+
+Verify
+
++
+
+Switch routing
+```
+
+Same idea as expand-contract migrations.
+
+---
+
+## Q: Sharding vs partitioning?
+
+Sharding:
+
+```
+Multiple machines
+```
+
+Partitioning:
+
+```
+Multiple pieces inside one database
+```
+
+They can be combined.
+
+Example:
+
+```
+Shard by tenant_id
+
+Partition by created_at
+```
+
+---
+
+## Q: What is a hot shard?
+
+A shard receiving too much:
+
+- Traffic
+- Data
+- Writes
+
+Fix with:
+
+- Better shard key
+- Splitting
+- Salting
+- Dedicated shards
+
+---
+
+# Key Takeaways
+
+Remember:
+
+1. Sharding scales beyond one database machine.
+2. Replication improves reads; sharding improves capacity.
+3. The shard key is the most important decision.
+4. Good shard keys distribute load evenly.
+5. Avoid scatter-gather queries.
+6. Range sharding is simple but can create hot spots.
+7. Hash sharding distributes better but hurts range queries.
+8. Consistent hashing makes scaling easier.
+9. Resharding is a major migration project.
+10. Large systems often combine sharding with partitioning.
 
 ## Related topics
 

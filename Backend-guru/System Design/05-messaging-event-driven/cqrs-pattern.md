@@ -1,105 +1,854 @@
-# CQRS Pattern (Command Query Responsibility Segregation)
+# Caching Strategies
 [← Back to index](../readme.md)
 
-## What it is and why it's asked
+---
 
-CQRS splits a system's model into two: a **write model** that handles commands (things that change state) and a **read model** that handles queries (things that return data), instead of one model doing both. In a normal CRUD app, the same table (and often the same ORM entity) is used to insert an order and to render an order-history page — CQRS says those two jobs have such different shapes and scaling needs that forcing one model to serve both is what makes both jobs harder than they need to be.
+# What are Caching Strategies?
 
-Interviewers bring this up to check whether you reach for CQRS *because the read/write asymmetry actually justifies it* or because it sounds sophisticated — the honest answer for most CRUD services is "we don't need this," and knowing that is the actual signal they're listening for.
+Caching strategies define **how data gets into the cache and how it stays synchronized with the database**.
 
-## Separating the write model from the read model
+Different applications have different requirements:
 
-```
-Traditional (single model):
-  Client --command--> [ Service ] --> [ Table ] <-- [ Service ] <--query-- Client
-                         (same schema, same code path, same database)
+- Some read data much more often than they write.
+- Some require the latest data immediately.
+- Others prioritize speed over absolute consistency.
 
-CQRS:
-  Client --command--> [ Command Handler ] --> [ Write Store ]
-                                                     |
-                                          (events / sync projector)
-                                                     v
-  Client <--query-- [ Query Handler ] <-- [ Read Store(s) : denormalized, query-optimized ]
-```
+A caching strategy determines:
 
-The write side enforces invariants and business rules (can this order actually be placed? is there enough stock?) and is typically normalized, transactional, and optimized for correctness under concurrent writes. The read side is denormalized, often duplicated across multiple purpose-built views, and optimized purely for the query patterns the UI/API actually needs — no joins, no normalization, just "give me this screen's data in one lookup."
+- Who loads data into the cache
+- Who updates the cache
+- What happens on a cache miss
+- How writes are handled
+- How consistency is maintained
 
-Command handlers return an acknowledgment, not query results: `PlaceOrder` returns "accepted, order id o-123," not the fully rendered order. If the caller needs to see the result, it issues a *query* afterward (possibly against a read model that hasn't caught up yet — see below).
+> **Interview takeaway:** "Use a cache" isn't enough. You should know **which caching strategy best fits the application's read/write pattern and consistency requirements.**
 
-## Why CQRS pairs naturally with event sourcing
+---
 
-CQRS doesn't require [event sourcing](event-sourcing.md), but the two solve complementary halves of the same problem, which is why they're almost always mentioned together:
+# Why It Matters
 
-```
-Command --> [ Command Handler ] --appends--> [ Event Store ]  (write side, source of truth)
-                                                     |
-                                         events streamed out (Kafka topic, CDC, outbox)
-                                                     |
-                          +--------------------------+---------------------------+
-                          v                           v                           v
-                 [ Read Model: SQL       [ Read Model: search      [ Read Model: cache
-                   "orders by user" ]      index for full-text ]     for "order status" ]
-```
+Without caching:
 
-The event store is a terrible thing to query directly (see [Event Sourcing](event-sourcing.md)'s note on this), but it's an excellent thing to *project* from — each read model is a **materialized view** built by a projector that subscribes to the event stream and folds events into whatever shape that particular query needs. Adding a new read model (e.g., a new analytics dashboard) means writing a new projector that replays the existing event history from scratch — zero changes to the write side.
+```text
+Application
 
-Without event sourcing, the same pattern still works using ordinary domain events published via the [outbox pattern](outbox-pattern.md): the write DB is the source of truth, but every change also emits an event that projectors consume to update denormalized read tables.
+↓
 
-## Eventual consistency between write and read sides
+Database
 
-This is the cost side of the ledger, and it's the first thing an interviewer will press on. Because projectors consume events asynchronously, there is a window — milliseconds to seconds depending on broker/projector lag — where the read model doesn't yet reflect a write that has already been acknowledged as successful.
+↓
 
-```
-t0: PlaceOrder command succeeds, write store has the order
-t0 + 50ms: OrderPlaced event lands on the projector's topic
-t0 + 80ms: read model updated, order now visible in "my orders" query
-
-Between t0 and t0+80ms: a query for "my orders" may not show the new order.
+Response
 ```
 
-Applications work around this with:
-- **Optimistic UI**: the client already has the data it just submitted (from the command response), so it renders that immediately rather than re-querying the read model.
-- **Read-your-writes routing**: route a user's own immediate follow-up query to the write store (or a synchronously-updated cache) for a short window after their own write, while other users still see eventual consistency.
-- **Versioned reads**: the client can pass "I need to see at least version N" and the query handler waits (briefly, with a timeout) for the read model to catch up.
+Every request hits the database.
 
-## When CQRS is overkill vs. when it earns its complexity
+With caching:
 
-Most systems should not do this. The tell is read/write **shape** asymmetry, not scale alone.
+```text
+Application
 
-- **Overkill**: a typical internal CRUD admin tool, a blog, a settings page — one table, one shape, low volume. Adding command/query separation here is pure ceremony: two schemas, an eventing pipeline, and eventual consistency bugs, in exchange for nothing, because there's no asymmetry to exploit.
-- **Earns it**: a system where writes are high-throughput and simple (e.g., "record a view," "place an order") but reads need rich, varied, denormalized shapes (a seller dashboard, a search index, a recommendations feed, a reporting/BI view) that would require expensive joins or full-table scans against the write schema. Complex reporting needs living alongside high-throughput transactional writes is the canonical CQRS trigger — the write model stays lean and fast, the read models can be shaped, indexed, and even scaled/replicated completely independently of write traffic.
-- Netflix and Uber-scale systems use this shape constantly for exactly this reason: the write path (a stream event, a trip update) is a firehose that must never be slowed down by the needs of any one read use case, so read models for billing, analytics, and live dashboards are built as independent projections off the same stream.
+↓
 
-## Trade-offs summary
+Cache
 
-| | Single (CRUD) model | CQRS |
-|---|---|---|
-| Consistency | Immediate (same transaction) | Eventual between write and read sides |
-| Query flexibility | Limited by the write schema | Read models shaped exactly for each query need |
-| Scaling | Read and write scale together | Read and write scale independently |
-| Complexity | Low — one schema, one code path | Higher — two models, a projection pipeline, staleness handling |
-| Adding a new query pattern | Reshape/join against existing schema | Add a new projector/read model, no write-side change |
-| Best fit | Most CRUD apps | High read/write asymmetry, multiple divergent read shapes, high-throughput writes with heavy reporting needs |
+↓
 
-## Common interview follow-ups
+Database (only when needed)
+```
 
-**Q: Does CQRS require two separate databases?**
-No — the minimal form is two models within the same database (a normalized write schema and a couple of denormalized views/materialized tables), and the full form uses physically separate stores (e.g., Postgres for writes, Elasticsearch for search reads, Redis for a status cache). The separation of *responsibility*, not physical location, is what defines CQRS.
+Benefits include:
 
-**Q: How do you keep multiple read models from drifting out of sync with each other?**
-Each read model independently projects from the same source of truth (event log or outbox stream), so they converge to consistency with the write side on their own timelines — they don't need to be consistent *with each other* at every instant, only eventually consistent with the source. If a projector falls behind or crashes, replaying its consumed stream from the last committed offset rebuilds it correctly.
+- Lower latency
+- Reduced database load
+- Better scalability
+- Lower infrastructure costs
 
-**Q: What happens if a projector has a bug and corrupts a read model?**
-Because the read model is disposable and rebuildable from the event/outbox stream, you fix the projector code and replay the stream from the beginning (or from the last known-good checkpoint) to regenerate a correct read model — the write side and source events are untouched.
+---
 
-**Q: Isn't eventual consistency between write and read confusing for users?**
-It can be, which is why UX design matters as much as backend design here — showing an optimistic "Order placed!" confirmation immediately (using data the client already has) avoids ever showing the user a stale negative result, and reserving "wait for consistency" only for cases where staleness would be actively misleading (e.g., available inventory count).
+# The Five Main Caching Strategies
 
-**Q: How does CQRS relate to microservices with their own databases?**
-It's the same idea at a different scope: [database-per-service](../07-architecture-patterns/microservices-architecture.md) means each service owns its write model, and other services that need that data build their own local read-optimized projections from that service's published events rather than querying its database directly — CQRS applied across service boundaries instead of within one service.
+1. Cache-Aside (Lazy Loading)
+2. Read-Through
+3. Write-Through
+4. Write-Behind (Write-Back)
+5. Refresh-Ahead
 
-**Q: When would you introduce CQRS without event sourcing?**
-When you want the read/write separation and materialized views but don't need (or want the operational cost of) treating the write side's history as the permanent source of truth — the write DB stays a normal current-state table, and a simpler mechanism like the [outbox pattern](outbox-pattern.md) publishes change events to keep read models in sync.
+Each strategy differs mainly in **who manages the cache and when data is loaded or written.**
+
+---
+
+# 1. Cache-Aside (Lazy Loading)
+
+## Idea
+
+The application controls everything.
+
+When reading:
+
+1. Check the cache.
+2. If found, return it.
+3. Otherwise query the database.
+4. Store the result in the cache.
+5. Return the data.
+
+---
+
+## Read Flow
+
+```text
+Client
+
+↓
+
+Application
+
+↓
+
+Cache
+
+│
+
+├── Cache Hit
+
+│       ↓
+
+│    Return Data
+
+│
+
+└── Cache Miss
+
+        ↓
+
+    Database
+
+        ↓
+
+Store in Cache
+
+        ↓
+
+Return Data
+```
+
+---
+
+## Write Flow
+
+```text
+Application
+
+↓
+
+Update Database
+
+↓
+
+Delete Cache Entry
+
+↓
+
+Next Read Reloads Cache
+```
+
+Notice that we **delete** the cache instead of updating it.
+
+---
+
+## Python Example
+
+```python
+def get_user(user_id):
+    value = redis.get(f"user:{user_id}")
+
+    if value:
+        return deserialize(value)
+
+    value = db.query(
+        "SELECT * FROM users WHERE id=%s",
+        user_id
+    )
+
+    redis.set(
+        f"user:{user_id}",
+        serialize(value),
+        ex=300
+    )
+
+    return value
+
+
+def update_user(user_id, fields):
+    db.execute(
+        "UPDATE users SET ... WHERE id=%s",
+        fields,
+        user_id
+    )
+
+    redis.delete(f"user:{user_id}")
+```
+
+---
+
+## Advantages
+
+- Very simple
+- Cache stores only requested data
+- Database remains the source of truth
+- Cache failure only slows the application—it doesn't stop it
+
+---
+
+## Disadvantages
+
+- First request always misses
+- Every service must implement cache-miss logic
+- Cold cache causes higher database traffic
+
+---
+
+## Best For
+
+- Redis
+- Memcached
+- Product catalogs
+- User profiles
+- Social media applications
+
+This is the **most commonly used caching strategy**.
+
+---
+
+# 2. Read-Through
+
+## Idea
+
+The application only communicates with the cache.
+
+If data is missing, the cache automatically loads it from the database.
+
+The application doesn't know whether the data came from the cache or the database.
+
+---
+
+## Read Flow
+
+```text
+Application
+
+↓
+
+Cache
+
+│
+
+├── Hit
+
+│      ↓
+
+│   Return Data
+
+│
+
+└── Miss
+
+        ↓
+
+Cache Loads From Database
+
+        ↓
+
+Store in Cache
+
+        ↓
+
+Return Data
+```
+
+---
+
+## Difference from Cache-Aside
+
+### Cache-Aside
+
+```text
+Application
+
+↓
+
+Cache
+
+↓
+
+Database
+```
+
+Application handles cache misses.
+
+---
+
+### Read-Through
+
+```text
+Application
+
+↓
+
+Cache
+
+↓
+
+Database
+```
+
+The cache itself handles cache misses.
+
+The application code becomes much cleaner.
+
+---
+
+## Advantages
+
+- Centralized cache logic
+- Less duplicated code
+- Easier to maintain
+- Consistent TTL and serialization
+
+---
+
+## Disadvantages
+
+- Requires cache libraries that support automatic loading
+- More tightly coupled to the caching framework
+
+---
+
+## Best For
+
+- Enterprise applications
+- Framework-managed caches
+- Java applications using LoadingCache or Ehcache
+
+---
+
+# 3. Write-Through
+
+## Idea
+
+Every write updates both the cache and the database.
+
+The cache doesn't acknowledge success until the database write also succeeds.
+
+---
+
+## Write Flow
+
+```text
+Application
+
+↓
+
+Cache
+
+↓
+
+Database
+
+↓
+
+Success Returned
+```
+
+Everything stays synchronized.
+
+---
+
+## Advantages
+
+- Cache and database remain consistent
+- Reads are always fresh
+- Simple read path
+
+---
+
+## Disadvantages
+
+Every write must wait for:
+
+- Cache write
+- Database write
+
+Write latency becomes higher.
+
+Also, data that is never read still occupies cache memory.
+
+---
+
+## Best For
+
+- Shopping carts
+- User sessions
+- Authentication data
+- Frequently updated user information
+
+---
+
+# 4. Write-Behind (Write-Back)
+
+## Idea
+
+Writes go only to the cache initially.
+
+The cache immediately returns success.
+
+Later, it writes accumulated changes to the database asynchronously.
+
+---
+
+## Write Flow
+
+```text
+Application
+
+↓
+
+Cache
+
+↓
+
+Immediate Success
+
+↓
+
+Background Worker
+
+↓
+
+Database
+```
+
+---
+
+## Why Use It?
+
+Instead of:
+
+```text
+1000 Database Writes
+```
+
+The cache may combine them into:
+
+```text
+10 Batch Writes
+```
+
+This dramatically improves write performance.
+
+---
+
+## Advantages
+
+- Extremely fast writes
+- High throughput
+- Database receives efficient batch updates
+
+---
+
+## Disadvantages
+
+If the cache crashes before flushing:
+
+```text
+Cached Writes
+
+↓
+
+Lost
+```
+
+Potential data loss.
+
+To reduce this risk:
+
+- Redis AOF
+- Replication
+- Persistent storage
+
+are commonly used.
+
+---
+
+## Best For
+
+- Analytics
+- Metrics
+- View counters
+- Logging
+- Telemetry
+
+Where losing a few seconds of data is acceptable.
+
+---
+
+# 5. Refresh-Ahead
+
+## Idea
+
+Instead of waiting for expiration,
+
+refresh hot cache entries **before** they expire.
+
+Users never experience a cache miss.
+
+---
+
+## Normal Cache
+
+```text
+TTL Ends
+
+↓
+
+Cache Miss
+
+↓
+
+Database
+
+↓
+
+Cache Updated
+```
+
+---
+
+## Refresh-Ahead
+
+```text
+TTL Almost Finished
+
+↓
+
+Background Refresh
+
+↓
+
+Cache Updated
+
+↓
+
+Users Continue Reading
+```
+
+No interruption.
+
+---
+
+## Advantages
+
+- Eliminates cache misses for popular items
+- Reduces database spikes
+- Great for predictable traffic
+
+---
+
+## Disadvantages
+
+Some entries may be refreshed even if nobody requests them again.
+
+This wastes resources.
+
+It also requires tracking access patterns.
+
+---
+
+## Best For
+
+- Homepages
+- Trending products
+- Dashboards
+- Leaderboards
+- Frequently accessed APIs
+
+---
+
+# Where Can You Cache?
+
+Caching usually exists at multiple layers.
+
+```text
+User
+
+↓
+
+Browser Cache
+
+↓
+
+CDN
+
+↓
+
+API Gateway
+
+↓
+
+Application Cache
+
+↓
+
+Redis / Memcached
+
+↓
+
+Database Cache
+
+↓
+
+Disk
+```
+
+Most large systems use several cache layers simultaneously.
+
+---
+
+# 1. Browser Cache
+
+Examples:
+
+- HTTP Cache
+- Local Storage
+- Service Workers
+- Mobile SQLite
+
+Advantages:
+
+- Zero network latency
+- Very fast
+
+Disadvantages:
+
+- Device-specific
+- Hard to invalidate remotely
+
+---
+
+# 2. CDN Cache
+
+Stores content near users.
+
+Typical content:
+
+- Images
+- CSS
+- JavaScript
+- Videos
+- Cacheable API responses
+
+Benefits:
+
+- Lower latency worldwide
+- Reduced server traffic
+
+---
+
+# 3. Application Cache (In-Memory)
+
+Examples:
+
+- Caffeine
+- Guava
+- Local LRU Cache
+
+Advantages:
+
+- Extremely fast
+- No network call
+
+Disadvantages:
+
+- Every application instance has its own cache
+- Synchronization becomes harder
+
+---
+
+# 4. Shared Cache
+
+Examples:
+
+- Redis
+- Memcached
+
+Advantages:
+
+- Shared across all servers
+- Central cache
+
+Disadvantages:
+
+- Requires network access
+- Introduces another service to manage
+
+---
+
+# 5. Database Cache
+
+Examples include:
+
+- Buffer Pool
+- Query Cache
+- Materialized Views
+- Read Replicas
+
+These reduce expensive disk operations.
+
+---
+
+# Strategy Comparison
+
+| Strategy | Read Speed | Write Speed | Data Freshness | Complexity |
+|-----------|------------|-------------|----------------|------------|
+| Cache-Aside | Fast after warm-up | Normal | Good | Low |
+| Read-Through | Fast after warm-up | Normal | Good | Medium |
+| Write-Through | Very Fast | Slower | Excellent | Medium |
+| Write-Behind | Very Fast | Very Fast | Eventual | High |
+| Refresh-Ahead | Fastest for hot data | Normal | Excellent | High |
+
+---
+
+# Which Strategy Should You Use?
+
+| Scenario | Recommended Strategy |
+|----------|----------------------|
+| Product catalog | Cache-Aside |
+| User profiles | Cache-Aside |
+| Shopping cart | Write-Through |
+| Session storage | Write-Through |
+| Analytics | Write-Behind |
+| View counters | Write-Behind |
+| Trending homepage | Refresh-Ahead |
+| Expensive reports | Refresh-Ahead |
+| Enterprise cache framework | Read-Through |
+
+---
+
+# Common Interview Questions
+
+## Why delete the cache instead of updating it?
+
+Deleting avoids race conditions.
+
+If multiple updates happen simultaneously, directly updating the cache may leave an older value in the cache.
+
+Deleting forces the next request to reload fresh data from the database.
+
+---
+
+## What happens if Redis goes down?
+
+### Cache-Aside
+
+The application falls back to the database.
+
+Performance decreases, but correctness is maintained.
+
+---
+
+### Write-Through
+
+Since writes go through the cache, writes may fail or be blocked if the cache is unavailable.
+
+---
+
+### Write-Behind
+
+Any writes still buffered in the cache may be lost unless the cache uses persistence or replication.
+
+---
+
+## How do you prevent a cache stampede?
+
+Common techniques include:
+
+- Request coalescing (single-flight)
+- Refresh-ahead
+- Jittered TTLs
+- Serving stale data during refresh
+
+---
+
+## When should you use Write-Behind?
+
+Choose it when:
+
+- Write throughput is extremely high
+- Small amounts of data loss are acceptable
+- Batch writes significantly improve performance
+
+Examples include analytics, metrics, and view counters.
+
+---
+
+## Local Cache vs Redis
+
+### Local Cache
+
+Advantages:
+
+- Fastest possible access
+- No network latency
+
+Disadvantages:
+
+- Each server has its own copy
+- Harder to keep synchronized
+
+---
+
+### Shared Redis
+
+Advantages:
+
+- One shared cache across all servers
+- Easier consistency
+
+Disadvantages:
+
+- Network hop required
+- Additional infrastructure
+
+Many production systems combine both:
+
+```text
+Application
+
+↓
+
+Local Cache (L1)
+
+↓
+
+Redis (L2)
+
+↓
+
+Database
+```
+
+This provides ultra-fast local reads while maintaining a shared cache across multiple application instances.
+
+---
+
+# Key Takeaways
+
+- **Cache-Aside** is the most widely used strategy and gives applications full control over cache population.
+- **Read-Through** moves cache-loading logic into the cache layer, simplifying application code.
+- **Write-Through** keeps the cache and database synchronized by writing to both before acknowledging success.
+- **Write-Behind** prioritizes write performance by buffering writes and flushing them asynchronously, at the cost of potential data loss if not made durable.
+- **Refresh-Ahead** refreshes frequently accessed data before it expires, preventing cache misses for hot keys.
+- Most real-world systems combine multiple cache layers—browser, CDN, application cache, Redis, and database cache—to maximize performance while balancing consistency and complexity.
 
 ## Related topics
 - [Event Sourcing](event-sourcing.md)

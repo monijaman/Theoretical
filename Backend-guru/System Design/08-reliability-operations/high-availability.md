@@ -24,13 +24,19 @@ Each additional nine is roughly an order of magnitude more expensive to achieve,
 
 This is why the first thing you should do with an HA requirement in an interview is translate the SLA into a downtime budget, then ask what components of your design could plausibly eat that budget (a single bad deploy at 3 nines can burn a third of the monthly allowance in one incident).
 
-Composite availability matters too: if a request touches five services each individually at 99.9%, and they're in serial dependency (not redundant), the effective availability is roughly 0.999^5 ≈ 99.5% — worse than any individual component. This is why deep synchronous call chains are an availability anti-pattern regardless of how reliable each hop is.
+Composite availability matters too: if a request touches five services each individually at 99.9%, and they're in serial dependency (not redundant), the effective availability is roughly:
+
+```
+0.999^5 ≈ 99.5%
+```
+
+This is why deep synchronous call chains are an availability anti-pattern regardless of how reliable each hop is.
 
 ## Redundancy at every layer
 
 HA is achieved by removing every SPOF, layer by layer:
 
-```
+```text
                       ┌─────────────┐
                       │   DNS / GSLB │  ← multiple providers, health-checked
                       └──────┬──────┘
@@ -42,88 +48,169 @@ HA is achieved by removing every SPOF, layer by layer:
         ┌────────────────────┼────────────────────┐
         │                    │                     │
    ┌─────────┐         ┌─────────┐           ┌─────────┐
-   │ App AZ-A│         │ App AZ-B│           │ App AZ-C│   ← multi-AZ app tier
+   │ App AZ-A│         │ App AZ-B│           │ App AZ-C│
    └────┬────┘         └────┬────┘           └────┬────┘
         │                    │                     │
         └────────────────────┼─────────────────────┘
                              │
                  ┌───────────┴────────────┐
-                 │   DB primary + replicas │  ← replica in each AZ
+                 │ DB primary + replicas  │
                  └────────────────────────┘
 ```
 
 Concretely:
 
-- **DNS**: use a provider with anycast and health-check-based failover (Route 53, Cloudflare); never point at a single IP.
-- **Load balancers**: run at least two, typically active-active behind a floating VIP or anycast; the LB itself must not be a SPOF.
-- **Compute**: spread instances across availability zones (AZs), not just across servers in one rack — a rack, a switch, or a whole AZ can go down.
-- **Data tier**: synchronous or asynchronous replicas across AZs (see `../02-data-storage/database-replication.md`), with automated leader election on primary failure (see `../03-consistency-distributed/leader-election.md`).
-- **Caches, queues, config stores**: same story — a single Redis node or single ZooKeeper node defeats the purpose of everything above it.
-- **Power, network, physical**: outside your control day-to-day, but this is precisely why multi-AZ (and sometimes multi-region) exists — a cloud AZ maps roughly to an independent power/network/cooling domain.
+- **DNS**: use a provider with anycast and health-check-based failover; never point at a single IP.
+- **Load balancers**: run at least two, typically active-active behind a floating VIP or anycast. The LB itself must not be a SPOF.
+- **Compute**: spread instances across availability zones (AZs), not just across servers in one rack.
+- **Data tier**: synchronous or asynchronous replicas across AZs with automated leader election on primary failure.
+- **Caches, queues, config stores**: the same redundancy rules apply. A single Redis or Kafka node defeats everything above it.
+- **Infrastructure**: multi-AZ protects against failures in power, networking, or cooling domains.
 
 ## Active-active vs active-passive
 
-**Active-passive (active-standby):** one instance/region/DC serves all traffic; a standby is kept in sync (via replication) and takes over on failure.
+### Active-passive (active-standby)
 
-```
+One instance or region serves traffic while a standby remains synchronized and waits for failover.
+
+```text
 [Primary: serving] ---replicates---> [Standby: idle, warm]
-        X (fails)
-                                     [Standby: promoted, now serving]
+
+        X fails
+
+                                  [Standby promoted]
 ```
 
-- Simpler to reason about — no need to handle concurrent writes to two masters, no split-brain conflict resolution.
-- Wastes capacity — the standby does nothing under normal operation (unless used for read traffic).
-- Failover introduces a gap: detection time + promotion time + DNS/routing propagation. This is your RTO (see `disaster-recovery.md`).
+Advantages:
 
-**Active-active:** two or more instances/regions serve live traffic simultaneously, typically behind a load balancer or geo-routing layer.
+- Simpler consistency model.
+- Single authoritative writer.
+- Easier operational reasoning.
 
+Trade-offs:
+
+- Idle capacity.
+- Failover takes detection + promotion + routing time.
+
+### Active-active
+
+Multiple instances or regions all serve production traffic.
+
+```text
+         ┌──────── Traffic ────────┐
+         ▼                         ▼
+ [Region A]  <---- sync ---->  [Region B]
 ```
-        ┌──────── requests split by GSLB ────────┐
-        ▼                                        ▼
- [Region A: active]  <---bidirectional sync--->  [Region B: active]
-```
 
-- No idle capacity — every node earns its keep, and failover is just "the LB stops sending traffic to the dead node," which is fast and often invisible to users.
-- Much harder: needs either a shared data layer, conflict-free replication (CRDTs), or careful partitioning of which region owns which data, to avoid write conflicts. See `../03-consistency-distributed/cap-theorem.md` and `../03-consistency-distributed/quorum.md`.
-- Testing and reasoning about split-brain scenarios (both sides think they're primary) is a real engineering cost.
+Advantages:
+
+- Near-zero failover.
+- Better resource utilization.
+- Excellent for stateless services and global traffic.
+
+Trade-offs:
+
+- Concurrent write conflicts.
+- Split-brain risk.
+- Much more complex replication and consistency.
 
 | | Active-Passive | Active-Active |
 |---|---|---|
-| Resource efficiency | Low (idle standby) | High |
-| Failover time | Seconds–minutes (promotion) | Near-zero (just stop routing) |
-| Complexity | Lower | Higher (conflict resolution, data sync) |
-| Good fit | Stateful systems with a natural single writer (most RDBMS) | Stateless services, geo-distributed reads, CRDT-friendly data |
+| Resource utilization | Low | High |
+| Failover | Seconds–minutes | Near-zero |
+| Complexity | Lower | Higher |
+| Best fit | Single-writer systems | Stateless or partitioned systems |
 
-## Avoiding single points of failure — a checklist
+## Avoiding single points of failure
 
-- Is there exactly one of anything that, if killed, stops the request path? (one LB, one NAT gateway, one DB writer instance not behind failover, one message broker node)
-- Does the "redundant" pair actually fail independently? Two app servers in the same rack sharing a power strip are not independent.
-- Do health checks distinguish "process is up" from "process is actually healthy" (can serve real traffic, DB connection working)? A shallow health check masks a SPOF.
-- Is there a bulkhead between tenants/features so one noisy neighbor can't take everything down? See `fault-tolerance.md`.
-- Does the control plane (config service, service discovery, secrets manager) have the same redundancy as the data plane? Teams often HA the app tier and forget that Consul/ZooKeeper/etcd is a single node.
+Ask yourself:
+
+- Is there exactly one instance of anything critical?
+- Are redundant components actually independent (different AZs/racks)?
+- Are health checks testing real readiness rather than just "process exists"?
+- Are critical and non-critical workloads isolated?
+- Is the control plane (configuration, service discovery, secrets) as redundant as the application itself?
+
+A system is only as available as its weakest dependency.
 
 ## Trade-offs
 
-- HA costs money and complexity linearly-ish, but the value of an extra nine is not linear — it depends entirely on the cost of downtime to the business (an e-commerce checkout flow vs. an internal reporting dashboard have very different HA budgets).
-- Over-engineering HA for a low-traffic internal tool wastes engineering time that could go to features; under-engineering it for a payments system is a business risk. Match the target to the actual cost-of-downtime, not to a generic "five nines" aspiration.
-- HA reduces *frequency/duration* of outages from *infrastructure* failure. It does not protect against bad deploys, bugs, or data corruption — that's what `disaster-recovery.md` and `zero-downtime-deployment.md` are for.
+High availability always costs additional infrastructure, operational complexity, and engineering effort.
+
+The right target depends entirely on business value:
+
+- Internal reporting tool → 99.9% may be perfectly acceptable.
+- Consumer SaaS → 99.95–99.99% is common.
+- Financial payments or critical infrastructure → much higher availability targets justify the cost.
+
+Remember that HA only protects against infrastructure failures.
+
+It does **not** protect against:
+
+- Bad deployments
+- Application bugs
+- Data corruption
+- Operator mistakes
+
+Those require deployment strategies, backups, and disaster recovery.
 
 ## Common interview follow-ups
 
-**Q: Your design has a load balancer in front of your app servers — isn't that a SPOF?**
-Yes, unless it's deployed redundantly. In practice, use a managed LB service (already HA internally) or run a pair with a floating VIP (keepalived/VRRP) or DNS-based failover. The point of the question is to check whether you notice the LB itself needs redundancy, not just the tier behind it.
+### Q: Isn't the load balancer itself a SPOF?
 
-**Q: How do you achieve 99.99% availability when your database is a single writer?**
-Accept that the single writer is a bottleneck for *write* availability, and mitigate with fast automated failover to a synchronously-replicated standby (seconds, not minutes), while reads scale out over replicas. True active-active writes need either partitioning by key (each partition has its own single writer) or a consensus-based multi-writer store — call out the CAP trade-off explicitly.
+Yes—unless it is redundant. Managed cloud load balancers already run HA internally. Self-managed deployments require redundant LBs with floating IPs or DNS failover.
 
-**Q: What's the difference between availability and reliability?**
-Availability is "is it up right now" (a point-in-time or aggregate percentage). Reliability is "does it keep working correctly over time without failing" (often measured as MTBF — mean time between failures). A system can be highly available (fails often but recovers in milliseconds) yet not very reliable, or vice versa.
+---
 
-**Q: How would you actually measure whether you're hitting your SLA?**
-Synthetic uptime checks are necessary but not sufficient — they miss partial degradation. Use real user monitoring / SLO burn-rate alerting on error rate and latency percentiles from actual traffic (see `observability-logs-metrics-traces.md`), and define availability as "percentage of requests that succeeded within SLA latency," not just "server responded to ping."
+### Q: How do you achieve 99.99% availability with a single-writer database?
 
-**Q: When would active-active be a bad idea?**
-When the data layer can't reconcile concurrent writes cheaply — e.g., a strongly consistent ledger where double-processing a payment is unacceptable. There, active-passive with fast failover (or active-active with strict partitioning by account/shard) is safer than a CRDT-based merge that risks silent inconsistency.
+Use synchronous replication plus automated failover to a standby within seconds. Reads can scale through replicas, while writes continue using one elected primary.
+
+---
+
+### Q: What's the difference between availability and reliability?
+
+Availability answers:
+
+> Is the system serving requests right now?
+
+Reliability answers:
+
+> How frequently does the system fail over long periods?
+
+A service that crashes every hour but recovers in one second has high availability but poor reliability.
+
+---
+
+### Q: How do you measure availability?
+
+Don't rely only on ping checks.
+
+Measure:
+
+- Request success rate
+- Error rate
+- Latency SLOs
+- Real User Monitoring (RUM)
+- Synthetic monitoring
+
+Availability should be defined as:
+
+> Percentage of requests successfully completed within the agreed latency SLO.
+
+---
+
+### Q: When is active-active the wrong choice?
+
+When conflicting concurrent writes are unacceptable.
+
+Examples:
+
+- Banking ledgers
+- Payment systems
+- Inventory reservation
+
+These systems typically prefer active-passive with fast automated failover or strict partitioning rather than allowing multiple concurrent writers.
 
 ## Related topics
 

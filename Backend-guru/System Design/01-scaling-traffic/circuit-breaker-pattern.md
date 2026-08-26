@@ -1,109 +1,492 @@
-# Circuit Breaker Pattern
-[← Back to index](../readme.md)
+# Load Balancing
 
-## What it is and why it's asked
 
-A circuit breaker wraps a call to a remote dependency and stops making that call entirely once failures cross a threshold, failing fast locally instead of letting every caller keep waiting on (and retrying) a dependency that's already down. The name is a deliberate borrow from electrical circuit breakers: better to trip and cut power to a faulty branch than let it keep drawing current until something burns. Interviewers ask this because it's the single pattern most responsible for stopping **cascading failures** — the scenario where one slow or dead service takes down every service that calls it, which takes down every service that calls *those*, until an entire system is unavailable because of one bad dependency. Netflix's Hystrix (now in maintenance mode but still the canonical reference) was built specifically because this happened to them repeatedly at scale.
+> Load Balancing distributes incoming requests across multiple servers so that no single server becomes overloaded.
+>
+> **Goals**
+>
+> - Improve availability
+> - Increase scalability
+> - Prevent server overload
+> - Handle failures automatically
 
-## The three states
+---
+
+# Why do we need Load Balancing?
+
+Imagine your website has only one server.
 
 ```
-                failure_rate >= threshold
-        ┌─────────────────────────────────────┐
-        │                                      ▼
-   ┌─────────┐                           ┌──────────┐
-   │ CLOSED  │                           │  OPEN    │
-   │ (calls  │                           │ (calls   │
-   │  flow   │                           │  fail    │
-   │ through)│                           │ instantly│
-   └─────────┘                           └──────────┘
-        ▲                                      │
-        │                                      │ timeout window elapses
-        │            success                   ▼
-        │        ┌──────────────┐        ┌──────────┐
-        └────────│ probe succeeds│◄───────│HALF-OPEN │
-                  └──────────────┘        │ (allow a │
-                          ▲                │ few test │
-                          │ failure        │ requests)│
-                          │                └──────────┘
-                          └────────────────────┘
-                             probe fails -> back to OPEN
+          Users
+             │
+             ▼
+        Web Server
 ```
 
-- **Closed**: normal operation. Requests pass through to the real dependency, and the breaker keeps a rolling count of successes/failures.
-- **Open**: the failure threshold was exceeded, so the breaker stops calling the dependency at all — it returns an error (or a fallback) immediately, without even attempting the network call. This is the entire point: a caller waiting on a 30-second timeout from a dead service, repeated across thousands of requests per second, is what actually causes the cascading collapse — cutting that off before it happens is what "fast failure" buys you.
-- **Half-open**: after a cooldown window, the breaker lets a small number of trial requests through to check whether the dependency has recovered. If they succeed, it closes again; if they fail, it reopens and restarts the cooldown clock.
+Everything works...
 
-## Failure threshold and timeout window
+Until:
 
-Two parameters define the sensitivity: a **failure threshold** (e.g. "50% of the last 20 requests failed," or "5 consecutive failures") and a **timeout/cooldown window** (how long to stay open before probing half-open). Both need tuning against real traffic:
+- Traffic suddenly increases
+- CPU reaches 100%
+- Memory fills up
+- Users start getting errors
 
-- Too low a threshold trips the breaker on normal transient blips (one slow GC pause looks like 3 failed requests) and needlessly cuts off a healthy dependency.
-- Too high a threshold means the breaker doesn't trip until real damage is already done — thousands of timed-out requests have already piled up waiting for the slow dependency.
-- Too short a cooldown re-opens the floodgates onto a dependency that hasn't actually recovered, causing it to flap between open and half-open.
-- Too long a cooldown keeps routing traffic to a fallback (or failing fast) well after the dependency is healthy again, costing availability unnecessarily.
+Now imagine adding more servers.
 
-resilience4j (the modern, actively maintained successor to Hystrix in the JVM ecosystem) configures this explicitly:
-
-```yaml
-resilience4j.circuitbreaker:
-  instances:
-    paymentService:
-      failureRateThreshold: 50          # % of calls that must fail to trip
-      slowCallRateThreshold: 80         # calls slower than slowCallDurationThreshold count too
-      slowCallDurationThreshold: 2s
-      slidingWindowSize: 20             # count-based or time-based window
-      waitDurationInOpenState: 30s      # cooldown before half-open probe
-      permittedNumberOfCallsInHalfOpenState: 5
+```
+          Users
+             │
+             ▼
+      Load Balancer
+       /    |     \
+      ▼     ▼      ▼
+  Server1 Server2 Server3
 ```
 
-Note the `slowCallRateThreshold` — a dependency that responds but is unacceptably slow is functionally as bad as one that's down outright, and a well-built breaker trips on latency degradation, not only on hard errors.
+Now requests are shared among all servers.
 
-## Why it prevents cascading failures
+Instead of one server doing all the work, every server handles part of the traffic.
 
-Without a breaker, imagine service A calls service B, and B starts timing out (not erroring — hanging). Every one of A's threads that calls B blocks for the full timeout. If A has a fixed thread pool of 200 and gets 500 requests/sec, its entire pool fills with threads stuck waiting on B within half a second, and A now can't serve *any* request — including ones that don't even touch B. A becomes unavailable because of B, and anything calling A now sees the same thing happen to it, one hop further out. This is exactly the failure mode that took down large chunks of Netflix's stack before Hystrix, and it's why the pattern's stated goal is "fail fast, fail cheap" — an immediate local error costs a few microseconds and one freed thread; a hung call costs a thread for the entire timeout duration, multiplied across every concurrent request.
+---
 
-## Circuit breaker vs retry vs timeout — the ordering matters
+# Benefits
 
-These three combine, and the order they're applied in changes the outcome entirely:
+✅ Better performance
 
-1. **Timeout** bounds how long a single call is allowed to take before giving up — without one, a hung dependency ties up resources indefinitely and nothing downstream (retry, breaker) ever even gets a chance to react.
-2. **Retry** (see [Retry & Exponential Backoff](retry-exponential-backoff.md)) decides whether to try again after a failed/timed-out call — but retrying against an *already-overloaded* dependency is exactly what makes an outage worse, which is why retry policies must respect the breaker's state.
-3. **Circuit breaker** wraps the timeout+retry pair and decides, based on aggregate recent history, whether to even attempt the call at all.
+✅ High availability
 
-The correct composition is: breaker → (if closed) attempt call with a timeout → (if it fails) retry with backoff, up to a small bounded number of attempts → report the outcome back to the breaker. A retry loop that ignores breaker state will keep hammering a dependency the breaker has already identified as dead, defeating the entire purpose.
+✅ Easy horizontal scaling
 
-## Bulkhead pattern
+✅ Automatic failover
 
-A circuit breaker limits *whether* you call a failing dependency; a **bulkhead** limits *how much of your own capacity* any single dependency can consume, named after the watertight compartments in a ship's hull that stop one breached compartment from sinking the whole vessel. Concretely: give calls to service B their own dedicated, small thread pool (or semaphore-limited concurrency) separate from calls to service C, so that even before a breaker trips, B being slow can only exhaust *B's* pool, not the shared pool every other dependency also uses. resilience4j and Hystrix both ship bulkheads (`ThreadPoolBulkhead` / `SemaphoreBulkhead`) alongside circuit breakers precisely because they address different failure surfaces — a breaker reacts to a dependency that's *already* failing; a bulkhead limits the blast radius while it's in the process of failing, before the breaker has even tripped.
+✅ Better resource utilization
 
-## Trade-offs summary
+---
 
-| Aspect | Behavior |
-|---|---|
-| Closed state cost | Near zero — just bookkeeping on success/failure counts |
-| Open state benefit | Instant failure instead of blocking on a dead dependency; frees threads/connections immediately |
-| Open state cost | Legitimate requests fail even if the dependency would have handled some of them fine |
-| Half-open risk | Too aggressive probing re-floods a barely-recovering dependency |
-| Needs a fallback? | Usually yes — returning a cached value, default, or degraded response is far better UX than a bare error |
-| Complements | Timeouts (bound call duration), retries (handle transient blips), bulkheads (limit blast radius) |
+# How Load Balancing Works
 
-## Common interview follow-ups
+1. Client sends a request.
+2. Request reaches the Load Balancer.
+3. Load Balancer chooses the best server.
+4. Server processes the request.
+5. Response goes back to the client.
 
-**Q: Should the circuit breaker live in the client, or can it live centrally (e.g. in a service mesh)?**
-Both exist in practice: library-level breakers (Hystrix, resilience4j) live inside each calling service's process and are simple to reason about per-service, while a service mesh sidecar (Envoy's outlier detection in Istio/Linkerd) centralizes the same logic at the infrastructure layer so every service gets it without embedding a library — the mesh approach trades per-call flexibility for consistency and zero application code.
+```
+Client
+   │
+   ▼
+Load Balancer
+   │
+   ├────────► Server A
+   ├────────► Server B
+   └────────► Server C
+```
 
-**Q: What should a caller do when the breaker is open — just return an error?**
-Prefer a fallback when one exists: a cached/stale value, a sensible default, or a degraded feature (e.g. "recommendations unavailable, showing bestsellers instead") rather than surfacing a raw failure to the end user. Netflix's fallback for a failed personalization call is exactly this — show generic popular content instead of an error page.
+---
 
-**Q: How is a circuit breaker different from a simple health check that removes a backend from a load balancer's rotation?**
-A load balancer's health check operates on the pool of backend *instances* of a service you're routing to (removing one sick replica while others still serve traffic); a circuit breaker operates per calling-service-to-dependency edge and trips even if the dependency's replicas are individually "healthy" but the aggregate call pattern (from this particular caller, for this particular operation) is failing or too slow — they operate at different layers and are typically both present.
+# Layer 4 vs Layer 7
 
-**Q: What metric should the failure-rate window be based on — a fixed count of recent calls, or a time window?**
-A count-based window (e.g. "the last 20 calls") is simple but behaves oddly under very low traffic (one call every few minutes takes a long time to accumulate 20 samples); a time-based window (e.g. "the last 10 seconds") reacts faster under high traffic but can trip on too few samples under low traffic. resilience4j supports both explicitly because production services often need to choose based on their own traffic shape.
+## Layer 4 (Transport Layer)
 
-**Q: How do half-open trial requests avoid causing the same pile-up problem the breaker was designed to prevent?**
-The breaker deliberately permits only a small, fixed number of concurrent trial requests in half-open state (e.g. 5, via `permittedNumberOfCallsInHalfOpenState`) rather than opening the floodgates to full traffic — this bounds the worst case if the dependency is in fact still unhealthy to just those few probe requests, not the full incoming load.
+Works using:
+
+- IP Address
+- TCP
+- UDP
+- Ports
+
+It **does NOT understand HTTP**.
+
+```
+Client
+   │ TCP
+   ▼
+L4 Load Balancer
+   │
+   ▼
+Backend
+```
+
+### Advantages
+
+- Extremely fast
+- Very low latency
+- Supports any TCP/UDP protocol
+
+### Disadvantages
+
+- Cannot route by URL
+- Cannot inspect HTTP headers
+- Cannot terminate TLS intelligently
+
+---
+
+## Layer 7 (Application Layer)
+
+L7 understands HTTP.
+
+It can inspect:
+
+- URL
+- Headers
+- Cookies
+- Host
+- HTTP Method
+
+Example:
+
+```
+/api/*       → API Service
+
+/images/*    → Image Service
+
+/admin/*     → Admin Service
+```
+
+```
+Client
+    │
+    ▼
+L7 Load Balancer
+    │
+ ┌──┴────────────┐
+ ▼               ▼
+API          Static Files
+```
+
+### Advantages
+
+- Smart routing
+- TLS termination
+- Canary deployment
+- Blue-Green deployment
+- Authentication support
+
+### Disadvantages
+
+- More CPU usage
+- Slightly slower than L4
+
+---
+
+# Load Balancing Algorithms
+
+## Round Robin
+
+Requests are distributed one after another.
+
+```
+1 → Server A
+
+2 → Server B
+
+3 → Server C
+
+4 → Server A
+```
+
+Best for:
+
+- Stateless applications
+- Equal-size servers
+
+---
+
+## Weighted Round Robin
+
+Some servers receive more traffic.
+
+```
+Server A (Weight 4)
+
+Server B (Weight 2)
+
+Server C (Weight 1)
+```
+
+Useful when servers have different hardware.
+
+---
+
+## Least Connections
+
+The request goes to the server with the fewest active connections.
+
+```
+A : 90 users
+
+B : 12 users
+
+C : 35 users
+
+Next request → B
+```
+
+Best when request duration varies.
+
+---
+
+## Consistent Hashing
+
+Same user always goes to the same server.
+
+```
+User 101 → Server A
+
+User 102 → Server C
+
+User 101 → Server A
+```
+
+Useful for:
+
+- Cache servers
+- Session affinity
+- Distributed databases
+
+---
+
+## Random / Power of Two Choices
+
+Choose two random servers.
+
+Send request to the less busy one.
+
+Very popular in cloud-scale systems.
+
+---
+
+# Health Checks
+
+A load balancer continuously checks whether servers are healthy.
+
+Healthy:
+
+```
+✓ Accept traffic
+```
+
+Unhealthy:
+
+```
+✗ Remove from rotation
+```
+
+Once healthy again:
+
+```
+✓ Add back automatically
+```
+
+---
+
+# Active vs Passive Health Checks
+
+## Active
+
+Load Balancer periodically calls
+
+```
+GET /health
+```
+
+If the server fails multiple times,
+
+it is removed.
+
+---
+
+## Passive
+
+The Load Balancer watches real user traffic.
+
+Too many:
+
+- 500 errors
+- Timeouts
+
+Server is automatically removed.
+
+---
+
+# Sticky Sessions
+
+Sometimes user data is stored in server memory.
+
+```
+User A
+
+↓
+
+Server 2
+
+↓
+
+Every request
+
+↓
+
+Server 2
+```
+
+Advantages
+
+- Simple
+- No shared session storage
+
+Problems
+
+- Harder scaling
+- Harder deployments
+- Single-server dependency
+
+Better approach:
+
+Store sessions in Redis or use JWT.
+
+---
+
+# Hardware vs Software vs Cloud
+
+## Hardware
+
+Examples
+
+- F5 BIG-IP
+- Citrix ADC
+
+Pros
+
+- Very fast
+
+Cons
+
+- Expensive
+
+---
+
+## Software
+
+Examples
+
+- Nginx
+- HAProxy
+- Envoy
+
+Most companies use these.
+
+---
+
+## Cloud Managed
+
+Examples
+
+AWS
+
+- ALB
+- NLB
+
+Google Cloud Load Balancer
+
+Azure Application Gateway
+
+These automatically scale.
+
+---
+
+# Common Use Cases
+
+- Web applications
+- APIs
+- Microservices
+- Kubernetes
+- CDN
+- Game servers
+- Video streaming
+
+---
+
+# Interview Questions
+
+### Why use a Load Balancer?
+
+To distribute traffic and improve availability.
+
+---
+
+### Difference between ALB and NLB?
+
+| ALB | NLB |
+|------|------|
+| Layer 7 | Layer 4 |
+| HTTP aware | TCP/UDP |
+| Path routing | Faster |
+| Cookies | Static IP |
+
+---
+
+### Why is sticky session discouraged?
+
+Because it makes scaling and deployments more difficult.
+
+Stateless services are preferred.
+
+---
+
+### When should you use Consistent Hashing?
+
+When the same user or cache key should always go to the same server.
+
+Examples:
+
+- Redis
+- Memcached
+- Session routing
+
+---
+
+# Best Practices
+
+✅ Keep services stateless
+
+✅ Enable health checks
+
+✅ Use autoscaling
+
+✅ Monitor latency
+
+✅ Use HTTPS
+
+✅ Enable logging
+
+---
+
+# Common Mistakes
+
+❌ Using sticky sessions everywhere
+
+❌ No health checks
+
+❌ One load balancer only
+
+❌ Ignoring slow servers
+
+❌ Using Round Robin for long-running requests
+
+---
+
+# Key Takeaways
+
+- Load Balancers improve reliability and scalability.
+- L4 is fast but protocol-aware only.
+- L7 is smarter and ideal for web applications.
+- Health checks keep bad servers out of rotation.
+- Stateless services work best with load balancing.
+
+---
+
+ 
 
 ## Related topics
 - [Retry & Exponential Backoff](retry-exponential-backoff.md)

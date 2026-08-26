@@ -3,127 +3,762 @@
 
 ## What it is and why it's asked
 
-A multi-tenant architecture serves multiple independent customers (tenants — companies, teams, or accounts) from a single deployed system, rather than standing up a dedicated copy of the application per customer. Almost every B2B SaaS product is multi-tenant. Interviewers ask about this to see whether you can reason about the actual axis of the decision — how much isolation does each tenant need, and what does that cost in operational and infrastructure terms — rather than treating "multi-tenant" as a single fixed design. The real content of this topic is the spectrum of isolation models and when each one is the right (or legally required) choice.
+A **multi-tenant architecture** allows a single application deployment to serve multiple independent customers (called **tenants**) while keeping each tenant's data isolated. A tenant might be a company, organization, workspace, school, or customer account.
 
-## The isolation spectrum: silo, pool, and bridge
+Nearly every modern B2B SaaS product—Salesforce, Slack, Shopify, GitHub Enterprise, Notion, Jira—uses some form of multi-tenancy.
 
-**Silo model** — each tenant gets a fully separate database (and sometimes a fully separate application deployment):
+Interviewers ask this topic because "multi-tenant" isn't one architecture. The real engineering decision is **how much isolation each tenant needs versus how much operational cost you're willing to pay**. The answer depends on security, compliance, scalability, and customer requirements.
+
+---
+
+# Why Multi-Tenancy Exists
+
+Without multi-tenancy, every customer gets their own deployment.
+
+```text
+Customer A
+    |
+ App A
+    |
+ DB A
+
+Customer B
+    |
+ App B
+    |
+ DB B
+
+Customer C
+    |
+ App C
+    |
+ DB C
 ```
-Tenant A --> [ App instance A ] --> [ Database A ]
-Tenant B --> [ App instance B ] --> [ Database B ]
-Tenant C --> [ App instance C ] --> [ Database C ]
-```
-Maximum isolation: one tenant's data is physically incapable of leaking into another's queries, one tenant's load can't degrade another's performance, and per-tenant backup/restore/deletion is trivial. Cost: N tenants means N databases (and possibly N app deployments) to provision, migrate schema on, monitor, and pay for — this doesn't scale cheaply to thousands of small tenants.
 
-**Pool model** — all tenants share the same database (and often the same tables), distinguished by a `tenant_id` column on every row:
+Easy to isolate.
+
+Very expensive.
+
+Every deployment must be:
+
+- updated
+- monitored
+- backed up
+- scaled
+- patched
+
+Instead, SaaS companies usually run one platform that serves everyone.
+
+```text
+          Customer A
+          Customer B
+          Customer C
+               |
+         Shared Application
+               |
+        Shared Infrastructure
+```
+
+Now the challenge becomes:
+
+> How do we keep Customer A from ever seeing Customer B's data?
+
+That is the entire multi-tenant problem.
+
+---
+
+# The Three Isolation Models
+
+There are three common approaches.
+
+```text
+Strong Isolation
+↑
+|
+|  Silo
+|
+|  Bridge
+|
+|  Pool
+|
+↓
+Lower Cost
+```
+
+---
+
+# 1. Silo Model (Database Per Tenant)
+
+Every tenant receives its own dedicated database.
+
+```text
+Tenant A
+
+App
+ |
+DB A
+
+
+Tenant B
+
+App
+ |
+DB B
+
+
+Tenant C
+
+App
+ |
+DB C
+```
+
+Sometimes enterprise customers even receive dedicated application servers.
+
+### Advantages
+
+- Strongest security
+- Physical isolation
+- No noisy neighbors
+- Easy backup/restore
+- Easy tenant deletion
+- Meets strict compliance requirements
+
+### Disadvantages
+
+- Expensive
+- Thousands of databases to maintain
+- Schema migrations become slower
+- Monitoring becomes harder
+- Infrastructure costs grow linearly
+
+If there are 10,000 tenants:
+
+```text
+10,000 databases
+```
+
+Someone has to migrate all of them.
+
+---
+
+# 2. Pool Model (Shared Database)
+
+All tenants share one database.
+
+Every row contains a tenant identifier.
+
+Example:
+
+```text
+Orders
+
+id
+tenant_id
+customer
+amount
+status
+```
+
+Every query must include the tenant filter.
+
 ```sql
-SELECT * FROM orders WHERE tenant_id = 'acme-corp' AND status = 'pending';
--- every table carries tenant_id; every query MUST filter by it
-```
-```
-Tenant A --+
-Tenant B --+--> [ Shared App ] --> [ Shared Database, every row tagged tenant_id ]
-Tenant C --+
-```
-Cheapest to run — one database to operate, migrate, and scale, and idle tenants cost nothing beyond storage. Cost: isolation is enforced entirely in application code (forget one `WHERE tenant_id = ?` clause and you have a cross-tenant data leak — a routine, high-severity class of SaaS bug), and tenants share the same underlying resources, creating the noisy-neighbor problem below.
-
-**Bridge model (hybrid)** — most tenants share a pooled database, but specific tenants (usually paying for an "enterprise"/"dedicated" tier, or with a compliance requirement) get their own silo:
-```
-Small/mid tenants --> [ Shared App ] --> [ Pooled DB, tenant_id column ]
-Enterprise Tenant X --> [ Dedicated App instance ] --> [ Dedicated DB ]
-```
-This is the model most mature SaaS products converge on: pooled by default for cost efficiency, with an escape hatch to silo specific tenants that need stronger isolation, higher scale, or specific compliance guarantees.
-
-## The noisy-neighbor problem
-
-In a pooled model, tenants share compute, connection pools, and I/O capacity. One tenant running an unusually heavy workload — a huge batch export, a runaway analytics query, a traffic spike from their own successful product launch — can degrade response times for every other tenant sharing that infrastructure, even though those other tenants did nothing wrong.
-
-```
-Shared DB connection pool (size 100)
-Tenant A (huge nightly report query) grabs 80 connections
-Tenant B, C, D... (normal traffic) --> starved for connections --> elevated latency/errors
+SELECT *
+FROM orders
+WHERE tenant_id = 'acme'
+AND status = 'pending';
 ```
 
-Mitigations, in increasing order of isolation (and cost):
-- **Per-tenant rate limiting / quotas** at the API gateway layer, so one tenant can't consume unbounded request capacity.
-- **Resource governance inside shared infrastructure** — per-tenant connection pool caps, query timeouts, and workload classes (e.g., routing heavy analytical queries to a read replica dedicated to reporting, away from the primary serving live traffic).
-- **Tiered isolation** — move consistently heavy or high-value tenants to their own silo (database, or even compute) once they're demonstrably a noisy neighbor or once their contract justifies the cost, which is exactly the bridge model above.
+Architecture:
 
-## Tenant-aware connection routing
-
-In a pool or bridge model, the application needs to resolve "which database/shard does this tenant's data live in" on every request, since not every tenant is guaranteed to be in the same physical location.
-
+```text
+Tenant A
+Tenant B
+Tenant C
+     |
+ Shared App
+     |
+ Shared Database
 ```
-Request arrives with tenant identifier (subdomain, JWT claim, API key)
+
+This is by far the most common SaaS model.
+
+### Advantages
+
+- Lowest cost
+- Easy deployments
+- One schema migration
+- Excellent hardware utilization
+- Easy horizontal scaling
+
+### Disadvantages
+
+- One missing tenant filter leaks data
+- Tenants share CPU
+- Tenants share memory
+- Tenants share connection pools
+- Noisy neighbors become possible
+
+---
+
+# 3. Bridge Model (Hybrid)
+
+Most tenants share infrastructure.
+
+Enterprise customers receive dedicated infrastructure.
+
+```text
+               Small Customers
+                      |
+                Shared Database
+
+Enterprise Customer
         |
-        v
-[ Tenant Routing Layer ] --looks up tenant_id in a tenant->shard/DB registry--> 
-        |
-        v
-Connects to the correct connection pool / database / shard for that tenant
+ Dedicated Database
 ```
 
-This routing layer is typically backed by a small, heavily-cached "tenant registry" (tenant_id → database host, shard, or silo instance) so the lookup is fast and doesn't itself become a bottleneck or single point of failure. This is the same shape of problem as [database sharding](../02-data-storage/database-sharding.md) — tenant ID is simply the shard key — and the same operational concerns (rebalancing, hot shards, routing-layer availability) apply.
+This is how many mature SaaS products operate.
 
-## Row-level security for shared-DB isolation
+Typical pricing:
 
-Relying purely on application code to always add `WHERE tenant_id = ?` is fragile — a forgotten clause in one code path is a cross-tenant data leak, and code review can't catch every case forever. **Row-level security (RLS)**, supported natively by Postgres and other databases, pushes the isolation guarantee down into the database engine itself, so it holds even if application code has a bug:
+```text
+Starter
+Professional
+Business
+Enterprise
+```
+
+Enterprise usually pays for dedicated infrastructure.
+
+---
+
+# Isolation Comparison
+
+```text
+Isolation
+
+Silo
+██████████████
+
+Bridge
+██████████
+
+Pool
+██████
+```
+
+Cost moves in the opposite direction.
+
+```text
+Cost
+
+Pool
+██
+
+Bridge
+██████
+
+Silo
+██████████████
+```
+
+Higher isolation almost always means higher operational cost.
+
+---
+
+# Tenant Identification
+
+Every request must identify the tenant.
+
+Common approaches:
+
+### Subdomain
+
+```text
+acme.example.com
+```
+
+↓
+
+```text
+Tenant = Acme
+```
+
+### JWT Claim
+
+```json
+{
+  "tenantId": "acme"
+}
+```
+
+### API Key
+
+```text
+Authorization:
+Bearer abc123...
+```
+
+↓
+
+Lookup tenant.
+
+### Custom Header
+
+```text
+X-Tenant-ID: acme
+```
+
+Common for internal APIs.
+
+---
+
+# Tenant Routing
+
+Once the tenant is identified, the application decides where the data lives.
+
+```text
+Incoming Request
+        |
+Tenant Resolver
+        |
+Tenant Registry
+        |
++--------+--------+
+|                 |
+Pool DB      Dedicated DB
+```
+
+The registry might contain:
+
+```text
+tenant
+
+↓
+
+database host
+
+↓
+
+schema
+
+↓
+
+region
+
+↓
+
+plan
+```
+
+For example:
+
+```text
+Acme
+
+↓
+
+db-east-1
+
+Enterprise
+
+↓
+
+Dedicated
+```
+
+Whereas:
+
+```text
+SmallCorp
+
+↓
+
+shared-db-03
+
+Starter
+
+↓
+
+Pool
+```
+
+This routing decision happens before executing business logic.
+
+---
+
+# The Noisy Neighbor Problem
+
+In pooled databases, every tenant shares resources.
+
+Imagine:
+
+```text
+Connection Pool
+
+100 Connections
+```
+
+One customer starts generating a huge report.
+
+```text
+Tenant A
+
+Uses 80 connections
+```
+
+Now everyone else competes for only 20.
+
+```text
+Tenant B
+
+Slow
+
+Tenant C
+
+Slow
+
+Tenant D
+
+Timeouts
+```
+
+Nothing is wrong with their applications.
+
+Another tenant consumed the shared resources.
+
+---
+
+# Mitigating Noisy Neighbors
+
+Common strategies include:
+
+- Per-tenant rate limiting
+- Connection pool quotas
+- Query timeouts
+- Read replicas for analytics
+- Background job queues
+- Resource isolation
+- Dedicated databases for heavy tenants
+
+Many SaaS companies automatically promote very large customers into dedicated infrastructure.
+
+---
+
+# Row-Level Security (RLS)
+
+The biggest danger in pooled databases is forgetting the tenant filter.
+
+Suppose a developer writes:
 
 ```sql
-ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY tenant_isolation ON orders
-  USING (tenant_id = current_setting('app.current_tenant')::uuid);
-
--- Application sets this once per connection/request:
-SET app.current_tenant = 'acme-corp-uuid';
-
--- Now ANY query against `orders` — even a bare `SELECT * FROM orders` with no WHERE clause —
--- is transparently filtered to that tenant's rows by the database itself.
+SELECT *
+FROM orders;
 ```
 
-This is a meaningfully stronger guarantee than "our ORM always adds the filter," because it moves enforcement below the application layer, making it the reasonable default recommendation for any pooled-model system that stores real customer data.
+Without filtering by tenant:
 
-## Data residency and compliance driving the silo model
+```text
+Every customer's data
+```
 
-For enterprise customers, especially in regulated industries (healthcare, finance, government) or specific jurisdictions (EU customers under GDPR requiring data to stay in-region), a pooled database often isn't a legally viable option regardless of engineering preference:
+A catastrophic security incident.
 
-- **Data residency** — a customer (or law) may require their data to physically reside in a specific country/region, which means it needs its own database instance provisioned in that region — impossible to satisfy from one shared, single-region database.
-- **Contractual/audit isolation** — enterprise contracts frequently require demonstrable physical data isolation ("no other customer's infrastructure touches ours") for security audits (SOC 2, HIPAA, FedRAMP), which a shared-table pool model can't prove as convincingly as a dedicated silo can, even if row-level security is technically sound.
-- **Independent backup/restore and deletion SLAs** — "delete all our data within 30 days of contract termination" is a straightforward `DROP DATABASE` in a silo, versus a careful, auditable row-level purge across shared tables in a pool.
+PostgreSQL supports **Row-Level Security (RLS)**.
 
-This is why SaaS pricing tiers so often map directly to isolation model: a self-serve/SMB tier runs pooled for cost efficiency, while an "Enterprise" tier's price premium partly funds the dedicated (siloed) infrastructure that data residency and compliance commitments require.
+```sql
+ALTER TABLE orders
+ENABLE ROW LEVEL SECURITY;
 
-## Trade-offs summary
+CREATE POLICY tenant_policy
+ON orders
+USING (
+    tenant_id =
+    current_setting('app.current_tenant')::uuid
+);
+```
 
-| | Silo (DB per tenant) | Pool (shared DB, tenant_id) | Bridge (hybrid) |
-|---|---|---|---|
-| Isolation strength | Strongest (physical) | Weakest (logical, enforced in app/DB policy) | Strong for silo'd tenants, weaker for pooled ones |
-| Cost per tenant | High — dedicated infra per tenant | Low — shared infra, marginal cost per tenant is small | Mixed — low for pooled majority, high for silo'd minority |
-| Noisy-neighbor risk | None (fully isolated) | High without mitigation | Contained to the pooled segment |
-| Operational complexity | High at scale (N databases to manage/migrate) | Low (one database to operate) | Highest — two operational models to maintain simultaneously |
-| Compliance/data residency fit | Best fit | Poor fit without extra controls | Good — route compliance-sensitive tenants to silo |
-| Typical use | Enterprise tier, regulated tenants | Self-serve/SMB tier, large tenant counts | Most mature SaaS products at scale |
+The application sets:
 
-## Common interview follow-ups
+```sql
+SET app.current_tenant = 'tenant-123';
+```
 
-**Q: How do you migrate a tenant from the pool model to a dedicated silo once they outgrow it?**
-Provision a new dedicated database, run a backfill/copy of that tenant's rows (filtered by `tenant_id`) into it, cut the tenant-routing registry over to point at the new database (ideally with a brief dual-write or read-only window to avoid losing in-flight writes), then delete that tenant's rows from the shared pool. This is operationally similar to a live database migration/resharding.
+Now even this query:
 
-**Q: What's the biggest real-world risk in the pool model, and how do you defend against it in depth?**
-Cross-tenant data leakage from a missing or incorrect `tenant_id` filter. Defend in layers: enforce row-level security at the database so a bug in application code can't leak data even if a filter is forgotten, add automated tests that assert every tenant-scoped query includes the tenant filter, and log/alert on any query pattern that touches multiple tenants' data outside of known admin paths.
+```sql
+SELECT *
+FROM orders;
+```
 
-**Q: How do you handle a tenant's noisy nightly batch job in a pooled model without giving them a full silo?**
-Route heavy/batch workloads to a separate read replica or a dedicated query queue with its own resource limits, separate from the connection pool and replica serving live user-facing traffic, so the batch job's resource consumption is contained even though the data still lives in the shared primary.
+returns only that tenant's rows.
 
-**Q: Does multi-tenancy conflict with microservices' database-per-service principle?**
-No — they're orthogonal axes. Database-per-service is about which *service* owns a given table; multi-tenancy is about how *tenants* share (or don't share) the database that a given service owns. A single microservice can itself be pooled, silo'd, or bridged across its tenants independently of how many other services exist.
+The database itself enforces isolation.
 
-**Q: How would you decide, for a new SaaS product, whether to start with silo or pool?**
-Start pooled by default — it's dramatically cheaper to operate with few tenants and no proven need for isolation yet — and add row-level security from day one so the safety net exists before any leak can happen. Move to silo/bridge only when a specific tenant's contract, compliance requirement, or demonstrated noisy-neighbor impact justifies the added operational cost, not preemptively.
+This is much safer than relying solely on application code.
 
-**Q: Can row-level security fully replace the need for a silo model?**
-No — RLS solves logical data-leak risk within a shared database, but it doesn't address noisy-neighbor resource contention (all tenants still share the same compute/IO), nor does it satisfy data-residency requirements that need physically separate infrastructure in a specific region, nor does it give as strong an audit story for compliance certifications that specifically ask about physical isolation.
+---
+
+# Data Residency
+
+Some countries require customer data to remain inside specific geographic regions.
+
+Example:
+
+```text
+EU Customer
+
+↓
+
+EU Database
+
+↓
+
+EU Region
+```
+
+Another customer:
+
+```text
+US Customer
+
+↓
+
+US Database
+
+↓
+
+US Region
+```
+
+This is called **data residency**.
+
+A single shared database often cannot satisfy these legal requirements.
+
+---
+
+# Compliance Requirements
+
+Enterprise customers may require:
+
+- HIPAA
+- SOC 2
+- ISO 27001
+- PCI DSS
+- FedRAMP
+- GDPR
+
+Many of these contracts strongly prefer—or explicitly require—physical data isolation.
+
+Dedicated databases make compliance audits significantly easier.
+
+---
+
+# Tenant Migration
+
+Eventually a tenant may outgrow the shared pool.
+
+Migration usually looks like this:
+
+```text
+Shared Database
+
+↓
+
+Copy Tenant Data
+
+↓
+
+Dedicated Database
+
+↓
+
+Update Tenant Registry
+
+↓
+
+Future Requests
+
+↓
+
+Dedicated Database
+```
+
+The application changes only the routing.
+
+The tenant continues using the same API.
+
+---
+
+# Typical SaaS Evolution
+
+```text
+Startup
+
+↓
+
+Shared Database
+
+↓
+
+Growth
+
+↓
+
+Bridge Model
+
+↓
+
+Enterprise
+
+↓
+
+Dedicated Infrastructure
+```
+
+Most companies evolve naturally through these stages.
+
+---
+
+# Comparison Table
+
+| Feature | Silo | Pool | Bridge |
+|----------|-------|-------|--------|
+| Database | One per tenant | Shared | Mixed |
+| Isolation | Excellent | Logical only | Mixed |
+| Cost | High | Low | Medium |
+| Performance Isolation | Excellent | Shared | Mixed |
+| Compliance | Excellent | Limited | Excellent for dedicated tenants |
+| Operational Complexity | High | Low | High |
+| Scalability | Moderate | Excellent | Excellent |
+| Typical Customers | Enterprise | SMB | Mixed SaaS |
+
+---
+
+# When to Choose Each
+
+## Choose Silo when
+
+- Enterprise customers
+- Government
+- Banking
+- Healthcare
+- Strong compliance
+- Data residency
+- Dedicated performance
+
+## Choose Pool when
+
+- SaaS startup
+- Thousands of small customers
+- Cost efficiency matters
+- Fast product development
+- No strict compliance
+
+## Choose Bridge when
+
+- Large SaaS platform
+- Mix of enterprise and SMB customers
+- Need both cost efficiency and dedicated isolation
+
+This is the architecture most mature SaaS companies eventually adopt.
+
+---
+
+# Best Practices
+
+- Always identify the tenant early in the request lifecycle.
+- Never trust client-provided tenant IDs without authentication.
+- Enforce Row-Level Security (RLS) where supported.
+- Use automated tests to verify tenant isolation.
+- Apply per-tenant rate limits and quotas.
+- Encrypt tenant data at rest and in transit.
+- Log tenant context for auditing.
+- Design for tenant migration from day one.
+- Monitor noisy-neighbor behavior.
+- Keep the tenant-routing layer highly available and heavily cached.
+
+---
+
+# Common Interview Questions
+
+### Q: What's the biggest risk in a pooled database?
+
+Cross-tenant data leakage caused by missing or incorrect tenant filters.
+
+Prevent it with:
+
+- Row-Level Security
+- automated testing
+- code reviews
+- tenant-aware ORM patterns
+- security monitoring
+
+---
+
+### Q: How do you move one tenant to its own database?
+
+1. Create a dedicated database.
+2. Copy that tenant's data.
+3. Update the tenant registry.
+4. Route future requests to the new database.
+5. Remove the tenant's data from the shared pool.
+
+The application API remains unchanged.
+
+---
+
+### Q: Does multi-tenancy conflict with microservices?
+
+No.
+
+They solve different problems.
+
+- **Microservices** decide how services are split by business capability.
+- **Multi-tenancy** decides how customers share each service's infrastructure.
+
+A single microservice can use:
+
+- pooled tenants,
+- dedicated tenants,
+- or a hybrid approach.
+
+---
+
+### Q: Can Row-Level Security replace dedicated databases?
+
+No.
+
+RLS prevents accidental cross-tenant data access, but it cannot solve:
+
+- noisy-neighbor resource contention,
+- data residency requirements,
+- independent backup and restore,
+- physical isolation requirements,
+- certain compliance obligations.
+
+Dedicated databases are still required for many enterprise workloads.
+
+---
+
+### Q: What should a new SaaS product start with?
+
+Usually a **pooled model**.
+
+It offers:
+
+- lower operational cost,
+- faster development,
+- simpler deployments,
+- efficient infrastructure utilization.
+
+Implement Row-Level Security from the beginning, and migrate large or compliance-sensitive tenants to dedicated infrastructure only when a clear business or technical requirement arises.
+
+---
+
+## Rule of Thumb
+
+> **Start pooled, design for migration, and isolate only when a customer, workload, or regulation justifies the additional operational cost.**
 
 ## Related topics
 - [Microservices Architecture](microservices-architecture.md)

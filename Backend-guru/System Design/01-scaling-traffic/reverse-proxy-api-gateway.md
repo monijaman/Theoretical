@@ -1,136 +1,712 @@
 # Reverse Proxy & API Gateway
-[← Back to index](../readme.md)
 
-## Why it matters
+> A **Reverse Proxy** sits between clients and backend servers. It forwards requests, hides internal servers, and handles infrastructure tasks like SSL, routing, and load balancing.
+>
+> An **API Gateway** is a specialized Reverse Proxy designed specifically for APIs. In addition to routing, it handles authentication, rate limiting, API versioning, request transformation, and monitoring.
+>
+> **Think of it this way:**
+>
+> - Reverse Proxy = Traffic Manager
+> - API Gateway = Traffic Manager + Security Guard + API Manager
 
-Every non-trivial system has *something* sitting between the internet and application code. Interviewers ask this to see whether you can draw a clean boundary between "infrastructure concerns that don't belong in application code" (TLS, routing, auth, rate limiting) and business logic — and whether you know that "reverse proxy" and "API gateway" are related but not synonymous. Conflating them in an interview is a minor tell that you've only worked with one of them.
+---
 
-## Reverse proxy vs API gateway — the actual difference
+# Why Do We Need Them?
 
-A **reverse proxy** sits in front of one or more backend servers and forwards client requests to them, hiding the backend topology from the client. Its core job: TLS termination, load balancing, basic routing, compression, caching static responses. Nginx and HAProxy in their classic configuration are reverse proxies. It generally doesn't know about your business domain — it moves bytes and headers.
-
-An **API gateway** is a reverse proxy with opinions about APIs: it understands "an API call," applies per-route policies (auth, quotas, transformation), aggregates or fans out to multiple backend services, and often exposes a developer-facing surface (API keys, usage plans, versioning). It is the reverse proxy pattern specialized for API traffic in a microservices world.
+Without a Reverse Proxy or API Gateway:
 
 ```
-                         ┌────────────────────────────┐
- Client ── HTTPS ──────► │        API Gateway          │
-                         │  - TLS termination           │
-                         │  - authN/authZ (JWT/OAuth)    │
-                         │  - rate limiting per API key  │
-                         │  - request/response transform │
-                         │  - routing by path/version     │
-                         └───────┬─────────┬────────────┘
-                                 │         │
-                      ┌──────────▼──┐   ┌──▼───────────┐
-                      │ Orders svc  │   │  Users svc    │
-                      │ (reverse    │   │  (reverse     │
-                      │  proxy in   │   │   proxy in    │
-                      │  front:     │   │   front too)  │
-                      │  Nginx)     │   │               │
-                      └─────────────┘   └───────────────┘
+             Internet
+
+        ┌──────┼──────┐
+        ▼      ▼      ▼
+    API 1   API 2   API 3
 ```
 
-In practice the line blurs: Envoy and Nginx can be configured to do everything a "gateway" does; Kong is literally Nginx (via OpenResty) plus a plugin/policy layer that turns it into a gateway product. The distinction is more about *role in the architecture* and *feature set exposed to API consumers/developers* than a hard technical line.
+Every backend server is exposed directly to the Internet.
 
-| | Reverse proxy | API gateway |
-|---|---|---|
-| Primary concern | Traffic routing, TLS, LB | API lifecycle: auth, quotas, contracts |
-| Domain awareness | Low (headers/paths) | Higher (per-route policy, per-tenant, versioning) |
-| Typical placement | In front of any service, or between LB and app | Edge of the whole system, often the sole public entry point |
-| Aggregation | Rare | Common (BFF-style fan-out/fan-in) |
-| Examples | Nginx, HAProxy, Envoy (bare) | Kong, AWS API Gateway, Apigee, Envoy + control plane, Zuul |
+Problems:
 
-## Core responsibilities
+- Multiple public IP addresses
+- Every service manages SSL
+- Authentication duplicated everywhere
+- Hard to monitor traffic
+- Difficult to scale
 
-**TLS termination**: decrypt HTTPS at the edge so backend services can speak plain HTTP internally (or re-encrypt for a zero-trust mesh). Centralizes certificate management — one place to rotate certs instead of per-service.
+Instead, place one component in front.
 
-**Routing**: path-based (`/v1/orders` → orders-service), host-based (`api.example.com` vs `admin.example.com`), header-based (canary via `x-canary: true`), or version-based (`/v2/...`).
-
-**Authentication / authorization**: validate JWTs, check API keys, call an external auth service (OAuth2 introspection), enforce mTLS for service-to-service calls — all *before* the request reaches application code, so every backend doesn't reimplement auth.
-
-**Rate limiting & quotas**: per API key, per client, per route — see [Rate Limiting](rate-limiting.md) for algorithms. A gateway is usually where this policy is centrally enforced rather than in each microservice.
-
-**Request/response transformation**: strip internal headers before forwarding upstream, rewrite paths (`/external/v1/x` → `/internal/x`), aggregate responses from multiple services into one payload for a mobile client (classic Backend-for-Frontend), convert protocols (REST-in, gRPC-out).
-
-**Observability**: centralized access logs, request IDs injected for [distributed tracing](../08-reliability-operations/distributed-tracing.md), consistent metrics (latency, error rate) across all services without every team wiring it up individually.
-
-**Caching**: cache idempotent GET responses at the edge to reduce backend load (though a CDN is usually the better place for this — see [CDN Architecture](../04-caching/cdn-architecture.md)).
-
-## Config example (Kong-style declarative)
-
-```yaml
-services:
-  - name: orders-service
-    url: http://orders.internal:8080
-    routes:
-      - name: orders-route
-        paths: ["/api/v1/orders"]
-    plugins:
-      - name: jwt
-      - name: rate-limiting
-        config:
-          minute: 100
-          policy: redis
-      - name: request-transformer
-        config:
-          add:
-            headers: ["x-request-source:gateway"]
+```
+          Internet
+               │
+               ▼
+      Reverse Proxy / Gateway
+               │
+      ┌────────┴────────┐
+      ▼        ▼        ▼
+    API 1    API 2    API 3
 ```
 
-## Nginx as a reverse proxy in front of a gateway (common layering)
+Clients only communicate with the gateway.
 
-```nginx
-server {
-    listen 443 ssl;
-    server_name api.example.com;
+Internal services remain hidden.
 
-    ssl_certificate     /etc/ssl/api.crt;
-    ssl_certificate_key /etc/ssl/api.key;
+---
 
-    location / {
-        proxy_pass http://gateway_upstream;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
+# Reverse Proxy
+
+A Reverse Proxy receives client requests and forwards them to backend servers.
+
+```
+Client
+   │
+   ▼
+Reverse Proxy
+   │
+ ┌─┴───────────┐
+ ▼             ▼
+API 1       API 2
+```
+
+The client never talks directly to the backend.
+
+---
+
+## What Does a Reverse Proxy Do?
+
+A Reverse Proxy commonly provides:
+
+- SSL/TLS Termination
+- Load Balancing
+- Request Routing
+- Compression
+- Caching
+- Security Headers
+- Logging
+
+Its primary responsibility is moving traffic efficiently.
+
+---
+
+# API Gateway
+
+An API Gateway is a Reverse Proxy with additional API-focused features.
+
+```
+                Client
+                   │
+                   ▼
+             API Gateway
+                   │
+      ┌────────────┼────────────┐
+      ▼            ▼            ▼
+  User API    Order API    Payment API
+```
+
+Besides forwarding requests, it understands APIs and applies policies.
+
+---
+
+# Reverse Proxy vs API Gateway
+
+| Feature | Reverse Proxy | API Gateway |
+|----------|---------------|-------------|
+| Request Forwarding | ✅ | ✅ |
+| Load Balancing | ✅ | ✅ |
+| SSL Termination | ✅ | ✅ |
+| Authentication | Basic | Advanced |
+| Rate Limiting | Limited | ✅ |
+| API Keys | ❌ | ✅ |
+| JWT Validation | ❌ | ✅ |
+| API Versioning | Limited | ✅ |
+| Request Transformation | Basic | ✅ |
+| Analytics | Basic | Advanced |
+
+Think of an API Gateway as a **superset** of a Reverse Proxy.
+
+---
+
+# Request Flow
+
+```
+Client
+   │
+ HTTPS
+   │
+   ▼
+API Gateway
+   │
+Authenticate
+   │
+Rate Limit
+   │
+Routing
+   │
+Logging
+   │
+   ▼
+Backend Service
+```
+
+The request passes through multiple layers before reaching your application.
+
+---
+
+# Core Responsibilities
+
+## 1. SSL/TLS Termination
+
+Instead of every service managing certificates:
+
+```
+Internet
+
+↓
+
+HTTPS
+
+↓
+
+Gateway
+
+↓
+
+HTTP
+
+↓
+
+Backend
+```
+
+The gateway decrypts HTTPS traffic.
+
+Backend services can communicate securely inside the private network.
+
+Advantages:
+
+- Easier certificate management
+- Better performance
+- Centralized security
+
+---
+
+# 2. Request Routing
+
+The gateway routes requests to different services.
+
+Example:
+
+```
+/users
+
+↓
+
+User Service
+```
+
+```
+/orders
+
+↓
+
+Order Service
+```
+
+```
+/payments
+
+↓
+
+Payment Service
+```
+
+Clients only need to know one public URL.
+
+---
+
+# 3. Authentication
+
+Instead of every service validating tokens:
+
+```
+Client
+
+↓
+
+JWT Token
+
+↓
+
+Gateway
+
+↓
+
+Validate
+
+↓
+
+Backend
+```
+
+Invalid requests are rejected immediately.
+
+Backend services receive only authenticated requests.
+
+---
+
+# 4. Authorization
+
+Authentication answers:
+
+```
+Who are you?
+```
+
+Authorization answers:
+
+```
+What are you allowed to do?
+```
+
+Example:
+
+```
+Admin
+
+↓
+
+Delete User
+```
+
+Allowed.
+
+```
+Guest
+
+↓
+
+Delete User
+```
+
+Denied.
+
+---
+
+# 5. Rate Limiting
+
+Suppose one client sends:
+
+```
+10,000 Requests
+```
+
+The gateway limits traffic.
+
+```
+100 Requests / Minute
+```
+
+If exceeded:
+
+```
+HTTP 429
+
+Too Many Requests
+```
+
+This protects backend services from overload.
+
+---
+
+# 6. Request Transformation
+
+Sometimes internal APIs differ from public APIs.
+
+Example:
+
+Client sends:
+
+```
+/api/v1/profile
+```
+
+Gateway forwards:
+
+```
+/internal/users/profile
+```
+
+The client never knows the internal structure.
+
+---
+
+# 7. Response Transformation
+
+The gateway can also modify responses.
+
+Example:
+
+Backend:
+
+```
+{
+"id":1,
+"name":"John",
+"password":"..."
 }
 ```
 
-Note the `X-Forwarded-*` headers — this is how the origin server learns the real client IP and protocol despite the proxy hop, and it matters for rate limiting by IP, logging, and redirect generation.
+Gateway removes sensitive fields before sending the response.
 
-## Real systems
+---
 
-- **Nginx**: the default reverse proxy for a huge share of the internet; also does basic load balancing and can be extended (OpenResty/Lua) into gateway territory.
-- **Envoy**: L4/L7 proxy built for dynamic service discovery (xDS API), rich observability, used as the sidecar data plane in service meshes (Istio, AWS App Mesh) and as a standalone edge/gateway (Envoy Gateway, Contour, Ambassador).
-- **Kong**: Nginx/OpenResty core + plugin ecosystem (auth, rate limiting, transformation, logging) — purpose-built as an API gateway product, often the front door for microservices platforms.
-- **AWS API Gateway**: fully managed, integrates directly with Lambda, tight IAM/Cognito auth integration, usage plans and API keys built in, but less flexible/more expensive at very high throughput than self-hosted Envoy/Kong.
-- **Traefik**: reverse proxy with native dynamic service discovery for container platforms (Docker, Kubernetes) — config updates automatically as services register/deregister.
-- **Zuul (Netflix)**: JVM-based gateway, historically paired with Hystrix/Eureka in the Netflix OSS stack; largely superseded by Envoy-based patterns industry-wide but still a good reference architecture to know.
+# 8. API Aggregation
 
-## Trade-offs
+Without a gateway:
 
-- **Centralizing cross-cutting concerns at the gateway** removes duplication across services, but creates a shared dependency — a gateway bug or overload takes down everything behind it. Mitigate with redundancy and keeping gateway logic simple/stateless.
-- **BFF/aggregation at the gateway** simplifies client code but couples the gateway to business semantics, making it harder to keep "pure infrastructure." Many teams push aggregation into a dedicated BFF service instead of the gateway itself.
-- **Self-hosted (Envoy/Kong) vs managed (AWS API Gateway)**: self-hosted gives full control and can be cheaper at scale, but you own the operational burden (scaling it, patching, HA); managed is fast to adopt and ops-free but has vendor lock-in, cold-start/latency quirks (Lambda-backed), and cost that scales linearly with requests.
-- **Gateway as single entry point** simplifies security posture (one place to enforce mTLS/WAF) but if it's also doing heavy per-request logic (auth token verification, schema validation) it can become the latency floor for every request in the system.
+```
+Mobile App
 
-## Common interview follow-ups
+↓
 
-**Q: Where would you put rate limiting — gateway or service?**
-Coarse, per-client/per-API-key limits belong at the gateway so you reject abusive traffic before it costs you any backend compute. Fine-grained, business-specific limits (e.g., "3 password reset attempts per account per hour") often need service-level context and belong closer to the domain logic. Many systems do both.
+User API
 
-**Q: How does the gateway avoid becoming a single point of failure?**
-Run it stateless and horizontally scaled behind a load balancer, keep policy state (rate limit counters, auth tokens) in an external store like Redis rather than in-process, and deploy across multiple AZs/regions. See [High Availability](../08-reliability-operations/high-availability.md).
+↓
 
-**Q: Gateway vs service mesh — aren't they solving the same problem?**
-Overlapping but distinct: a gateway handles north-south traffic (external client → system), a service mesh (Envoy sidecars + control plane like Istio) handles east-west traffic (service-to-service inside the cluster) — mTLS, retries, circuit breaking between internal services. Many architectures use both: gateway at the edge, mesh internally.
+Order API
 
-**Q: How do you version an API without breaking existing clients?**
-URL versioning (`/v1/`, `/v2/`) is simplest to route on at the gateway; header-based versioning (`Accept: application/vnd.api+json;version=2`) is cleaner semantically but harder to route/cache. The gateway is the natural place to run both versions side by side and eventually deprecate the old route.
+↓
 
-**Q: What happens to observability/tracing across the gateway hop?**
-The gateway must propagate (or originate) a trace/correlation ID (e.g., W3C traceparent header) so that downstream services' logs and spans can be stitched together — otherwise you lose the ability to follow one request across the whole call graph. See [Distributed Tracing](../08-reliability-operations/distributed-tracing.md).
+Notification API
+```
+
+Three network requests.
+
+With a gateway:
+
+```
+Mobile App
+
+↓
+
+Gateway
+
+↓
+
+User API
+
+↓
+
+Order API
+
+↓
+
+Notification API
+
+↓
+
+One Response
+```
+
+The gateway combines multiple backend responses into a single response.
+
+This reduces network traffic and improves performance.
+
+---
+
+# 9. Logging & Monitoring
+
+Every request passes through the gateway.
+
+This allows centralized:
+
+- Request Logs
+- Error Logs
+- Response Time
+- Traffic Metrics
+- User Activity
+
+Instead of configuring every service separately.
+
+---
+
+# 10. Caching
+
+Frequently requested data can be cached.
+
+```
+Client
+
+↓
+
+Gateway
+
+↓
+
+Cache
+
+↓
+
+Backend
+```
+
+If data already exists in cache:
+
+```
+Return Cached Response
+```
+
+Backend is never called.
+
+This reduces latency and server load.
+
+---
+
+# Reverse Proxy Examples
+
+## Nginx
+
+- Reverse Proxy
+- Load Balancer
+- SSL Termination
+- Static File Serving
+
+Very popular for websites.
+
+---
+
+## HAProxy
+
+- High-performance proxy
+- Excellent Layer 4 & Layer 7 Load Balancing
+
+Often used in enterprise systems.
+
+---
+
+## Envoy
+
+Modern cloud-native proxy.
+
+Common in:
+
+- Kubernetes
+- Istio
+- Service Mesh
+
+---
+
+# API Gateway Examples
+
+## Kong
+
+Open-source API Gateway.
+
+Features:
+
+- Authentication
+- JWT
+- Rate Limiting
+- Logging
+- Plugins
+
+---
+
+## AWS API Gateway
+
+Fully managed.
+
+Supports:
+
+- REST APIs
+- HTTP APIs
+- WebSockets
+- Lambda Integration
+- IAM Authentication
+
+---
+
+## Apigee
+
+Enterprise API management platform by Google.
+
+Provides:
+
+- Analytics
+- Monetization
+- Security
+- Developer Portal
+
+---
+
+# Reverse Proxy + API Gateway Together
+
+Many production systems use both.
+
+```
+              Internet
+                   │
+                   ▼
+            Reverse Proxy
+             (Nginx)
+                   │
+                   ▼
+            API Gateway
+             (Kong)
+                   │
+         ┌─────────┴─────────┐
+         ▼         ▼         ▼
+      User     Order     Payment
+      Service   Service    Service
+```
+
+The Reverse Proxy handles traffic and SSL.
+
+The API Gateway handles API policies.
+
+---
+
+# Best Practices
+
+✅ Use HTTPS everywhere
+
+✅ Authenticate requests at the gateway
+
+✅ Apply rate limiting
+
+✅ Keep gateway stateless
+
+✅ Log every request
+
+✅ Use health checks
+
+✅ Monitor latency
+
+---
+
+# Common Mistakes
+
+❌ Business logic inside the gateway
+
+❌ No authentication
+
+❌ No rate limiting
+
+❌ Exposing backend services directly
+
+❌ Hardcoding service IP addresses
+
+---
+
+# Real-World Examples
+
+### Netflix
+
+Uses API Gateways to route traffic to thousands of microservices.
+
+---
+
+### Amazon
+
+Public APIs are protected by API Gateways before reaching backend services.
+
+---
+
+### Kubernetes
+
+Common setup:
+
+- Nginx Ingress Controller
+- Kong Gateway
+- Envoy Gateway
+- Traefik
+
+---
+
+# Reverse Proxy vs API Gateway vs Load Balancer
+
+| Feature | Reverse Proxy | API Gateway | Load Balancer |
+|----------|---------------|-------------|---------------|
+| Routes Requests | ✅ | ✅ | ✅ |
+| Load Balancing | ✅ | ✅ | ✅ |
+| SSL Termination | ✅ | ✅ | Sometimes |
+| Authentication | ❌ | ✅ | ❌ |
+| API Keys | ❌ | ✅ | ❌ |
+| Rate Limiting | Limited | ✅ | Limited |
+| API Versioning | ❌ | ✅ | ❌ |
+| Traffic Distribution | Basic | Basic | Primary Purpose |
+
+---
+
+# Interview Questions
+
+## What's the difference between a Reverse Proxy and an API Gateway?
+
+A Reverse Proxy focuses on routing traffic and infrastructure concerns.
+
+An API Gateway includes those capabilities plus API-specific features like authentication, rate limiting, API versioning, request transformation, and analytics.
+
+---
+
+## Why use an API Gateway?
+
+To centralize common API concerns such as:
+
+- Authentication
+- Authorization
+- Rate Limiting
+- Logging
+- Routing
+- Monitoring
+
+This keeps backend services simpler.
+
+---
+
+## Can Nginx be used as an API Gateway?
+
+Yes.
+
+With additional modules or tools like OpenResty, Nginx can provide many API Gateway features.
+
+However, dedicated gateways such as Kong or AWS API Gateway offer these capabilities out of the box.
+
+---
+
+## Should business logic be implemented inside the API Gateway?
+
+Generally, no.
+
+The gateway should focus on infrastructure concerns.
+
+Business logic belongs in backend services.
+
+---
+
+## How does an API Gateway improve security?
+
+It validates requests before they reach backend services.
+
+Examples include:
+
+- JWT validation
+- API Key verification
+- OAuth authentication
+- Rate Limiting
+- IP filtering
+
+---
+
+# Key Takeaways
+
+- A **Reverse Proxy** sits between clients and backend servers to manage traffic.
+- An **API Gateway** is a specialized Reverse Proxy for APIs with additional capabilities.
+- Reverse Proxies focus on routing, SSL termination, and load balancing.
+- API Gateways add authentication, rate limiting, API versioning, request transformation, and monitoring.
+- Large microservice architectures typically expose only the API Gateway to the public Internet.
+- Keeping business logic out of the gateway makes systems easier to maintain and scale.
+
+---
+ 
 
 ## Related topics
 

@@ -1,96 +1,818 @@
 # PACELC Theorem
+
 [← Back to index](../readme.md)
 
-## What it is and why it's asked
+## What is PACELC?
 
-PACELC (Daniel Abadi, 2010, pronounced "pass-elk") is the fix for the biggest gap in CAP: **CAP only describes behavior during a network partition, but partitions are rare and brief — most of a distributed system's life is spent in normal operation, and there's still a trade-off to make even then.**
+PACELC extends the CAP theorem.
 
-PACELC states:
-
-> **P**artition: if there **is** a Partition, trade off **A**vailability vs **C**onsistency (this part is exactly CAP).
-> **E**lse (normal operation, no partition): trade off **L**atency vs **C**onsistency.
-
-An interviewer bringing this up is testing whether you understand that consistency has a *cost in latency* even when everything is healthy — replicating a write to a quorum of nodes before acknowledging it is slower than acknowledging locally and replicating asynchronously, partition or not. CAP alone lets candidates believe "no partition → free lunch, get C and A both." PACELC removes that illusion.
-
-## The four-letter classification
-
-Every system gets a two-part label:
+CAP explains what happens:
 
 ```
-                 ┌─── during Partition ───┐   ┌─── Else (normal ops) ───┐
-                 │   Availability / Consistency │  Latency / Consistency │
-System           │         (A or C)              │        (L or C)        │
-─────────────────┼───────────────────────────────┼────────────────────────┤
-DynamoDB         │              PA                │           EL          │
-Cassandra        │              PA                │           EL          │
-MongoDB (default)│              PC                │           EC          │
-ZooKeeper        │              PC                │           EC          │
-etcd / Raft KV   │              PC                │           EC          │
-Spanner          │              PC                │           EC*         │
-Riak (tunable)   │        PA (default) or PC       │       EL or EC        │
-```
-*Spanner is PC/EC but engineers extremely tight latency bounds via TrueTime, so the "cost" of EC is much smaller in practice than a naive Paxos-over-WAN system.
-
-So you get one of four combinations: **PC/EC**, **PC/EL** (rare/inconsistent design), **PA/EC** (rare), and **PA/EL**. In practice almost everything clusters into **PA/EL** (Dynamo-style) or **PC/EC** (consensus-store style) because the two choices tend to be philosophically coupled: if you've already decided to sacrifice consistency for availability under partition, you'll usually also sacrifice consistency for latency day-to-day, and vice versa.
-
-## Why the "Else" trade-off exists even with a perfect network
-
-Even with zero packet loss, replicating a write to multiple nodes before confirming it to the client takes time — speed of light and processing time across a WAN or even across AZs is not zero.
-
-```
-Strong consistency (EC) — synchronous replication:
-
-  Client → Leader ──write──▶ Replica 1  (ack)
-                   ──write──▶ Replica 2  (ack)
-                   ◀── wait for quorum acks ──
-           Client ◀── success (slower, but replicas match)
-
-Low latency (EL) — asynchronous replication:
-
-  Client → Leader ──write──▶ ack immediately
-                   Leader ──(async, later)──▶ Replica 1
-                                          ──▶ Replica 2
-           Client ◀── success (fast, but replicas lag)
+During a network partition
 ```
 
-There is no partition in either diagram — this is everyday, healthy operation. The EC path pays a latency tax (round trip to a quorum, or to every replica) purely to guarantee the read-after-write is consistent everywhere. The EL path skips that tax and accepts a replication lag window during which a read from a lagging replica returns stale data.
+But most of the time:
 
-## Classifying real systems
+```
+The network works normally
+```
 
-**DynamoDB — PA/EL.** Under partition, it stays available on both sides (sloppy quorums, hinted handoff). Under normal operation, its default read is eventually consistent and fast; you can opt into "strongly consistent reads" per request, which pushes that specific read toward EC at a latency cost — this per-request tunability is exactly why Abadi's model is useful, since it lets you describe a *knob* rather than a fixed label.
+Even then, distributed systems still face a trade-off.
 
-**Cassandra — PA/EL by default, but tunable.** `CL=ONE` for both read and write is PA/EL: fastest, most available, weakest guarantee. `CL=QUORUM` for both moves it toward PC/EC-like behavior: a partition that leaves fewer than quorum nodes reachable will start rejecting requests (more C, less A), and normal-operation requests wait for a quorum of replicas to respond (more C, less L).
+PACELC says:
 
-**MongoDB — PC/EC leaning.** Single primary per replica set; by default reads and writes go through the primary, and `majority` write concern means the client waits for replication to a majority of the set before ack (EC = pays latency for consistency). If a partition strands the primary from a majority, the replica set cannot elect/retain a writable primary — it becomes unavailable rather than split-brained (PC).
+```
+If Partition happens:
 
-**ZooKeeper / etcd — PC/EC.** Every write goes through the Raft/ZAB leader and must be replicated to a quorum before it's committed (EC — latency cost even absent a partition). During a partition, the minority side has no quorum and rejects requests (PC).
+Choose between:
 
-**Spanner — PC/EC, but latency-optimized.** Commits use Paxos across replicas (EC cost paid on every write) plus TrueTime `commit wait` to guarantee external consistency of timestamps. Google spent enormous engineering effort (atomic clocks + GPS in every datacenter) specifically to shrink the EC latency tax that a naive implementation would otherwise pay.
+Availability (A)
 
-## Trade-offs summary
+or
 
-| Choice | Optimizes for | Cost | Typical use case |
-|---|---|---|---|
-| PC/EC | Correctness always | Higher latency, occasional unavailability | Coordination services, financial ledgers, config stores, inventory |
-| PA/EL | Speed and uptime always | Stale reads, conflict resolution needed | Feeds, caches, presence, shopping carts, analytics counters |
-| Tunable (Cassandra/Riak/Dynamo) | Per-operation choice | Operational complexity of choosing consistency level per call | Systems with mixed requirements (e.g., strong read for checkout, eventual for recommendations) |
+Consistency (C)
 
-## Common interview follow-ups
 
-**Q: Why doesn't CAP alone cover this?**
-CAP is defined strictly in terms of behavior *during a partition* — it's silent about the far more common case where the network is fine but you still must choose between waiting for replicas (consistent, slow) or not (fast, stale). PACELC adds that second axis explicitly.
 
-**Q: Can a system be PC/EL — strongly consistent under partition but low-latency normally?**
-In theory a system could serve fast local reads normally and only enforce strict quorum behavior when it detects a partition, but this is uncommon because detecting "no partition" reliably is itself hard (you can't distinguish a slow node from a partitioned one without a timeout, which reintroduces latency). Most real systems keep the same replication discipline in both states for simplicity.
+Else (normal operation):
 
-**Q: How would you use PACELC to justify a technology choice in a design interview?**
-State the business requirement first (e.g., "an inventory decrement must never oversell"), then map it to PC/EC (accept latency and rare unavailability to avoid overselling), and name a real system (etcd, ZooKeeper-backed lock, or Spanner) rather than staying abstract — that's the signal of someone who's operated these systems, not just read about them.
+Choose between:
 
-**Q: Where does client-perceived latency actually come from in an EC system?**
-Primarily from waiting for acknowledgment from a quorum (or all) replicas before returning success to the client, plus cross-region network RTT if replicas are geographically distributed, plus consensus protocol overhead (leader election, log replication rounds) if using Raft/Paxos.
+Latency (L)
 
-**Q: Is PA/EL "worse" than PC/EC?**
-No — it's a different point on the same trade-off curve, correct for a different problem. A "like" button that occasionally shows a stale count for a second is a non-issue; a payment ledger with the same staleness is a incident. The theorem doesn't rank the choices, it forces you to make the choice explicit.
+or
+
+Consistency (C)
+```
+
+---
+
+# CAP vs PACELC
+
+CAP:
+
+```
+During failure:
+
+Partition
+
+    |
+    |
+Choose:
+
+Availability
+
+or
+
+Consistency
+```
+
+---
+
+PACELC:
+
+```
+Partition happens?
+
+        |
+        |
+       Yes
+
+        |
+        v
+
+Availability vs Consistency
+
+
+
+No partition?
+
+        |
+        v
+
+Latency vs Consistency
+```
+
+---
+
+# Why PACELC Matters
+
+Many people think:
+
+```
+No network failure
+
+=
+
+Get consistency and availability for free
+```
+
+Wrong.
+
+Even when the system is healthy, consistency costs time.
+
+Example:
+
+A user updates their profile.
+
+Data exists on:
+
+```
+Server A
+
+Server B
+
+Server C
+```
+
+---
+
+## Strong Consistency
+
+Wait until replicas confirm.
+
+```
+Client
+
+ |
+ v
+
+Server A
+
+ |
+ +----> Server B
+
+ |
+ +----> Server C
+
+
+Wait for replies
+
+
+Return success
+```
+
+Result:
+
+```
+Correct data
+
+Higher latency
+```
+
+---
+
+## Low Latency
+
+Return immediately.
+
+```
+Client
+
+ |
+ v
+
+Server A
+
+ |
+ v
+
+Success
+
+
+Later:
+
+Server B updated
+
+Server C updated
+```
+
+Result:
+
+```
+Fast response
+
+Temporary stale data
+```
+
+---
+
+# PACELC Naming
+
+Every system gets two labels:
+
+Example:
+
+```
+DynamoDB:
+
+PA / EL
+```
+
+Meaning:
+
+```
+Partition:
+
+Availability
+
+
+Else:
+
+Latency
+```
+
+---
+
+Another example:
+
+```
+etcd:
+
+PC / EC
+```
+
+Meaning:
+
+```
+Partition:
+
+Consistency
+
+
+Else:
+
+Consistency
+```
+
+---
+
+# Four Possible Choices
+
+```
+PC / EC
+
+Strong consistency always
+
+
+PA / EL
+
+Fast and available always
+
+
+PC / EL
+
+Rare
+
+
+PA / EC
+
+Rare
+```
+
+Most real systems are:
+
+```
+PA/EL
+
+or
+
+PC/EC
+```
+
+---
+
+# PA/EL Systems
+
+PA/EL means:
+
+During partition:
+
+```
+Prefer Availability
+```
+
+Normal operation:
+
+```
+Prefer Low Latency
+```
+
+---
+
+Examples:
+
+- DynamoDB
+- Cassandra
+- Riak
+
+---
+
+# DynamoDB
+
+DynamoDB chooses:
+
+```
+PA / EL
+```
+
+During partition:
+
+Both sides can continue serving requests.
+
+Example:
+
+```
+Region A
+
+User update:
+
+name = John
+
+
+Region B
+
+User update:
+
+name = Jack
+```
+
+Later:
+
+```
+Conflict resolution
+```
+
+---
+
+Normal operation:
+
+Default reads are:
+
+```
+Eventually consistent
+```
+
+Meaning:
+
+```
+Fast response
+
+Possible stale data
+```
+
+---
+
+DynamoDB can also provide:
+
+```
+Strongly consistent reads
+```
+
+but with higher latency.
+
+---
+
+# Cassandra
+
+Default behavior:
+
+```
+PA / EL
+```
+
+Example:
+
+Fast mode:
+
+```
+Consistency Level = ONE
+```
+
+Meaning:
+
+One replica response is enough.
+
+---
+
+Stronger mode:
+
+```
+Consistency Level = QUORUM
+```
+
+Meaning:
+
+Need majority replicas.
+
+Benefits:
+
+```
+More consistency
+```
+
+Cost:
+
+```
+Higher latency
+
+Less availability
+```
+
+---
+
+# PC/EC Systems
+
+PC/EC means:
+
+During partition:
+
+```
+Prefer consistency
+```
+
+Normal operation:
+
+```
+Prefer consistency
+```
+
+---
+
+Examples:
+
+- etcd
+- ZooKeeper
+- Spanner
+- MongoDB (default behavior)
+
+---
+
+# etcd / Raft
+
+Writes:
+
+```
+Client
+
+ |
+ v
+
+Leader
+
+ |
+ +----> Follower
+
+ |
+ +----> Follower
+```
+
+Commit happens after:
+
+```
+Majority acknowledgement
+```
+
+---
+
+During partition:
+
+Example:
+
+```
+5 nodes
+
+
+3 nodes
+
+Majority
+
+
+2 nodes
+
+Minority
+```
+
+Majority continues.
+
+Minority stops accepting writes.
+
+---
+
+Result:
+
+```
+No conflicting data
+
+Possible downtime
+```
+
+---
+
+# ZooKeeper
+
+ZooKeeper uses:
+
+```
+ZAB consensus protocol
+```
+
+It requires quorum.
+
+During partition:
+
+```
+Minority side
+
+Cannot make decisions
+```
+
+This protects consistency.
+
+---
+
+# MongoDB
+
+MongoDB uses:
+
+```
+Single primary model
+```
+
+Writes go to:
+
+```
+Primary node
+```
+
+If primary loses majority:
+
+```
+No writable primary
+```
+
+System prefers:
+
+```
+Consistency
+
+over availability
+```
+
+---
+
+# Spanner
+
+Google Spanner chooses:
+
+```
+PC / EC
+```
+
+It uses:
+
+```
+Paxos replication
+```
+
+for consistency.
+
+Every write pays:
+
+```
+Replication latency
+```
+
+but gets:
+
+```
+Strong global consistency
+```
+
+---
+
+# PACELC Comparison
+
+| System | Partition Choice | Normal Choice | Category |
+|-|-|-|-|
+| DynamoDB | Availability | Latency | PA/EL |
+| Cassandra | Availability | Latency | PA/EL |
+| MongoDB | Consistency | Consistency | PC/EC |
+| ZooKeeper | Consistency | Consistency | PC/EC |
+| etcd | Consistency | Consistency | PC/EC |
+| Spanner | Consistency | Consistency | PC/EC |
+
+---
+
+# Trade-off Summary
+
+| Choice | Advantages | Disadvantages | Examples |
+|-|-|-|-|
+| PC/EC | Strong correctness | Higher latency, possible downtime | etcd, Spanner |
+| PA/EL | Fast and highly available | Stale data, conflicts | DynamoDB, Cassandra |
+| Tunable | Choose per operation | More complexity | Cassandra, DynamoDB |
+
+---
+
+# Choosing Based on Business Requirements
+
+## Payment System
+
+Need:
+
+```
+Correct balance
+```
+
+Example:
+
+```
+Account balance = $100
+```
+
+Cannot allow:
+
+```
+Two withdrawals at the same time
+```
+
+Choose:
+
+```
+PC/EC
+```
+
+---
+
+## Social Media Like Counter
+
+Example:
+
+```
+Likes = 10,001
+```
+
+A temporary wrong number is acceptable.
+
+Choose:
+
+```
+PA/EL
+```
+
+---
+
+## Inventory System
+
+Need:
+
+```
+Never oversell products
+```
+
+Choose:
+
+```
+Consistency
+```
+
+because:
+
+```
+Wrong inventory
+
+is worse than
+
+temporary unavailability
+```
+
+---
+
+# Common Interview Questions
+
+## Q: Why is CAP not enough?
+
+CAP only talks about:
+
+```
+When partition happens
+```
+
+PACELC adds:
+
+```
+Normal operation trade-off
+```
+
+because consistency also increases latency.
+
+---
+
+## Q: Is PA/EL worse than PC/EC?
+
+No.
+
+They solve different problems.
+
+Example:
+
+Social feed:
+
+```
+PA/EL is good
+```
+
+because speed matters.
+
+Bank balance:
+
+```
+PC/EC is good
+```
+
+because correctness matters.
+
+---
+
+## Q: Can you have both low latency and strong consistency?
+
+Only within limits.
+
+Strong consistency requires:
+
+```
+Waiting for coordination
+```
+
+Coordination creates:
+
+```
+Latency
+```
+
+---
+
+## Q: How does PACELC help in system design interviews?
+
+Start with requirements.
+
+Example:
+
+```
+Need correct money transfers
+```
+
+Choose:
+
+```
+PC/EC
+```
+
+Example:
+
+```
+Need fast social feed updates
+```
+
+Choose:
+
+```
+PA/EL
+```
+
+---
+
+# Simple Rule To Remember
+
+```
+Money / Inventory / Locks
+        |
+        v
+Consistency
+
+
+Feeds / Likes / Analytics
+        |
+        v
+Availability
+
+
+Partition:
+
+A vs C
+
+
+Normal:
+
+Latency vs C
+```
+
+---
+
+# Interview Answer
+
+> "CAP explains the consistency versus availability trade-off during network partitions, but PACELC extends this by adding the normal-operation trade-off between latency and consistency. Strongly consistent systems like etcd and Spanner choose PC/EC, accepting latency and occasional unavailability. Systems like DynamoDB and Cassandra choose PA/EL, prioritizing availability and low latency while accepting eventual consistency."
 
 ## Related topics
 - [CAP Theorem](cap-theorem.md) — the partition-only half of this trade-off

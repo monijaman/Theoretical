@@ -1,123 +1,898 @@
 # Event Sourcing
 [← Back to index](../readme.md)
 
-## What it is and why it's asked
+---
 
-Traditional (CRUD) persistence stores the *current* state of an entity and throws the history away: `UPDATE accounts SET balance = 80 WHERE id = 1` overwrites whatever the balance used to be. Event sourcing inverts this: instead of storing current state, you store the **append-only sequence of events** that caused the state to change, and current state is a *derived*, rebuildable projection of that log — never the primary source of truth.
+# Event Sourcing
+
+## What is Event Sourcing?
+
+Traditional applications store the **current state** of an object.
+
+Event Sourcing stores **every change (event)** that happened to that object.
+
+The current state is **reconstructed by replaying those events**.
+
+Instead of storing:
 
 ```
-CRUD:            row: { id: 1, balance: 80 }              <- previous value gone
-Event-sourced:   [ AccountOpened{100} , Withdrew{20} ]     <- balance=80 is derived by replay
+Account
+-------
+Balance = 80
 ```
 
-Interviewers reach for this topic to see whether you understand the difference between *storing facts* and *storing state*, and whether you can reason about the very real costs (replay performance, schema evolution, operational unfamiliarity) that come with the audit-trail and time-travel benefits everyone quotes from blog posts.
+You store:
 
-## Rebuilding state by replaying events
+```
+AccountOpened ($100)
 
-The event store never mutates a record — it only appends. To get "the current balance," you load every event for that entity, in order, and fold them into state:
+↓
+
+MoneyWithdrawn ($20)
+```
+
+The balance is calculated by replaying those events:
+
+```
+$100 - $20 = $80
+```
+
+The event log becomes the **source of truth**.
+
+---
+
+## Why Interviewers Ask This
+
+Interviewers want to know whether you understand:
+
+- Events vs current state
+- Append-only storage
+- Audit history
+- Replaying state
+- Snapshotting
+- Schema evolution
+- CQRS integration
+
+It's commonly discussed together with:
+
+- CQRS
+- Event-Driven Architecture
+- Kafka
+- Distributed Systems
+
+---
+
+# Traditional CRUD vs Event Sourcing
+
+## Traditional CRUD
+
+```
+UPDATE Account
+
+Balance
+
+100
+
+↓
+
+80
+```
+
+The previous value disappears.
+
+Current database:
+
+```
+Account
+
+Balance = 80
+```
+
+History is lost unless you build a separate audit system.
+
+---
+
+## Event Sourcing
+
+Every change is stored forever.
+
+```
+AccountOpened ($100)
+
+↓
+
+MoneyWithdrawn ($20)
+
+↓
+
+MoneyDeposited ($30)
+
+↓
+
+MoneyWithdrawn ($10)
+```
+
+Nothing is overwritten.
+
+Current balance is simply:
+
+```
+100
+-20
++30
+-10
+
+=100
+```
+
+History never disappears.
+
+---
+
+# Core Idea
+
+Instead of storing state:
+
+```
+Current State
+```
+
+Store:
+
+```
+State Changes
+```
+
+These changes are called **Events**.
+
+Examples:
+
+- UserRegistered
+- MoneyDeposited
+- OrderPlaced
+- PaymentCompleted
+- ProductCreated
+
+Events represent facts.
+
+They should never change once written.
+
+---
+
+# Rebuilding State (Replay)
+
+To calculate the current state:
+
+1. Load all events.
+2. Replay them in order.
+3. Apply each event.
+
+Example:
+
+```
+Events
+
+↓
+
+AccountOpened ($100)
+
+↓
+
+MoneyWithdrawn ($20)
+
+↓
+
+MoneyDeposited ($50)
+```
+
+Replay:
+
+```
+Balance
+
+0
+
+↓
+
+100
+
+↓
+
+80
+
+↓
+
+130
+```
+
+Current balance:
+
+```
+$130
+```
+
+---
+
+## Example Code
 
 ```python
 def replay(account_id):
-    events = event_store.load(account_id)   # ordered by sequence number
-    state = Account.empty()
+    events = event_store.load(account_id)
+
+    account = Account.empty()
+
     for event in events:
-        state = state.apply(event)           # pure function: (state, event) -> state
-    return state
+        account.apply(event)
 
-# AccountOpened(100) -> Withdrew(20) -> Deposited(30)
-# state: {balance: 0} -> {100} -> {80} -> {110}
+    return account
 ```
 
-This is identical in spirit to Kafka's "a topic is a log you can replay" model discussed in [Message Queues](message-queues.md) — in fact Kafka (with compaction or long retention) is a common physical substrate for an event store, because both are built on the same append-only-log primitive.
+Replay simply applies every event in order.
 
-Replaying *every* event since the beginning of time for a hot entity (e.g., an account with 200,000 transactions) is obviously too slow to do on every read, which is the reason snapshotting exists.
+---
 
-## Snapshots: trading storage for replay speed
+# Event Store
 
-A snapshot is a materialized "state as of event #N" checkpoint, stored alongside the log so replay only has to process events *after* the snapshot:
+Unlike a traditional database,
+
+an Event Store only supports two major operations.
+
+## Append
 
 ```
-Events:    [1][2][3][4][5][6][7][8][9][10][11][12]
-                              ^
-                         snapshot taken at #8: {balance: 340}
-Replay for current state:
-   load snapshot(#8) -> apply events 9,10,11,12 -> done
-   (instead of replaying all 12 from scratch)
+Add new event
 ```
 
-Snapshots are pure optimization — they hold no information the log doesn't already contain, and can always be regenerated by replaying from event #0. A common policy is "snapshot every N events" or "snapshot every T minutes for active aggregates," and to keep the last few snapshots around in case a bug in a newer snapshot's projection logic needs a rollback to an older one.
+Never:
 
-## The event store as a database
+```
+UPDATE
+DELETE
+```
 
-An event store is a specialized database whose two core operations are narrower than a general-purpose DB's: **append events for a stream** (with optimistic concurrency via an expected-version check) and **read events for a stream, in order**. Purpose-built stores (EventStoreDB, Axon Server) or repurposed ones (a Postgres table with `(stream_id, sequence_no, event_type, payload, timestamp)` and a unique constraint on `(stream_id, sequence_no)`, or a Kafka topic partitioned by aggregate ID) all provide the same shape:
+---
+
+## Read
+
+Load all events for an entity.
+
+```
+Account 1
+
+↓
+
+Event1
+
+↓
+
+Event2
+
+↓
+
+Event3
+```
+
+Then replay them.
+
+---
+
+# Example Event Store Table
 
 ```sql
 CREATE TABLE events (
-  stream_id     UUID,
-  sequence_no   BIGINT,
-  event_type    TEXT,
-  payload       JSONB,
-  occurred_at   TIMESTAMPTZ,
-  PRIMARY KEY (stream_id, sequence_no)   -- also enforces optimistic concurrency
+
+    stream_id UUID,
+
+    sequence_no BIGINT,
+
+    event_type TEXT,
+
+    payload JSONB,
+
+    occurred_at TIMESTAMPTZ,
+
+    PRIMARY KEY(stream_id, sequence_no)
+
 );
 ```
 
-The `PRIMARY KEY` doubles as the concurrency check: a writer reads the current max `sequence_no` for a stream, and its `INSERT` at `sequence_no + 1` fails (constraint violation) if another writer beat it to that slot — exactly the "expected version" compare-and-swap that event-sourced systems need to prevent two concurrent commands from silently clobbering each other's events.
+Each entity has its own event stream.
 
-## Schema evolution: the versioning problem
-
-Events are immutable and live forever, but the code that produces and consumes them changes. Six months after `OrderPlaced{orderId, total}` ships, you need to add `currency` — but there are millions of old events on disk without that field, and your replay code must still be able to fold them into current state.
-
-Strategies, roughly in order of how often they're used:
-- **Weak schema / additive-only changes**: only ever add optional fields with sensible defaults; never remove or rename. Consumers tolerate unknown fields (forward compatibility) and missing new fields (backward compatibility).
-- **Upcasting**: a translation layer rewrites old event versions into the current shape at load time, so application code only ever deals with `OrderPlacedV3`, never V1/V2 directly.
 ```
-Stored: OrderPlacedV1{orderId, total}
-Load:   upcast_v1_to_v2(e) -> adds currency="USD" (assumed default)
-        upcast_v2_to_v3(e) -> adds taxIncluded=false
-Application code only ever sees V3.
+Account A
+
+Event 1
+
+Event 2
+
+Event 3
 ```
-- **Explicit versioned event types**: `OrderPlacedV1`, `OrderPlacedV2` as distinct types, with the replay/apply logic switching on version — more boilerplate, but no silent assumptions baked into an upcaster.
-- **Schema registry** (Confluent Schema Registry, AWS Glue Schema Registry): enforces compatibility rules (backward/forward/full) at write time so a producer literally cannot publish a breaking change without a registry-level override.
 
-The rule of thumb that matters in an interview: you can never delete or rewrite history, so schema changes must always be able to coexist with every version that has ever been written, indefinitely.
+```
+Account B
 
-## Audit trail as a first-class benefit, not an afterthought
+Event 1
 
-Because nothing is ever overwritten, "who changed what, when, and why" is answered by construction — there is no separate audit-log table to keep in sync with the "real" data, because the event log *is* the real data. This is why event sourcing shows up disproportionately in domains with regulatory/compliance weight: banking ledgers, healthcare records, e-commerce order history, and anywhere a dispute ("the customer says we double-charged them") needs a replayable, tamper-evident sequence of exactly what happened rather than a snapshot of where things ended up.
+Event 2
+```
 
-## Trade-offs summary
+---
 
-| | Traditional CRUD persistence | Event sourcing |
-|---|---|---|
-| What's stored | Current state only | Append-only log of state-changing events |
-| History/audit trail | Requires a separate audit table, can drift | Built-in, tamper-evident, always in sync |
-| Read performance | O(1) row lookup | Requires replay or snapshot + replay |
-| "What was the state last Tuesday" | Usually impossible without a separate history table | Trivial — replay up to that point |
-| Schema change cost | `ALTER TABLE`, backfill | Upcasting/versioning strategy needed forever |
-| Debugging a bug's blast radius | Hard — you only see the aftermath | Easier — replay shows exact sequence that led to the bad state |
-| Operational complexity | Well-understood, mature tooling | Event store, snapshotting, upcasting all need building/choosing |
-| Best fit | Most CRUD apps, simple domains | Ledgers, audit-critical domains, and anywhere paired with [CQRS](cqrs-pattern.md) |
+# Snapshots
 
-## Common interview follow-ups
+Replaying thousands of events every time would be slow.
 
-**Q: How do you handle a bug in the code that projects events into state, after bad state has already been derived and used?**
-Because state is a derived projection and the log is immutable and correct, you fix the projection code and **replay from scratch** (or from the last good snapshot) to rebuild correct state — this is the single biggest practical payoff of event sourcing over CRUD, where a bug in a mutation is much harder to undo.
+Imagine:
 
-**Q: Doesn't storing every event forever make storage unbounded?**
-Yes, and it's a real cost — mitigated by snapshotting (so you don't need infinite replay time), and sometimes by archiving old events to cold storage once enough snapshots exist that ancient raw events are rarely needed, keeping only the compliance requirement (not performance) as the reason to retain them at all.
+```
+500,000 events
 
-**Q: How does event sourcing interact with GDPR's "right to be forgotten" if events are immutable?**
-This is a known hard problem. Common answers: encrypt PII with a per-user key and delete the key (crypto-shredding) rather than the event itself, or keep PII out of events entirely and reference it by ID from a separate, deletable store.
+↓
 
-**Q: What's the difference between event sourcing and just publishing domain events from a CRUD service?**
-Publishing events from a CRUD service is *event notification/EDA* — the database of record is still the current-state table, and events are a side effect for other services. Event sourcing makes the **event log itself the source of truth**; the current-state table (if one exists at all) is just a cache/projection that could be deleted and rebuilt.
+Replay
 
-**Q: Why pair event sourcing with CQRS almost by default?**
-Because the event log is a terrible shape to query ("what are all orders over $100 placed this week" requires scanning and replaying everything). [CQRS](cqrs-pattern.md) lets you project the log into purpose-built, queryable read models while keeping the log itself as the append-only write side.
+↓
 
-**Q: What happens to optimistic concurrency when two commands race to append to the same stream?**
-The append is guarded by an expected-version check (see the `PRIMARY KEY (stream_id, sequence_no)` example above) — the second writer's append fails, and it must reload the stream, reapply its command against the now-current state, and retry, exactly like optimistic locking in any other system.
+Current Balance
+```
+
+Too expensive.
+
+Instead we save periodic snapshots.
+
+---
+
+## Example
+
+```
+Events
+
+1
+2
+3
+4
+5
+6
+7
+8
+
+↓
+
+Snapshot
+
+↓
+
+9
+10
+11
+12
+```
+
+To rebuild state:
+
+```
+Load Snapshot
+
+↓
+
+Replay only events
+
+9
+10
+11
+12
+```
+
+Instead of replaying all twelve events.
+
+---
+
+## Benefits
+
+- Faster reads
+- Faster startup
+- Less replay work
+
+Snapshots are **optimizations only**.
+
+If deleted,
+
+they can always be recreated by replaying events.
+
+---
+
+# Optimistic Concurrency
+
+Suppose two users update the same account.
+
+```
+Current Version = 5
+```
+
+User A:
+
+```
+Append Event 6
+```
+
+User B:
+
+```
+Append Event 6
+```
+
+Only one should succeed.
+
+The database checks:
+
+```
+Expected Version = 5
+```
+
+If another writer already inserted Event 6,
+
+the second write fails.
+
+The application:
+
+- Reloads events
+- Rebuilds state
+- Retries
+
+This prevents lost updates.
+
+---
+
+# Schema Evolution
+
+Events live forever.
+
+Your code changes.
+
+How do old events still work?
+
+Example:
+
+Original event:
+
+```json
+{
+  "orderId":"123",
+  "total":100
+}
+```
+
+Months later you need:
+
+```json
+{
+  "orderId":"123",
+  "total":100,
+  "currency":"USD"
+}
+```
+
+Millions of old events don't contain "currency".
+
+---
+
+## Common Strategies
+
+### 1. Additive Changes
+
+Only add optional fields.
+
+Old events still work.
+
+---
+
+### 2. Upcasting
+
+Convert old events into new versions during replay.
+
+```
+Stored
+
+↓
+
+Version 1
+
+↓
+
+Upcaster
+
+↓
+
+Version 2
+
+↓
+
+Application
+```
+
+The application only sees the newest version.
+
+---
+
+### 3. Versioned Events
+
+```
+OrderPlacedV1
+
+OrderPlacedV2
+
+OrderPlacedV3
+```
+
+Application handles each version explicitly.
+
+---
+
+### 4. Schema Registry
+
+Systems like:
+
+- Confluent Schema Registry
+- AWS Glue Schema Registry
+
+Prevent incompatible event changes.
+
+---
+
+# Audit Trail
+
+One of Event Sourcing's biggest strengths.
+
+Because nothing is deleted,
+
+you always know:
+
+- Who changed it
+- What changed
+- When
+- Why
+
+Example:
+
+```
+09:00
+
+AccountOpened
+
+↓
+
+10:05
+
+Deposit
+
+↓
+
+12:15
+
+Withdrawal
+
+↓
+
+13:20
+
+Transfer
+```
+
+The complete history is preserved forever.
+
+Perfect for:
+
+- Banking
+- Healthcare
+- Accounting
+- Compliance
+- Finance
+
+---
+
+# Time Travel
+
+Since every event exists,
+
+you can reconstruct state at any point in history.
+
+Example:
+
+```
+Replay until
+
+10:00 AM
+```
+
+You get the account exactly as it looked then.
+
+Or:
+
+```
+Replay until
+
+Yesterday
+```
+
+Or:
+
+```
+Replay until
+
+Last Month
+```
+
+Traditional CRUD systems usually cannot do this.
+
+---
+
+# Event Sourcing + CQRS
+
+These patterns often work together.
+
+```
+Command
+
+↓
+
+Event Store
+
+↓
+
+Events
+
+↓
+
+Projector
+
+↓
+
+Read Database
+```
+
+The Event Store is optimized for writes.
+
+Read databases are optimized for queries.
+
+This is CQRS.
+
+---
+
+# Event Sourcing + Kafka
+
+Kafka is naturally append-only.
+
+```
+Producer
+
+↓
+
+Kafka Topic
+
+↓
+
+Consumers
+```
+
+Many systems use Kafka as:
+
+- Event transport
+- Event storage
+- Replay mechanism
+
+Although dedicated Event Stores (EventStoreDB, Axon) provide richer features.
+
+---
+
+# Benefits
+
+- Complete audit history
+- Replay capability
+- Time travel
+- Easy debugging
+- Supports CQRS
+- Easy projections
+- Immutable history
+- Excellent for compliance
+
+---
+
+# Challenges
+
+- More complex architecture
+- Slower replay without snapshots
+- Schema evolution
+- More storage required
+- Harder learning curve
+- GDPR/privacy challenges
+- Event versioning
+
+---
+
+# Real-World Examples
+
+## Banking
+
+```
+AccountOpened
+
+↓
+
+Deposit
+
+↓
+
+Withdraw
+
+↓
+
+Transfer
+```
+
+Every financial operation becomes an immutable event.
+
+---
+
+## E-commerce
+
+```
+OrderPlaced
+
+↓
+
+PaymentCaptured
+
+↓
+
+Packed
+
+↓
+
+Shipped
+
+↓
+
+Delivered
+```
+
+The entire order lifecycle is preserved.
+
+---
+
+## Healthcare
+
+```
+PatientRegistered
+
+↓
+
+DiagnosisAdded
+
+↓
+
+PrescriptionIssued
+
+↓
+
+MedicationUpdated
+```
+
+Medical history becomes fully traceable.
+
+---
+
+# Best Practices
+
+- Events should be immutable
+- Never update old events
+- Use snapshots for performance
+- Version event schemas
+- Include timestamps
+- Include correlation IDs
+- Keep events business-focused
+- Replay should be deterministic
+
+---
+
+# CRUD vs Event Sourcing
+
+| CRUD | Event Sourcing |
+|-------|----------------|
+| Stores current state | Stores every event |
+| History usually lost | Complete history |
+| Fast reads | Replay required |
+| Easy to understand | More complex |
+| Simple schema changes | Requires versioning |
+| Limited auditing | Built-in audit trail |
+| Best for most applications | Best for audit-heavy systems |
+
+---
+
+# When Should You Use Event Sourcing?
+
+Good fit:
+
+- Banking
+- Payments
+- Financial ledgers
+- Inventory systems
+- Healthcare
+- Compliance-heavy applications
+- Systems requiring audit history
+
+Avoid when:
+
+- Simple CRUD apps
+- Internal admin panels
+- Small business systems
+- Basic CMS applications
+
+Most applications **do not need Event Sourcing**.
+
+---
+
+# Interview Cheat Sheet
+
+### What is Event Sourcing?
+
+Store every state-changing event instead of the current state.
+
+---
+
+### What is replay?
+
+Reconstruct current state by applying events in order.
+
+---
+
+### Why use snapshots?
+
+To avoid replaying thousands of events every time.
+
+---
+
+### Why is Event Sourcing good for auditing?
+
+Because every change is permanently stored.
+
+---
+
+### Does Event Sourcing require CQRS?
+
+No.
+
+But they naturally complement each other.
+
+---
+
+### Can you delete events?
+
+Generally no.
+
+Events are immutable.
+
+---
+
+### What is the biggest downside?
+
+Higher complexity:
+
+- Replay
+- Snapshots
+- Schema evolution
+- Storage
+- Operational overhead
+
+---
+
+# Key Takeaways
+
+- Event Sourcing stores **facts**, not current state.
+- The **event log** is the source of truth.
+- Current state is rebuilt by replaying events.
+- Snapshots improve replay performance.
+- Event Sourcing naturally complements CQRS.
+- It provides excellent auditability and time travel but introduces significant architectural complexity, making it suitable only for domains where those benefits outweigh the cost.
 
 ## Related topics
 - [CQRS Pattern](cqrs-pattern.md)

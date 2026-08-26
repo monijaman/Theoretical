@@ -12,7 +12,7 @@ The first move in any real-time design question is to replace "real-time" with a
 - **Hard real-time**: missing the deadline is a system failure, not just a degraded experience — think embedded flight control or industrial safety systems, where a late response is treated the same as a wrong one. Almost no web-scale system design interview is actually asking about this category.
 - **Soft real-time**: missing the deadline degrades value but doesn't make the system incorrect — a live sports score arriving 2 seconds late is still useful; arriving 2 minutes late defeats the purpose. This is what "real-time system design" almost always means in an interview context: fraud detection (must flag within seconds, not hard-realtime microseconds), live dashboards, chat delivery, ride-location updates, trading market-data feeds (soft real-time even at low-single-digit milliseconds, since a slightly-late price update is degraded, not catastrophic, for most retail use cases).
 
-```
+```text
 Latency budget drives architecture:
 
   < 10ms      →  in-memory, single-process, no network hop if avoidable
@@ -29,7 +29,7 @@ Stating the budget up front ("I'm assuming sub-second end-to-end, since this is 
 
 The dominant pattern for real-time data processing at scale is: an event log for durable, ordered ingestion, and a stream processor that consumes it continuously and computes derived results.
 
-```
+```text
   Producers                Kafka (durable log)         Stream processor
 ┌────────────┐         ┌───────────────────────┐      ┌───────────────────┐
 │ App events  │───────▶│ topic: clicks          │─────▶│ Flink / Spark      │
@@ -52,7 +52,7 @@ The dominant pattern for real-time data processing at scale is: an event log for
 
 Streams are unbounded, so "aggregate the last N events" needs a precise definition of the time boundary — that's a **window**.
 
-```
+```text
 Tumbling window (fixed, non-overlapping):
 |--- 0-5s ---|--- 5-10s ---|--- 10-15s ---|
 each event belongs to exactly ONE window
@@ -88,11 +88,11 @@ The honest framing for an interview: "exactly-once" describes the *observable ef
 
 Getting a real-time result computed server-side is only half the problem — getting it to the client with the same latency budget is the other half, and it's a genuinely separate decision.
 
-```
+```text
 Poll                                    Push
 ────                                    ────
-Client → GET /status  (every Nsec)      Server → client (WebSocket / SSE)
-Client → GET /status                     pushed the moment new data exists
+Client → GET /status  (every N sec)     Server → client (WebSocket / SSE)
+Client → GET /status                    pushed the moment new data exists
 Client → GET /status  (mostly "no       No wasted requests, but the server
  new data" responses — wasted work)      must hold an open connection per
                                           client (stateful, resource cost)
@@ -105,15 +105,15 @@ Client → GET /status  (mostly "no       No wasted requests, but the server
 ```
 
 - **WebSocket**: full-duplex, persistent TCP connection — needed when the client also sends frequent messages back (chat, collaborative editing).
-- **Server-Sent Events (SSE)**: one-directional server→client stream over plain HTTP — simpler than WebSocket, sufficient when the client only receives updates (live score ticker, notification stream), and plays more nicely with existing HTTP infra (proxies, load balancers) since it's just a long-lived HTTP response.
+- **Server-Sent Events (SSE)**: one-directional server→client stream over plain HTTP — simpler than WebSocket, sufficient when the client only receives updates (live score ticker, notification stream), and plays more nicely with existing HTTP infrastructure since it's just a long-lived HTTP response.
 - **Long polling**: a middle ground — client makes a request that the server holds open until there's new data (or a timeout), then the client immediately re-requests. Useful as a fallback when WebSocket/SSE aren't available (older clients, restrictive proxies).
-- The real trade-off is operational: push means the server fleet holds one open connection per active client, so connection count (not just request rate) becomes a capacity dimension, and a client's server-affinity (which node holds its socket) complicates horizontal scaling and deployments (a rolling deploy has to gracefully migrate/reconnect live sockets).
+- The real trade-off is operational: push means the server fleet holds one open connection per active client, so connection count (not just request rate) becomes a capacity dimension, and a client's server affinity (which node holds its socket) complicates horizontal scaling and deployments (a rolling deploy has to gracefully migrate/reconnect live sockets).
 
 ## Backpressure in streaming pipelines
 
 If a downstream stage (sink, consumer, network) is slower than the upstream production rate, something has to give — that's **backpressure**, and how a pipeline handles it determines whether it degrades gracefully or falls over.
 
-```
+```text
 Producer rate: 10,000 events/sec
 Consumer processing rate: 6,000 events/sec
                                     │
@@ -139,28 +139,28 @@ Kafka's design inherently absorbs a lot of backpressure for free: since the log 
 |---|---|---|
 | Processing engine | Flink (true per-event, lowest latency) | Spark Structured Streaming (micro-batch, ecosystem reuse) |
 | Windowing | Tumbling/sliding (fixed clock) | Session (activity-gap based) |
-| Delivery guarantee | At-least-once (simpler, needs idempotent sink) | Exactly-once semantics (transactional, more infra) |
+| Delivery guarantee | At-least-once (simpler, needs idempotent sink) | Exactly-once semantics (transactional, more infrastructure) |
 | Client delivery | Poll (simple, latency floor = interval) | Push: WebSocket/SSE (lower latency, stateful connections) |
 | Overload response | Unbounded buffer (delays the crash) | Bounded queue + backpressure/drop policy (controlled degradation) |
 
 ## Common interview follow-ups
 
-**Q: How do you decide between Flink and Spark Streaming for a given system?**
-Pick Flink when you need the lowest achievable per-event latency, complex event-time windowing, and fine-grained state management; pick Spark Structured Streaming when the team already operates Spark for batch workloads and near-real-time (low single-digit seconds) is genuinely acceptable, since reusing one engine/operational model across batch and streaming reduces total system complexity even if raw latency is a bit higher.
+**Q: How do you decide between Flink and Spark Streaming for a given system?**  
+Pick Flink when you need the lowest achievable per-event latency, complex event-time windowing, and fine-grained state management; pick Spark Structured Streaming when the team already operates Spark for batch workloads and near-real-time (low single-digit seconds) is genuinely acceptable, since reusing one engine and operational model across batch and streaming reduces total system complexity even if raw latency is a bit higher.
 
-**Q: What's the difference between "exactly-once" and "effectively-once"?**
+**Q: What's the difference between "exactly-once" and "effectively-once"?**  
 Strictly, no distributed system delivers a message exactly one time at the transport layer — retries and duplicates happen; "effectively-once" (sometimes used instead) is the more honest term for the same guarantee: duplicates may occur in transit, but idempotent writes or transactional offset/output commits make the *observable result* identical to processing each event exactly once.
 
-**Q: How would you handle a late-arriving event that belongs to a window that's already closed?**
+**Q: How would you handle a late-arriving event that belongs to a window that's already closed?**  
 Use a watermark strategy that defines how long to wait for stragglers before finalizing a window (trading completeness for latency), and configure a policy for events arriving after the watermark has passed — typically either dropping them with a metric/alert, or emitting a "late update" that corrects a previously-published aggregate, depending on whether downstream consumers can handle a revision.
 
-**Q: When would you choose polling over push, even though push is lower latency?**
+**Q: When would you choose polling over push, even though push is lower latency?**  
 When the latency requirement is genuinely loose (a dashboard refreshing every 30 seconds is fine polling every 30 seconds), when client diversity is high and maintaining persistent connections across all of them is operationally costly, or when the infrastructure between client and server (corporate proxies, some mobile carriers) is hostile to long-lived connections — polling's simplicity and statelessness can outweigh the latency cost.
 
-**Q: How do you scale a system holding millions of open WebSocket connections?**
+**Q: How do you scale a system holding millions of open WebSocket connections?**  
 Shard connections across many stateful gateway nodes (each holding a subset of live sockets), use a separate pub/sub layer (Redis Pub/Sub, Kafka) to route a message to whichever gateway node currently holds the target client's socket, and handle deploys/scaling events with graceful connection draining and client-side reconnect-with-backoff rather than hard-dropping sockets.
 
-**Q: What happens to a stream-processing job's state (e.g., a running aggregate) when it needs to restart after a crash?**
+**Q: What happens to a stream-processing job's state (e.g., a running aggregate) when it needs to restart after a crash?**  
 The engine periodically checkpoints its internal state (Flink writes checkpoints to durable storage like S3/HDFS on an interval) alongside the input offset it had consumed up to; on restart, it restores state from the last checkpoint and resumes consuming from that offset, which is also the mechanism that underlies exactly-once processing guarantees.
 
 ## Related topics

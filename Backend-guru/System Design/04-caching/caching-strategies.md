@@ -1,161 +1,854 @@
 # Caching Strategies
 [← Back to index](../readme.md)
 
-## What this is and why it matters
+---
 
-Caching is the single highest-leverage technique in system design: it trades a small amount of staleness for a large reduction in latency and load on the source of truth. Every senior candidate is expected to know not just "add a cache" but *which* caching pattern fits a given read/write ratio, consistency requirement, and failure mode. Interviewers use this topic to see whether you reason about who is responsible for populating the cache, what happens on a miss, and what happens when the cache and the database disagree.
+# What are Caching Strategies?
 
-The five canonical patterns — cache-aside, read-through, write-through, write-behind (write-back), and refresh-ahead — differ in exactly one dimension each time: who talks to the cache, and when.
+Caching strategies define **how data gets into the cache and how it stays synchronized with the database**.
 
-## Cache-Aside (Lazy Loading)
+Different applications have different requirements:
 
-The application is in full control. It reads from the cache first; on a miss it reads from the DB, then populates the cache itself.
+- Some read data much more often than they write.
+- Some require the latest data immediately.
+- Others prioritize speed over absolute consistency.
 
+A caching strategy determines:
+
+- Who loads data into the cache
+- Who updates the cache
+- What happens on a cache miss
+- How writes are handled
+- How consistency is maintained
+
+> **Interview takeaway:** "Use a cache" isn't enough. You should know **which caching strategy best fits the application's read/write pattern and consistency requirements.**
+
+---
+
+# Why It Matters
+
+Without caching:
+
+```text
+Application
+
+↓
+
+Database
+
+↓
+
+Response
 ```
-Read path:
-  App -> Cache.get(key)
-           |-- hit  -> return value
-           |-- miss -> App -> DB.get(key)
-                       App -> Cache.set(key, value, ttl)
-                       return value
 
-Write path:
-  App -> DB.write(key, value)
-  App -> Cache.delete(key)   // invalidate, don't update
+Every request hits the database.
+
+With caching:
+
+```text
+Application
+
+↓
+
+Cache
+
+↓
+
+Database (only when needed)
 ```
 
-This is the default pattern for Redis/Memcached in front of a relational database (Facebook's Memcached architecture, described in their 2013 paper, is the textbook example). The write path deletes rather than updates the cache entry to avoid race conditions where a stale write wins.
+Benefits include:
+
+- Lower latency
+- Reduced database load
+- Better scalability
+- Lower infrastructure costs
+
+---
+
+# The Five Main Caching Strategies
+
+1. Cache-Aside (Lazy Loading)
+2. Read-Through
+3. Write-Through
+4. Write-Behind (Write-Back)
+5. Refresh-Ahead
+
+Each strategy differs mainly in **who manages the cache and when data is loaded or written.**
+
+---
+
+# 1. Cache-Aside (Lazy Loading)
+
+## Idea
+
+The application controls everything.
+
+When reading:
+
+1. Check the cache.
+2. If found, return it.
+3. Otherwise query the database.
+4. Store the result in the cache.
+5. Return the data.
+
+---
+
+## Read Flow
+
+```text
+Client
+
+↓
+
+Application
+
+↓
+
+Cache
+
+│
+
+├── Cache Hit
+
+│       ↓
+
+│    Return Data
+
+│
+
+└── Cache Miss
+
+        ↓
+
+    Database
+
+        ↓
+
+Store in Cache
+
+        ↓
+
+Return Data
+```
+
+---
+
+## Write Flow
+
+```text
+Application
+
+↓
+
+Update Database
+
+↓
+
+Delete Cache Entry
+
+↓
+
+Next Read Reloads Cache
+```
+
+Notice that we **delete** the cache instead of updating it.
+
+---
+
+## Python Example
 
 ```python
 def get_user(user_id):
-    val = redis.get(f"user:{user_id}")
-    if val is not None:
-        return deserialize(val)
-    val = db.query("SELECT * FROM users WHERE id=%s", user_id)
-    redis.set(f"user:{user_id}", serialize(val), ex=300)
-    return val
+    value = redis.get(f"user:{user_id}")
+
+    if value:
+        return deserialize(value)
+
+    value = db.query(
+        "SELECT * FROM users WHERE id=%s",
+        user_id
+    )
+
+    redis.set(
+        f"user:{user_id}",
+        serialize(value),
+        ex=300
+    )
+
+    return value
+
 
 def update_user(user_id, fields):
-    db.execute("UPDATE users SET ... WHERE id=%s", fields, user_id)
+    db.execute(
+        "UPDATE users SET ... WHERE id=%s",
+        fields,
+        user_id
+    )
+
     redis.delete(f"user:{user_id}")
 ```
 
-- Pros: cache only holds what's actually requested (no wasted memory on cold data); cache outage degrades to "slow" not "down" since app falls back to DB.
-- Cons: first request for any key always misses (cold-start penalty); every read path has to contain cache-miss logic, duplicated across services unless abstracted.
+---
 
-## Read-Through
+## Advantages
 
-Functionally similar to cache-aside, but the cache library/provider itself owns the miss-fill logic, not the application. The app only ever talks to the cache; the cache is configured with a loader function that it calls on a miss.
+- Very simple
+- Cache stores only requested data
+- Database remains the source of truth
+- Cache failure only slows the application—it doesn't stop it
 
+---
+
+## Disadvantages
+
+- First request always misses
+- Every service must implement cache-miss logic
+- Cold cache causes higher database traffic
+
+---
+
+## Best For
+
+- Redis
+- Memcached
+- Product catalogs
+- User profiles
+- Social media applications
+
+This is the **most commonly used caching strategy**.
+
+---
+
+# 2. Read-Through
+
+## Idea
+
+The application only communicates with the cache.
+
+If data is missing, the cache automatically loads it from the database.
+
+The application doesn't know whether the data came from the cache or the database.
+
+---
+
+## Read Flow
+
+```text
+Application
+
+↓
+
+Cache
+
+│
+
+├── Hit
+
+│      ↓
+
+│   Return Data
+
+│
+
+└── Miss
+
+        ↓
+
+Cache Loads From Database
+
+        ↓
+
+Store in Cache
+
+        ↓
+
+Return Data
 ```
-App -> Cache.get(key)
-         |-- hit  -> return value
-         |-- miss -> Cache internally calls loader(key) -> DB
-                     Cache stores result, returns to App
+
+---
+
+## Difference from Cache-Aside
+
+### Cache-Aside
+
+```text
+Application
+
+↓
+
+Cache
+
+↓
+
+Database
 ```
 
-Examples: Google Guava `LoadingCache`, AWS DynamoDB Accelerator (DAX) in some modes, Ehcache with a `CacheLoader`. The distinction from cache-aside is purely architectural — it moves miss-handling out of business logic and into infrastructure, which matters for code reuse across many services but is otherwise operationally identical.
+Application handles cache misses.
 
-- Pros: centralizes loading logic, reduces duplicated boilerplate, easier to enforce consistent TTL/serialization policy.
-- Cons: requires a cache provider that supports pluggable loaders; couples the cache library to your data-access layer.
+---
 
-## Write-Through
+### Read-Through
 
-Every write goes to the cache first (or simultaneously), and the cache synchronously writes through to the DB before acknowledging.
+```text
+Application
 
-```
-App -> Cache.set(key, value)
-         Cache -> DB.write(key, value)   // synchronous
-         Cache acks App only after DB ack
-```
+↓
 
-- Pros: cache and DB never diverge; reads are always fresh; simplifies read path (no miss-fill race).
-- Cons: write latency = cache write + DB write (no benefit to write throughput); every written key occupies cache space even if never read again (can pair with a short TTL or combine with cache-aside for reads).
+Cache
 
-Used when read-after-write consistency matters a lot and write volume is manageable, e.g. session stores, shopping carts.
+↓
 
-## Write-Behind (Write-Back)
-
-Writes go to the cache and are acknowledged immediately; the cache asynchronously flushes to the DB in the background, often batched.
-
-```
-App -> Cache.set(key, value)   // ack returned immediately
-         Cache buffers write
-         ... later, async ...
-         Cache -> DB.batch_write([...])
+Database
 ```
 
-Examples: CPU cache write-back is the original archetype; at the application layer, DynamoDB Accelerator (DAX) supports write-through only, but systems like Cassandra's memtable-to-SSTable flush, or custom Redis + background flusher jobs, follow write-behind semantics. Database buffer pools (e.g., InnoDB's dirty pages flushed by the checkpoint process) are also write-behind in spirit.
+The cache itself handles cache misses.
 
-- Pros: highest write throughput and lowest write latency (DB write is off the critical path); batching amplifies DB efficiency.
-- Cons: risk of data loss if the cache node crashes before flushing (must be mitigated with persistence/replication of the cache itself, e.g. Redis AOF); more complex failure/retry handling; readers must go through the same cache to avoid seeing stale DB data.
+The application code becomes much cleaner.
+
+---
+
+## Advantages
+
+- Centralized cache logic
+- Less duplicated code
+- Easier to maintain
+- Consistent TTL and serialization
+
+---
+
+## Disadvantages
+
+- Requires cache libraries that support automatic loading
+- More tightly coupled to the caching framework
+
+---
+
+## Best For
+
+- Enterprise applications
+- Framework-managed caches
+- Java applications using LoadingCache or Ehcache
+
+---
+
+# 3. Write-Through
+
+## Idea
+
+Every write updates both the cache and the database.
+
+The cache doesn't acknowledge success until the database write also succeeds.
+
+---
+
+## Write Flow
+
+```text
+Application
+
+↓
+
+Cache
+
+↓
+
+Database
+
+↓
+
+Success Returned
+```
+
+Everything stays synchronized.
+
+---
+
+## Advantages
+
+- Cache and database remain consistent
+- Reads are always fresh
+- Simple read path
+
+---
+
+## Disadvantages
+
+Every write must wait for:
+
+- Cache write
+- Database write
+
+Write latency becomes higher.
+
+Also, data that is never read still occupies cache memory.
+
+---
+
+## Best For
+
+- Shopping carts
+- User sessions
+- Authentication data
+- Frequently updated user information
+
+---
+
+# 4. Write-Behind (Write-Back)
+
+## Idea
+
+Writes go only to the cache initially.
+
+The cache immediately returns success.
+
+Later, it writes accumulated changes to the database asynchronously.
+
+---
+
+## Write Flow
+
+```text
+Application
+
+↓
+
+Cache
+
+↓
+
+Immediate Success
+
+↓
+
+Background Worker
+
+↓
+
+Database
+```
+
+---
+
+## Why Use It?
+
+Instead of:
+
+```text
+1000 Database Writes
+```
+
+The cache may combine them into:
+
+```text
+10 Batch Writes
+```
+
+This dramatically improves write performance.
+
+---
+
+## Advantages
+
+- Extremely fast writes
+- High throughput
+- Database receives efficient batch updates
+
+---
+
+## Disadvantages
+
+If the cache crashes before flushing:
+
+```text
+Cached Writes
+
+↓
+
+Lost
+```
+
+Potential data loss.
+
+To reduce this risk:
+
+- Redis AOF
+- Replication
+- Persistent storage
+
+are commonly used.
+
+---
+
+## Best For
+
+- Analytics
+- Metrics
+- View counters
+- Logging
+- Telemetry
+
+Where losing a few seconds of data is acceptable.
+
+---
+
+# 5. Refresh-Ahead
+
+## Idea
+
+Instead of waiting for expiration,
+
+refresh hot cache entries **before** they expire.
+
+Users never experience a cache miss.
+
+---
+
+## Normal Cache
+
+```text
+TTL Ends
+
+↓
+
+Cache Miss
+
+↓
+
+Database
+
+↓
+
+Cache Updated
+```
+
+---
 
 ## Refresh-Ahead
 
-The cache proactively refreshes a hot key *before* it expires, based on access patterns, so consumers never see a miss for popular keys.
+```text
+TTL Almost Finished
 
-```
-Cache tracks: key accessed frequently, TTL nearing expiry (e.g. < 20% of TTL left)
-Cache -> asynchronously calls loader(key) -> DB
-Cache updates value, resets TTL
-   (readers keep getting the old value until refresh completes — no miss)
-```
+↓
 
-Used for hot, expensive-to-compute keys — e.g., a homepage "trending" widget, leaderboard snapshots, or ML feature values. EVCache (Netflix's Memcached wrapper) and some CDN configurations implement refresh-ahead-style background revalidation.
+Background Refresh
 
-- Pros: eliminates the miss penalty entirely for predictable hot keys, avoids thundering-herd-on-expiry.
-- Cons: wastes work refreshing keys nobody ends up reading again soon; needs access-pattern tracking, adding complexity; still needs a fallback path for genuinely cold keys.
+↓
 
-## Where to cache — the layered picture
+Cache Updated
 
-```
-Client (browser/mobile)  -- localStorage, HTTP cache, in-memory app state
-        |
-       CDN / Edge PoP     -- static assets, sometimes API GET responses
-        |
-   API Gateway / LB       -- occasionally response caching for idempotent GETs
-        |
-   Application layer      -- in-process cache (Caffeine, local LRU) + Redis/Memcached (shared)
-        |
-   Database layer         -- query cache, buffer pool/page cache, materialized views
-        |
-      Disk
+↓
+
+Users Continue Reading
 ```
 
-- **Client**: HTTP `Cache-Control`/`ETag`, service workers, mobile app local DB (SQLite/Realm). Zero network cost but per-device, hard to invalidate remotely.
-- **CDN**: for static assets always; increasingly for cacheable dynamic responses (see `cdn-architecture.md`). Removes load and latency at the edge, closest to the user.
-- **Application (in-process)**: e.g. Caffeine/Guava in the JVM, or an LRU dict in a Python worker. Nanosecond access, no network hop, but not shared across instances — every node has its own copy, so it's best for read-mostly, small, slowly-changing data (feature flags, config).
-- **Application (shared/distributed)**: Redis, Memcached. Shared across all app instances, single source of "hot" truth, but adds a network hop and a new failure domain.
-- **Database layer**: buffer pool (InnoDB), query result cache, read replicas acting as a coarse cache, materialized views for expensive aggregates.
+No interruption.
 
-Most real systems use several of these simultaneously (browser cache + CDN + Redis + DB buffer pool), each with a different TTL and invalidation story — which is exactly why cache invalidation (see companion doc) is the hard part, not the caching itself.
+---
 
-## Trade-off summary
+## Advantages
 
-| Pattern | Write latency | Read latency (steady state) | Data-loss risk | Complexity |
-|---|---|---|---|---|
-| Cache-aside | DB only | Fast after warm | Low | Low |
-| Read-through | DB only | Fast after warm | Low | Medium (needs loader plumbing) |
-| Write-through | Cache + DB (sync) | Fast, always fresh | Low | Medium |
-| Write-behind | Cache only (fast) | Fast, always fresh | Higher (buffered writes) | High |
-| Refresh-ahead | DB only | Fast, no miss for hot keys | Low | High (needs access tracking) |
+- Eliminates cache misses for popular items
+- Reduces database spikes
+- Great for predictable traffic
 
-## Common interview follow-ups
+---
 
-**Q: Why delete the cache entry on write instead of updating it (cache-aside)?**
-Updating risks a race: if two writes interleave with two reads, a slower DB write can overwrite the cache with stale data after a newer value was already cached. Deleting forces the next read to reload from the DB, which is simpler to reason about and self-heals through the invalidation path.
+## Disadvantages
 
-**Q: What happens if the cache goes down under cache-aside vs write-through?**
-Under cache-aside, the app falls back to hitting the DB directly on every read — degraded latency but functionally correct. Under write-through/write-behind, a cache outage can mean writes are lost (write-behind) or blocked entirely (write-through, since writes go through the cache), so those patterns need the cache tier to be highly available or persistent.
+Some entries may be refreshed even if nobody requests them again.
 
-**Q: How would you avoid a stampede when a hot key expires?**
-Combine refresh-ahead for known-hot keys with request coalescing/locking for the rest (single-flight pattern: only one request recomputes, others wait), plus jittered TTLs so many keys don't expire in the same instant. Details in `cache-invalidation.md`.
+This wastes resources.
 
-**Q: When would you choose write-behind despite the data-loss risk?**
-When write volume is very high and slight loss on crash is acceptable or mitigated by cache persistence/replication — e.g., view-count counters, analytics event buffers, or metrics aggregation where losing the last few seconds of data is tolerable but blocking on synchronous DB writes is not.
+It also requires tracking access patterns.
 
-**Q: Local in-process cache vs shared Redis — how do you pick?**
-Local cache wins on latency and removes a network hop and a failure domain, but every instance has its own copy (memory multiplied by instance count, and invalidation must fan out to all nodes). Shared cache costs a network round trip but guarantees consistency across instances. Many systems use both: a small local cache (with a short TTL) backed by Redis as the shared layer.
+---
+
+## Best For
+
+- Homepages
+- Trending products
+- Dashboards
+- Leaderboards
+- Frequently accessed APIs
+
+---
+
+# Where Can You Cache?
+
+Caching usually exists at multiple layers.
+
+```text
+User
+
+↓
+
+Browser Cache
+
+↓
+
+CDN
+
+↓
+
+API Gateway
+
+↓
+
+Application Cache
+
+↓
+
+Redis / Memcached
+
+↓
+
+Database Cache
+
+↓
+
+Disk
+```
+
+Most large systems use several cache layers simultaneously.
+
+---
+
+# 1. Browser Cache
+
+Examples:
+
+- HTTP Cache
+- Local Storage
+- Service Workers
+- Mobile SQLite
+
+Advantages:
+
+- Zero network latency
+- Very fast
+
+Disadvantages:
+
+- Device-specific
+- Hard to invalidate remotely
+
+---
+
+# 2. CDN Cache
+
+Stores content near users.
+
+Typical content:
+
+- Images
+- CSS
+- JavaScript
+- Videos
+- Cacheable API responses
+
+Benefits:
+
+- Lower latency worldwide
+- Reduced server traffic
+
+---
+
+# 3. Application Cache (In-Memory)
+
+Examples:
+
+- Caffeine
+- Guava
+- Local LRU Cache
+
+Advantages:
+
+- Extremely fast
+- No network call
+
+Disadvantages:
+
+- Every application instance has its own cache
+- Synchronization becomes harder
+
+---
+
+# 4. Shared Cache
+
+Examples:
+
+- Redis
+- Memcached
+
+Advantages:
+
+- Shared across all servers
+- Central cache
+
+Disadvantages:
+
+- Requires network access
+- Introduces another service to manage
+
+---
+
+# 5. Database Cache
+
+Examples include:
+
+- Buffer Pool
+- Query Cache
+- Materialized Views
+- Read Replicas
+
+These reduce expensive disk operations.
+
+---
+
+# Strategy Comparison
+
+| Strategy | Read Speed | Write Speed | Data Freshness | Complexity |
+|-----------|------------|-------------|----------------|------------|
+| Cache-Aside | Fast after warm-up | Normal | Good | Low |
+| Read-Through | Fast after warm-up | Normal | Good | Medium |
+| Write-Through | Very Fast | Slower | Excellent | Medium |
+| Write-Behind | Very Fast | Very Fast | Eventual | High |
+| Refresh-Ahead | Fastest for hot data | Normal | Excellent | High |
+
+---
+
+# Which Strategy Should You Use?
+
+| Scenario | Recommended Strategy |
+|----------|----------------------|
+| Product catalog | Cache-Aside |
+| User profiles | Cache-Aside |
+| Shopping cart | Write-Through |
+| Session storage | Write-Through |
+| Analytics | Write-Behind |
+| View counters | Write-Behind |
+| Trending homepage | Refresh-Ahead |
+| Expensive reports | Refresh-Ahead |
+| Enterprise cache framework | Read-Through |
+
+---
+
+# Common Interview Questions
+
+## Why delete the cache instead of updating it?
+
+Deleting avoids race conditions.
+
+If multiple updates happen simultaneously, directly updating the cache may leave an older value in the cache.
+
+Deleting forces the next request to reload fresh data from the database.
+
+---
+
+## What happens if Redis goes down?
+
+### Cache-Aside
+
+The application falls back to the database.
+
+Performance decreases, but correctness is maintained.
+
+---
+
+### Write-Through
+
+Since writes go through the cache, writes may fail or be blocked if the cache is unavailable.
+
+---
+
+### Write-Behind
+
+Any writes still buffered in the cache may be lost unless the cache uses persistence or replication.
+
+---
+
+## How do you prevent a cache stampede?
+
+Common techniques include:
+
+- Request coalescing (single-flight)
+- Refresh-ahead
+- Jittered TTLs
+- Serving stale data during refresh
+
+---
+
+## When should you use Write-Behind?
+
+Choose it when:
+
+- Write throughput is extremely high
+- Small amounts of data loss are acceptable
+- Batch writes significantly improve performance
+
+Examples include analytics, metrics, and view counters.
+
+---
+
+## Local Cache vs Redis
+
+### Local Cache
+
+Advantages:
+
+- Fastest possible access
+- No network latency
+
+Disadvantages:
+
+- Each server has its own copy
+- Harder to keep synchronized
+
+---
+
+### Shared Redis
+
+Advantages:
+
+- One shared cache across all servers
+- Easier consistency
+
+Disadvantages:
+
+- Network hop required
+- Additional infrastructure
+
+Many production systems combine both:
+
+```text
+Application
+
+↓
+
+Local Cache (L1)
+
+↓
+
+Redis (L2)
+
+↓
+
+Database
+```
+
+This provides ultra-fast local reads while maintaining a shared cache across multiple application instances.
+
+---
+
+# Key Takeaways
+
+- **Cache-Aside** is the most widely used strategy and gives applications full control over cache population.
+- **Read-Through** moves cache-loading logic into the cache layer, simplifying application code.
+- **Write-Through** keeps the cache and database synchronized by writing to both before acknowledging success.
+- **Write-Behind** prioritizes write performance by buffering writes and flushing them asynchronously, at the cost of potential data loss if not made durable.
+- **Refresh-Ahead** refreshes frequently accessed data before it expires, preventing cache misses for hot keys.
+- Most real-world systems combine multiple cache layers—browser, CDN, application cache, Redis, and database cache—to maximize performance while balancing consistency and complexity.
 
 ## Related topics
 - [Cache Eviction Policies](cache-eviction-policies.md)

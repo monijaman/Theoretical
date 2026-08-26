@@ -1,124 +1,791 @@
 # Load Balancing
-[← Back to index](../readme.md)
 
-## Why it matters
 
-The moment you have more than one instance of a service, something has to decide which instance handles which request. Get this wrong and you get hot instances that fall over while siblings sit idle, connection storms during deploys, or an outage the instant one box dies. Load balancing is the first piece of infrastructure that turns "a server" into "a service," and interviewers use it to check whether you understand the difference between routing packets and routing requests — i.e., L4 vs L7 — and whether you can reason about statefulness, health, and failure.
+> A **Load Balancer** distributes incoming requests across multiple servers so that no single server becomes overloaded.
+>
+> It improves:
+>
+> - Scalability
+> - High Availability
+> - Fault Tolerance
+> - Performance
+>
+> Modern cloud applications almost always place a Load Balancer in front of multiple application servers.
 
-## L4 vs L7
+---
 
-**Layer 4 (transport layer) load balancing** looks only at IP + TCP/UDP port. It doesn't parse HTTP, doesn't see headers, doesn't see paths. It forwards packets (or proxies connections) based on a 5-tuple hash (src IP, dst IP, src port, dst port, protocol). It's fast and cheap — often line-rate, sometimes done in kernel space or dedicated hardware — but it's blind to application semantics.
+# Why Do We Need Load Balancing?
 
-**Layer 7 (application layer) load balancing** terminates the connection, reads the HTTP request (method, path, headers, cookies, even body), and makes a routing decision based on that. This is what enables path-based routing (`/api/*` → service A, `/static/*` → service B), header-based routing, canary releases by cookie, and TLS termination.
-
-```
-Client                     L4 LB                        Backend
-  |--- TCP SYN ------------->|                              |
-  |                          |--- picks backend by 5-tuple  |
-  |                          |--- forwards packets --------->|
-  |<===================== packets flow through, LB doesn't ==|
-                              read HTTP at all
-
-Client                     L7 LB (proxy)                 Backend
-  |--- TCP SYN + TLS ------->|  (LB terminates TLS)         |
-  |--- GET /checkout ------->|                              |
-  |                          |--- parses Host/path/headers  |
-  |                          |--- opens its OWN connection ->|
-  |                          |<---------------- response ----|
-  |<--- response ------------|
-```
-
-- L4 examples: AWS Network Load Balancer (NLB), IPVS, raw HAProxy in TCP mode, Linux LVS.
-- L7 examples: AWS Application Load Balancer (ALB), Nginx, Envoy, HAProxy in HTTP mode, Traefik.
-
-L4 is preferred when you need extreme throughput/low latency (millions of packets/sec, gaming, financial feeds) or non-HTTP protocols. L7 is preferred whenever routing needs to be content-aware — which is most web/microservice traffic today. Many real deployments stack both: an NLB (L4) in front for TLS passthrough and DDoS absorption, with ALB/Envoy (L7) behind it for routing.
-
-## Algorithms
-
-| Algorithm | How it picks a backend | Good for | Weak spot |
-|---|---|---|---|
-| Round robin | Cycles through backend list in order | Uniform, stateless backends of equal capacity | Ignores current load; a slow request piles up connections |
-| Weighted round robin | Round robin but backends get proportional share by weight | Mixed instance sizes (some 2x CPU) | Weights are static, don't adapt to real-time load |
-| Least connections | Sends to backend with fewest active connections | Variable request duration (some requests slow) | Needs LB to track connection state; wrong for very short requests where round robin is fine |
-| Weighted least connections | Least connections adjusted by capacity weight | Heterogeneous fleet with variable request time | More bookkeeping, same blind spots as weights |
-| Consistent hashing | Hash(key) maps to a point on a ring; request goes to nearest backend clockwise | Cache-friendly routing, sticky sessions without a session store, sharding to stateful backends (e.g. Redis, Memcached clients) | Requires careful ring design (virtual nodes) to avoid hot spots when nodes join/leave |
-| Random / power-of-two-choices | Pick 2 random backends, send to the less loaded | Very large fleets where full state tracking is expensive | Slightly less optimal than true least-connections, but scales better |
-| IP hash | Hash(client IP) → backend | Simple session affinity | Breaks under NAT (many clients share one IP) or client IP changes (mobile networks) |
-
-### Consistent hashing, concretely
-
-Used heavily where you want the *same key* to keep landing on the *same backend* even as the fleet scales — think client-side sharding for Memcached, or an L7 proxy routing by user ID to warm a per-user cache.
+Imagine your application runs on a single server.
 
 ```
-Ring (0 .. 2^32-1), backends placed via hash(backend_id + vnode_i):
-
-        B1(120)
-           |
-  B3(310)--+--B2(200)
-           |
-        B1(150)  <- vnode of B1 again
-
-request key="user:42" -> hash = 180 -> walk clockwise -> lands on B2(200)
+          Users
+             │
+             ▼
+        Web Server
 ```
 
-Virtual nodes (multiple points per physical backend) smooth out the distribution — without them, one backend can end up owning a disproportionate arc of the ring. Adding/removing a backend only remaps the keys in its immediate ring neighborhood, not the whole keyspace — this is the property that makes it so much better than `hash(key) % N` for dynamic fleets.
+Everything works...
 
-## Health checks
+Until thousands of users arrive at the same time.
 
-A load balancer is only as good as its view of backend health.
+The server becomes overloaded.
 
-- **Active health checks**: LB periodically hits `/healthz` (or opens a TCP connection) and removes a backend from rotation after N consecutive failures, re-adds after M consecutive successes. Nginx, HAProxy, ALB target groups, Envoy — all support this natively.
-- **Passive health checks**: LB observes real traffic — if a backend starts returning 5xxs or timing out, it's ejected without a dedicated probe. Envoy's "outlier detection" is a canonical example.
-- Distinguish **liveness** (is the process up?) from **readiness** (is it warmed up and able to serve, e.g. cache populated, DB pool established?). Kubernetes formalizes this split; an LB should route only on readiness, not liveness.
+- CPU reaches 100%
+- Memory fills up
+- Requests become slow
+- Users receive errors
 
-```nginx
-upstream backend {
-    least_conn;
-    server 10.0.1.10:8080 weight=3 max_fails=3 fail_timeout=30s;
-    server 10.0.1.11:8080 weight=1;
-    server 10.0.1.12:8080 backup;
-}
+Instead of making one server bigger, we can add more servers.
+
+```
+             Users
+                │
+                ▼
+         Load Balancer
+        /      |      \
+       ▼       ▼       ▼
+   Server1  Server2  Server3
 ```
 
-## Sticky sessions
+The Load Balancer spreads traffic evenly across all servers.
 
-If a backend holds in-memory state for a session (shopping cart, WebSocket, in-memory auth cache), you either need the LB to keep routing the same client to the same backend ("sticky sessions" / session affinity), or you need to externalize the state (Redis-backed sessions, JWT) so any backend can serve any request.
+---
 
-- **Cookie-based affinity**: LB sets a cookie (e.g. `AWSALBAPP`) pinning the client to a backend. Survives client IP changes, breaks if the client doesn't send cookies back (some API clients).
-- **IP-based affinity**: crude, breaks under NAT/CGNAT.
-- The architecturally cleaner answer, and the one interviewers want to hear, is: **prefer stateless backends** and push session state to a shared store. Stickiness is a workaround, not a design goal — it reintroduces a single point of failure per session and complicates scaling/deploys (draining a "hot" instance loses affinity for everyone pinned to it).
+# How Load Balancing Works
 
-## Hardware vs software vs managed
+Every client request first reaches the Load Balancer.
 
-- **Hardware LBs** (F5 BIG-IP, Citrix ADC): dedicated appliances, very high throughput, expensive, mostly seen in large enterprises/legacy data centers.
-- **Software LBs**: HAProxy (battle-tested, L4/L7, extremely tunable), Nginx (L7 reverse proxy that also load balances), Envoy (L4/L7, first-class observability, xDS dynamic config, the data plane of most modern service meshes like Istio).
-- **Managed/cloud**: AWS ALB (L7, HTTP/gRPC-aware, integrates with target groups & auto scaling), AWS NLB (L4, static IP, ultra-low latency, TLS passthrough), Google Cloud Load Balancing, Azure Load Balancer / App Gateway.
+```
+Client
+   │
+   ▼
+Load Balancer
+   │
+ ┌─┴───────────────┐
+ ▼                 ▼
+API 1          API 2
+                   ▼
+                API 3
+```
 
-The industry trend: fewer hand-rolled HAProxy boxes, more Envoy (often invisible to app teams, driving a service mesh sidecar) plus a cloud L4/L7 LB at the edge.
+The Load Balancer decides which backend server should handle the request.
 
-## Trade-offs summary
+If one server becomes unhealthy, requests are automatically sent to healthy servers.
 
-- L4: faster, protocol-agnostic, cannot do content routing or TLS termination cheaply.
-- L7: flexible, enables canary/blue-green/path routing, but adds latency (parsing, possibly re-encrypting) and needs more CPU per connection.
-- Consistent hashing: essential for cache affinity and stateful sharding; overkill for plain stateless web tiers where round robin/least-conn is simpler and easier to reason about.
-- Sticky sessions: solve a real problem cheaply in the short term but usually indicate a design smell — the fix is usually to externalize state, not to lean harder on affinity.
+---
 
-## Common interview follow-ups
+# Benefits
 
-**Q: Your ALB shows even request distribution but one backend is still slow — why?**
-Round-robin/least-connections balances at the LB layer, but requests can vary wildly in cost (a report-generation endpoint vs a health check). Even distribution of *count* doesn't mean even distribution of *work*. You'd want least-connections or latency-aware/adaptive load balancing (e.g. Envoy's weighted-least-request), plus per-endpoint capacity isolation.
+✅ Better Performance
 
-**Q: How does a load balancer itself avoid being a single point of failure?**
-Run at least two LB nodes behind a floating/virtual IP (keepalived + VRRP) or behind DNS with health-checked records, or use a managed LB service where the cloud provider guarantees the redundancy (ALB/NLB are already multi-AZ). At L4, anycast IP plus ECMP across multiple LB instances is the hyperscaler pattern.
+✅ High Availability
 
-**Q: When would you choose consistent hashing over least connections?**
-When backend nodes hold state that benefits from affinity — a local LRU cache, in-memory session data, sharded connections to Memcached/Redis — so that repeat requests for the same key hit a warm node instead of the request being served "correctly" but slowly by a cold node.
+✅ Fault Tolerance
 
-**Q: What happens during a rolling deploy with sticky sessions enabled?**
-Draining a pinned instance either kills in-flight sessions or forces the LB to keep routing to a "draining" instance until sessions naturally expire, which can stall deploys. This is a strong argument for stateless services with externalized session stores.
+✅ Easy Horizontal Scaling
 
-**Q: NLB vs ALB — when do you pick NLB?**
-When you need extreme throughput/low latency, static IPs (for allowlisting), non-HTTP protocols (raw TCP/UDP, e.g. game servers, MQTT), or you need to preserve the client's source IP without proxy protocol.
+✅ Automatic Failover
+
+---
+
+# Layer 4 vs Layer 7 Load Balancing
+
+Load Balancers operate at different layers of the OSI model.
+
+```
+                Load Balancer
+                    │
+        ┌───────────┴───────────┐
+        ▼                       ▼
+    Layer 4                 Layer 7
+   (Transport)            (Application)
+```
+
+---
+
+# Layer 4 (L4) Load Balancer
+
+Layer 4 works with:
+
+- TCP
+- UDP
+- IP Address
+- Port Numbers
+
+It does **not** understand HTTP.
+
+Example:
+
+```
+Client
+
+↓
+
+TCP Connection
+
+↓
+
+L4 Load Balancer
+
+↓
+
+Backend Server
+```
+
+The Load Balancer forwards packets without reading URLs or headers.
+
+---
+
+## Advantages
+
+✅ Extremely fast
+
+✅ Low latency
+
+✅ Works with any TCP/UDP protocol
+
+✅ Lower CPU usage
+
+---
+
+## Disadvantages
+
+❌ Cannot inspect HTTP requests
+
+❌ Cannot route by URL
+
+❌ Cannot route using headers or cookies
+
+---
+
+## Examples
+
+- AWS Network Load Balancer (NLB)
+- Linux LVS
+- HAProxy (TCP Mode)
+
+---
+
+# Layer 7 (L7) Load Balancer
+
+Layer 7 understands HTTP.
+
+It can inspect:
+
+- URL Path
+- Headers
+- Cookies
+- HTTP Method
+- Host Name
+
+Example:
+
+```
+GET /api/users
+```
+
+↓
+
+```
+API Server
+```
+
+```
+GET /images/logo.png
+```
+
+↓
+
+```
+Image Server
+```
+
+---
+
+## Diagram
+
+```
+Client
+   │
+   ▼
+L7 Load Balancer
+   │
+ ┌─┴──────────────┐
+ ▼                ▼
+API          Static Files
+```
+
+The Load Balancer reads the request before forwarding it.
+
+---
+
+## Advantages
+
+✅ Smart Routing
+
+✅ TLS/SSL Termination
+
+✅ Header-Based Routing
+
+✅ Cookie-Based Routing
+
+✅ Canary Deployments
+
+✅ Blue-Green Deployments
+
+---
+
+## Disadvantages
+
+❌ Higher CPU usage
+
+❌ Slightly higher latency
+
+---
+
+## Examples
+
+- AWS Application Load Balancer (ALB)
+- Nginx
+- Envoy
+- HAProxy (HTTP Mode)
+- Traefik
+
+---
+
+# L4 vs L7 Comparison
+
+| Feature | Layer 4 | Layer 7 |
+|----------|----------|----------|
+| Understands HTTP | ❌ | ✅ |
+| TCP/UDP Support | ✅ | Limited |
+| URL Routing | ❌ | ✅ |
+| Header Routing | ❌ | ✅ |
+| Cookie Routing | ❌ | ✅ |
+| Speed | Faster | Slightly Slower |
+| Typical Use | Gaming, Databases | Web APIs, Websites |
+
+---
+
+# Load Balancing Algorithms
+
+A Load Balancer needs a strategy to choose the next server.
+
+---
+
+# 1. Round Robin
+
+Requests are distributed one after another.
+
+```
+Request 1 → Server A
+
+Request 2 → Server B
+
+Request 3 → Server C
+
+Request 4 → Server A
+```
+
+Best for:
+
+- Equal-sized servers
+- Stateless applications
+
+---
+
+## Advantages
+
+✅ Simple
+
+✅ Fair distribution
+
+---
+
+## Disadvantages
+
+❌ Ignores server load
+
+---
+
+# 2. Weighted Round Robin
+
+Some servers receive more traffic.
+
+```
+Server A
+
+Weight = 4
+
+Server B
+
+Weight = 2
+
+Server C
+
+Weight = 1
+```
+
+Server A receives more requests because it has more capacity.
+
+---
+
+# 3. Least Connections
+
+The next request goes to the server with the fewest active connections.
+
+```
+Server A
+
+90 Connections
+
+Server B
+
+18 Connections
+
+Server C
+
+44 Connections
+
+↓
+
+Next Request
+
+↓
+
+Server B
+```
+
+Useful when requests take different amounts of time.
+
+---
+
+# 4. Consistent Hashing
+
+Instead of choosing randomly, requests are assigned using a hash.
+
+Example:
+
+```
+User 101
+
+↓
+
+Server A
+```
+
+```
+User 102
+
+↓
+
+Server C
+```
+
+The same user always reaches the same server.
+
+---
+
+## Common Uses
+
+- Redis
+- Memcached
+- User Sessions
+- Distributed Cache
+- Database Sharding
+
+---
+
+## Advantages
+
+✅ Cache locality
+
+✅ Minimal data movement when servers are added or removed
+
+---
+
+## Disadvantages
+
+❌ More complex
+
+❌ Requires careful implementation
+
+---
+
+# 5. Random / Power of Two Choices
+
+Choose two random servers.
+
+Send the request to the less busy one.
+
+```
+Random
+
+↓
+
+Server A
+
+Server C
+
+↓
+
+Choose Lower Load
+```
+
+Popular in large cloud systems because it provides good balancing with little overhead.
+
+---
+
+# Health Checks
+
+A Load Balancer continuously checks whether backend servers are healthy.
+
+```
+Server
+
+↓
+
+Health Check
+
+↓
+
+Healthy?
+
+↓
+
+Yes → Receive Traffic
+
+No → Remove
+```
+
+---
+
+# Types of Health Checks
+
+## Active Health Check
+
+The Load Balancer periodically calls:
+
+```
+GET /health
+```
+
+If multiple checks fail, the server is removed from rotation.
+
+---
+
+## Passive Health Check
+
+The Load Balancer monitors real traffic.
+
+If a server returns many:
+
+- HTTP 500
+- Timeouts
+- Connection failures
+
+It is temporarily removed.
+
+---
+
+# Readiness vs Liveness
+
+These two health checks serve different purposes.
+
+### Liveness Check
+
+```
+Is the application running?
+```
+
+If not, restart it.
+
+---
+
+### Readiness Check
+
+```
+Can the application serve requests?
+```
+
+For example:
+
+- Database connected
+- Cache initialized
+- Startup complete
+
+Only **ready** servers should receive traffic.
+
+---
+
+# Sticky Sessions (Session Affinity)
+
+Normally:
+
+```
+Request 1
+
+↓
+
+Server A
+```
+
+```
+Request 2
+
+↓
+
+Server B
+```
+
+But if user sessions are stored in memory:
+
+```
+User Login
+
+↓
+
+Server A
+```
+
+The next request reaches:
+
+```
+Server B
+
+↓
+
+Session Missing
+```
+
+The user appears logged out.
+
+---
+
+## Sticky Session Solution
+
+Always send the same user to the same server.
+
+```
+User A
+
+↓
+
+Server 2
+
+↓
+
+Every Request
+
+↓
+
+Server 2
+```
+
+---
+
+## Better Solution
+
+Instead of relying on Sticky Sessions, store session data in:
+
+- Redis
+- Database
+- JWT Token
+
+Now every server can process every request.
+
+This creates a **stateless architecture**, which is easier to scale.
+
+---
+
+# Types of Load Balancers
+
+## Hardware Load Balancer
+
+Examples:
+
+- F5 BIG-IP
+- Citrix ADC
+
+Advantages:
+
+- Very high performance
+
+Disadvantages:
+
+- Expensive
+- Difficult to scale
+
+---
+
+## Software Load Balancer
+
+Examples:
+
+- Nginx
+- HAProxy
+- Envoy
+- Traefik
+
+Advantages:
+
+- Flexible
+- Cost-effective
+- Widely used
+
+---
+
+## Cloud Managed Load Balancer
+
+Examples:
+
+- AWS ALB
+- AWS NLB
+- Google Cloud Load Balancer
+- Azure Application Gateway
+
+Advantages:
+
+- Fully managed
+- Automatic scaling
+- Multi-region support
+- Built-in monitoring
+
+---
+
+# Real-World Architecture
+
+```
+             Internet
+                  │
+                  ▼
+        Cloud Load Balancer
+                  │
+        ┌─────────┴─────────┐
+        ▼         ▼         ▼
+      API 1     API 2     API 3
+                  │
+                  ▼
+             Redis / Database
+```
+
+This architecture provides:
+
+- High Availability
+- Horizontal Scaling
+- Fault Tolerance
+
+---
+
+# Best Practices
+
+✅ Keep application servers stateless
+
+✅ Store sessions in Redis or use JWT
+
+✅ Enable health checks
+
+✅ Monitor server latency
+
+✅ Use HTTPS/TLS
+
+✅ Configure automatic failover
+
+---
+
+# Common Mistakes
+
+❌ Using Sticky Sessions for everything
+
+❌ No health checks
+
+❌ One Load Balancer without redundancy
+
+❌ Ignoring slow servers
+
+❌ Using Round Robin for long-running requests
+
+---
+
+# Real-World Examples
+
+### Netflix
+
+Uses Envoy and cloud load balancing to route traffic across thousands of microservices.
+
+---
+
+### AWS
+
+Provides:
+
+- ALB (Layer 7)
+- NLB (Layer 4)
+
+---
+
+### Kubernetes
+
+Uses Services and Ingress Controllers (such as Nginx or Traefik) to distribute traffic across Pods.
+
+---
+
+# Interview Questions
+
+## Why do we need a Load Balancer?
+
+To distribute requests across multiple servers, improve performance, and provide high availability.
+
+---
+
+## What's the difference between Layer 4 and Layer 7?
+
+| Layer 4 | Layer 7 |
+|----------|----------|
+| Uses TCP/UDP | Understands HTTP |
+| Faster | Smarter |
+| No URL routing | Supports URL, Header, Cookie routing |
+
+---
+
+## When should you use Consistent Hashing?
+
+When requests should consistently reach the same backend, such as for caching, session affinity, or sharded databases.
+
+---
+
+## Why are Sticky Sessions discouraged?
+
+Because they tightly couple users to individual servers, making scaling and deployments harder.
+
+A stateless architecture with shared session storage is usually a better long-term solution.
+
+---
+
+## How does a Load Balancer know a server has failed?
+
+By performing active health checks or observing failed requests through passive health checks.
+
+---
+
+## How do you avoid the Load Balancer becoming a single point of failure?
+
+Deploy multiple Load Balancers behind a virtual IP, DNS, or use a managed cloud Load Balancer that provides built-in redundancy.
+
+---
+
+# Key Takeaways
+
+- A Load Balancer distributes requests across multiple servers.
+- Layer 4 works at the transport level and is optimized for speed.
+- Layer 7 understands HTTP and enables intelligent routing.
+- Health checks automatically remove unhealthy servers.
+- Consistent Hashing is ideal for caches and stateful workloads.
+- Stateless applications are easier to scale than applications relying on Sticky Sessions.
+- Load Balancing is a core building block of modern distributed systems.
+
+---
 
 ## Related topics
 
