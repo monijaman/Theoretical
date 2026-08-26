@@ -32,6 +32,38 @@ A friendly, practical walkthrough of Python: from "Hello, World!" to decorators,
 24. [Cheat Sheet](#24-cheat-sheet)
 25. [Where to Go Next](#25-where-to-go-next)
 
+### Topic overview
+
+Use this quick summary to understand what each part of the guide teaches before reading it in detail.
+
+| Topic | Brief explanation |
+|---|---|
+| What is Python? | Introduces Python, its common uses, strengths, and trade-offs. |
+| Setup & Running Code | Shows how to check Python, run a file, and use the interactive shell. |
+| Basic Syntax | Explains indentation, comments, statements, and Python's basic writing rules. |
+| Variables & Data Types | Covers how Python stores text, numbers, booleans, collections, and empty values. |
+| Operators | Introduces arithmetic, comparison, logical, identity, and membership operations. |
+| Strings | Shows how to create, access, change, search, and format text. |
+| Control Flow | Uses conditions and loops to decide which code runs and how often it runs. |
+| Collections | Explains lists, tuples, sets, and dictionaries for storing groups of values. |
+| Functions | Shows how to group reusable logic, accept inputs, and return results. |
+| Comprehensions | Demonstrates compact ways to build collections from existing data. |
+| Object-Oriented Programming | Organizes data and behavior using classes, objects, inheritance, and properties. |
+| Error Handling | Shows how to detect, handle, raise, and clean up after runtime errors. |
+| Modules & Packages | Explains how to split code into reusable files and folders and import it. |
+| File Handling | Covers safely reading and writing text, JSON, and CSV files. |
+| Iterators & Generators | Produces values one at a time, which is useful for large data and efficient memory use. |
+| Decorators | Adds behavior to functions or methods without changing their original code. |
+| Context Managers | Manages setup and cleanup automatically with the `with` statement. |
+| Type Hints | Documents expected value types and helps development tools catch mistakes. |
+| Virtual Environments & pip | Keeps each project's third-party packages isolated and manageable. |
+| Standard Library Modules | Introduces useful tools included with Python, so no separate installation is needed. |
+| Concurrency | Compares threads, processes, and async code for handling multiple tasks. |
+| Testing | Verifies that code behaves correctly and continues working after changes. |
+| Common Pitfalls | Highlights frequent Python mistakes and how to avoid them. |
+| Cheat Sheet | Provides a compact reference for common syntax and built-in functions. |
+| Where to Go Next | Suggests practical learning paths and small projects for continued practice. |
+
 ---
 
 ## 1. What is Python?
@@ -647,16 +679,21 @@ from my_package.module_a import some_function
 ```
 
 ### Standard library imports
+
+The **standard library** is a collection of modules included with Python. You can import these modules without installing a separate package. Each module focuses on a particular kind of task:
+
 ```python
-import os
-import sys
-import json
-import re
-import datetime
-import random
-import collections
-import itertools
+import os           # Work with the operating system: files, folders, paths, and environment variables
+import sys          # Access Python runtime features, command-line arguments, and program exit controls
+import json         # Convert between Python values and JSON text or files
+import re           # Search, match, and replace text using regular expressions (patterns)
+import datetime     # Create, compare, and format dates and times
+import random       # Generate pseudo-random numbers and choose or shuffle items
+import collections  # Use specialized containers such as Counter, defaultdict, and deque
+import itertools    # Build efficient iterators for combining, grouping, and repeating values
 ```
+
+Importing a module makes its tools available through the module name. For example, `json.loads(text)` converts JSON text into a Python value, while `random.choice(items)` selects one item from a collection.
 
 ---
 
