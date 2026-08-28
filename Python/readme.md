@@ -70,6 +70,8 @@ Use this quick summary to understand what each part of the guide teaches before 
 
 Python is a high-level, interpreted, dynamically-typed language created by **Guido van Rossum**, first released in 1991. It's designed to be **readable** — code often looks close to plain English.
 
+Unlike a compiled language, Python normally executes your program through an interpreter. This makes the edit-run-test cycle quick and approachable. “Dynamically typed” means a variable does not have one permanently declared type; Python determines the type of the value while the program runs. These choices make Python easy to learn and productive for many kinds of work, although they also explain some of its performance and runtime-error trade-offs.
+
 **Why people love it:**
 - Simple, clean syntax — great for beginners
 - Huge standard library ("batteries included")
@@ -85,17 +87,22 @@ Python is a high-level, interpreted, dynamically-typed language created by **Gui
 
 ## 2. Setup & Running Code
 
+Before writing a larger program, you need to know how Python code reaches the interpreter. You can run saved `.py` files for repeatable programs or use the interactive REPL to test small expressions immediately. The examples below establish both workflows and introduce the conventional entry point used in real Python scripts.
+
 ### Check your installation
+This command confirms that Python 3 is installed and shows which version your terminal will use.
 ```bash
 python3 --version
 ```
 
 ### Running a script
+Save Python instructions in a file ending in `.py`, then pass that filename to the interpreter.
 ```bash
 python3 script.py
 ```
 
 ### Interactive REPL (great for experimenting)
+The REPL reads one instruction, evaluates it, prints the result, and waits for the next instruction. It is ideal for quick experiments, but your work is not saved automatically.
 ```bash
 python3
 >>> print("Hello!")
@@ -104,6 +111,7 @@ Hello!
 ```
 
 ### One file structure
+Small programs commonly place their main workflow in a function and call it through an entry-point check. This keeps the file usable both as an executable script and as an importable module.
 ```python
 # script.py
 def main():
@@ -120,6 +128,8 @@ if __name__ == "__main__":
 ## 3. Basic Syntax
 
 Python uses **indentation** (not `{}`) to define code blocks. This is not a style choice — it's required syntax.
+
+Syntax is the set of writing rules the interpreter expects. In Python, whitespace communicates structure: indented lines belong to the condition, loop, function, or class above them. Consistent formatting is therefore part of program correctness as well as readability.
 
 ```python
 # Comments start with #
@@ -145,6 +155,8 @@ total = (1 + 2 +
 
 Python is **dynamically typed** — you don't declare a type, and a variable can be reassigned to a different type.
 
+A variable is a name that refers to a value; it is not a box with a permanently fixed data type. The value's type determines which operations are valid—for example, numbers can be added mathematically, while strings can be joined as text. Understanding these types helps you predict what an expression will produce and why a type-related error occurs.
+
 ```python
 name = "Alice"      # str
 age = 30             # int
@@ -156,6 +168,7 @@ age = "thirty"        # totally legal — age is now a str
 ```
 
 ### Core built-in types
+These are the everyday value categories built directly into Python. Choose a type according to what the value represents and whether a collection needs ordering, uniqueness, or modification.
 ```python
 int        # whole numbers: 42, -7
 float      # decimals: 3.14, -0.5
@@ -169,6 +182,7 @@ NoneType   # None               — represents "no value"
 ```
 
 ### Checking and converting types
+Use `type()` when exploring the exact type and `isinstance()` when checking whether a value belongs to an expected type. Conversion functions create a value of another type when the source value has a compatible form.
 ```python
 type(42)              # <class 'int'>
 isinstance(42, int)   # True
@@ -183,6 +197,8 @@ bool(1)       # True
 ---
 
 ## 5. Operators
+
+Operators combine, compare, or inspect values. The same symbol can behave differently depending on the operands: `+` adds numbers but joins strings, for example. The examples are grouped by purpose so you can distinguish calculations, boolean decisions, object identity, and collection membership.
 
 ```python
 # Arithmetic
@@ -224,6 +240,8 @@ if (n := len([1, 2, 3])) > 2:
 
 ## 6. Strings
 
+Strings represent text as an ordered sequence of Unicode characters. Because they are sequences, you can access characters by index, extract ranges with slicing, and measure them with `len()`. String methods return useful transformed or searched results without changing the original string.
+
 ```python
 s = "Hello, World!"
 
@@ -245,6 +263,7 @@ s.find("World")            # 7 (index, or -1 if not found)
 ```
 
 ### f-strings (the modern, preferred way to format strings)
+An f-string places values and expressions inside readable text using `{}` placeholders. It is usually clearer than joining many strings manually and can also control number precision, alignment, and debug representations.
 ```python
 name = "Alice"
 age = 30
@@ -265,6 +284,10 @@ Strings are **immutable** — every "modification" creates a new string object.
 ---
 
 ## 7. Control Flow
+
+Control flow determines the order in which instructions run. Conditions choose one path from several possibilities, loops repeat work, and `break` or `continue` changes a loop's normal progression. These tools turn a straight list of statements into a program that can react to its data.
+
+Read each example by asking two questions: “What condition is being tested?” and “Which indented block runs when that condition is true?” This habit makes nested logic much easier to follow.
 
 ```python
 # if / elif / else
@@ -313,7 +336,10 @@ match score:
 
 ## 8. Collections: List, Tuple, Set, Dict
 
+Collections store multiple related values under one name. Python provides several collection types because programs need different guarantees: sometimes order matters, sometimes values must be unique, and sometimes a meaningful key should locate each value. Choosing the right collection makes the code simpler and communicates your intent.
+
 ### List — ordered, mutable, allows duplicates
+A list is the general-purpose choice for a sequence that may grow, shrink, or change. Items keep their position and are accessed with zero-based indexes.
 ```python
 fruits = ["apple", "banana", "cherry"]
 
@@ -329,6 +355,7 @@ fruits[0:2]                  # slicing
 ```
 
 ### Tuple — ordered, immutable
+A tuple also preserves order, but its item references cannot be replaced after creation. It is useful for fixed groups such as coordinates or multiple values returned together.
 ```python
 point = (3, 4)
 x, y = point          # unpacking
@@ -343,6 +370,7 @@ lo, hi = min_max([3, 1, 4, 1, 5])
 ```
 
 ### Set — unique, unordered
+A set automatically removes duplicates and supports fast membership checks. Set operations are especially useful when comparing groups, such as finding shared or missing values.
 ```python
 a = {1, 2, 3}
 b = {2, 3, 4}
@@ -356,6 +384,7 @@ a.remove(1)
 ```
 
 ### Dict — key-value pairs
+A dictionary associates each unique key with a value. Use it when a name, ID, or other key is more meaningful than a numeric position.
 ```python
 person = {"name": "Alice", "age": 30}
 
@@ -376,6 +405,7 @@ person.pop("email", None)   # remove safely
 ```
 
 ### Quick comparison
+Use this table as a decision aid: first decide whether you need key-based access, then consider ordering, duplicates, and whether the collection must be changed.
 
 | Type | Ordered | Mutable | Duplicates | Syntax |
 |---|---|---|---|---|
@@ -389,6 +419,10 @@ person.pop("email", None)   # remove safely
 ---
 
 ## 9. Functions
+
+A function gives a name to a reusable block of behavior. Inputs arrive through parameters, the body performs the work, and `return` sends a result back to the caller. Functions reduce repetition and let a larger problem be divided into small pieces that can be understood and tested independently.
+
+The examples progress from ordinary parameters to flexible argument collection. Prefer a simple, explicit signature unless a function genuinely needs to accept a variable number of inputs.
 
 ```python
 def greet(name):
@@ -427,6 +461,7 @@ people.sort(key=lambda p: p["age"])
 ```
 
 **Scope basics:**
+Scope answers “where can this name be accessed?” A function normally has its own local scope, while nested and module-level scopes surround it. `nonlocal` and `global` explicitly rebind names outside the current function and should be used carefully because they make state changes less local.
 ```python
 x = "global"
 
@@ -448,6 +483,8 @@ def modify_global():
 ## 10. Comprehensions
 
 A compact way to build lists, dicts, and sets from existing iterables.
+
+A comprehension describes both the transformation and the source data in one expression. Read it in this order: the value to produce, the loop that supplies each input, and any optional condition that filters inputs. It is concise, but clarity is more important than minimizing line count.
 
 ```python
 # List comprehension
@@ -479,7 +516,12 @@ Use comprehensions when they stay **readable on one line**. If the logic needs m
 
 ## 11. Object-Oriented Programming
 
+Object-oriented programming groups related state and behavior into objects. A class is the reusable definition, while an instance is one concrete object created from that class. OOP is useful when a domain contains entities—such as users, orders, or devices—that have their own data and operations.
+
+Not every program needs classes. They are most helpful when they create a clear boundary around responsibilities and preserve rules about how an object's state may change.
+
 ### Classes and instances
+The constructor initializes each new instance, `self` refers to the current instance, and methods define operations it can perform. Class attributes are shared defaults; instance attributes belong to one object.
 ```python
 class Dog:
     species = "Canis familiaris"    # class attribute — shared by all instances
@@ -503,6 +545,7 @@ print(rex)             # uses __str__: "Dog(Rex, 3)"
 ```
 
 ### Inheritance
+Inheritance creates a specialized class from a more general one. A child can reuse parent behavior or override a method, allowing callers to use a common interface with different implementations.
 ```python
 class Animal:
     def __init__(self, name):
@@ -525,6 +568,7 @@ for a in animals:
 ```
 
 ### `super()` — call the parent class
+`super()` delegates work to the parent implementation. It avoids duplicating initialization logic and becomes especially important when a class hierarchy changes.
 ```python
 class Employee:
     def __init__(self, name, salary):
@@ -538,6 +582,7 @@ class Manager(Employee):
 ```
 
 ### Properties — controlled attribute access
+A property looks like a normal attribute to callers but runs method logic behind the scenes. It can calculate a value, validate an assignment, or protect an object's internal representation.
 ```python
 class Circle:
     def __init__(self, radius):
@@ -558,6 +603,7 @@ c.area        # accessed like an attribute, computed like a method
 ```
 
 ### Class methods & static methods
+A class method receives the class as `cls` and is often used as an alternate constructor. A static method belongs conceptually to the class but needs neither a particular instance nor the class itself.
 ```python
 class Pizza:
     def __init__(self, toppings):
@@ -575,6 +621,7 @@ Pizza.margherita()
 ```
 
 ### Dataclasses — less boilerplate (Python 3.7+)
+Dataclasses are designed for classes whose main purpose is storing structured data. The decorator generates routine methods so the code can focus on the fields and domain behavior.
 ```python
 from dataclasses import dataclass
 
@@ -588,6 +635,7 @@ print(p)           # Point(x=1, y=2)
 ```
 
 ### Key OOP terms
+These terms describe the main design ideas behind classes. Treat them as tools for organizing responsibilities, not as rules that every solution must maximize.
 
 | Concept | Meaning |
 |---|---|
@@ -599,6 +647,10 @@ print(p)           # Point(x=1, y=2)
 ---
 
 ## 12. Error Handling
+
+Exceptions report that a program cannot complete an operation normally. Error handling lets you respond deliberately—for example, by showing a useful message, trying an alternative, or releasing a resource—instead of allowing an unexplained crash.
+
+Catch only exceptions you can handle meaningfully. A broad catch can hide programming mistakes, whereas a specific exception documents the failure you expected and keeps unrelated bugs visible.
 
 ```python
 try:
@@ -645,6 +697,8 @@ except Exception as e:
 
 ## 13. Modules & Packages
 
+As a program grows, keeping everything in one file becomes difficult to navigate and reuse. A module is a Python file that can expose functions, classes, and variables; a package organizes related modules in a directory. Imports connect these pieces while giving each one a clear namespace.
+
 ```python
 # math_utils.py
 def add(a, b):
@@ -667,6 +721,7 @@ import math_utils as mu                 # alias the module
 ```
 
 ### Packages (folders with `__init__.py`)
+A package provides a stable grouping for related modules. The dotted import path mirrors the folder structure, helping both Python and readers locate the code.
 ```
 my_package/
     __init__.py
@@ -699,6 +754,10 @@ Importing a module makes its tools available through the module name. For exampl
 
 ## 14. File Handling
 
+Files let a program keep data after the process ends or exchange data with other tools. Opening a file creates a resource with a mode: read (`r`), write (`w`), or append (`a`). Be careful with write mode because it replaces existing content, while append adds content at the end.
+
+Text encoding and error handling matter in production code; `encoding="utf-8"` is usually a good explicit choice for text files. The introductory examples focus on the core open-read/write-close lifecycle.
+
 ```python
 # Writing
 with open("data.txt", "w") as f:
@@ -723,6 +782,7 @@ with open("data.txt", "a") as f:
 The `with` statement (a context manager, see [Section 17](#17-context-managers-with)) guarantees the file closes automatically, even if an error occurs.
 
 ### JSON
+JSON stores objects, arrays, strings, numbers, booleans, and null in a language-independent text format. Python's `json` module converts between that text and familiar dictionaries, lists, and primitive values.
 ```python
 import json
 
@@ -739,6 +799,7 @@ with open("data.json", "r") as f:
 ```
 
 ### CSV
+CSV represents table-like data as rows and columns. `DictReader` uses the header row as dictionary keys, which often makes code easier to understand than accessing columns by position.
 ```python
 import csv
 
@@ -757,8 +818,12 @@ with open("data.csv", "w", newline="") as f:
 
 ## 15. Iterators & Generators
 
+Iteration is Python's common protocol for retrieving a sequence of values one at a time. Lists, files, strings, generator objects, and many library results all work with `for` because they follow this protocol. Understanding it explains both everyday loops and memory-efficient data pipelines.
+
 ### Iterators
 Anything with `__iter__` and `__next__` can be looped over with `for`.
+
+An iterator remembers its current position. Each `next()` request returns one value and advances that position until `StopIteration` signals that no values remain; a `for` loop handles that signal automatically.
 
 ```python
 nums = [1, 2, 3]
@@ -770,6 +835,7 @@ next(it)   # raises StopIteration
 ```
 
 ### Generators — functions that yield instead of return
+A generator is a convenient way to create an iterator. `yield` produces a value and pauses the function while preserving its local state, so execution can resume later instead of starting over.
 ```python
 def count_up_to(n):
     i = 1
@@ -801,6 +867,8 @@ next(squares)   # 0  — computed on demand
 
 A decorator wraps a function to add behavior without modifying its code.
 
+The `@decorator` syntax is equivalent to replacing the original function with the decorator's returned wrapper. Common uses include logging, authorization, caching, retries, and timing. Decorators are powerful because one cross-cutting rule can be reused consistently across many functions.
+
 ```python
 import functools
 import time
@@ -822,6 +890,7 @@ slow_function()   # prints timing automatically
 ```
 
 ### Decorators with arguments
+A decorator that accepts configuration needs an extra function layer: the outer function receives configuration, the next receives the target function, and the wrapper receives the target's runtime arguments.
 ```python
 def repeat(times):
     def decorator(func):
@@ -841,6 +910,7 @@ greet()   # prints "Hi!" three times
 ```
 
 ### Built-in decorators you'll see everywhere
+These decorators solve common language and library needs. Some change method access in classes, while others compute properties, cache results, or preserve metadata when wrapping functions.
 ```python
 @staticmethod
 @classmethod
@@ -855,6 +925,8 @@ greet()   # prints "Hi!" three times
 
 Guarantee setup/cleanup happens, even on error — most common for files, locks, and connections.
 
+A context manager defines what happens when a controlled block begins and ends. The `with` statement makes resource lifetimes visible in the code and ensures cleanup is not accidentally skipped by an early return or exception.
+
 ```python
 with open("file.txt") as f:
     data = f.read()
@@ -862,6 +934,7 @@ with open("file.txt") as f:
 ```
 
 ### Writing your own (class-based)
+The class protocol uses `__enter__` for setup and `__exit__` for cleanup. Information about any exception is passed to `__exit__`, which may either allow it to propagate or deliberately suppress it.
 ```python
 class Timer:
     def __enter__(self):
@@ -876,6 +949,7 @@ with Timer():
 ```
 
 ### Writing your own (generator-based, simpler)
+`contextlib.contextmanager` turns a generator-style function into the same protocol. Code before `yield` performs setup, and code after it performs cleanup.
 ```python
 from contextlib import contextmanager
 
@@ -894,6 +968,8 @@ with timer():
 ## 18. Type Hints
 
 Optional annotations that document intent and let tools (mypy, IDEs) catch bugs before running code. They are **not enforced at runtime**.
+
+Type hints make function contracts easier to understand: readers can see what inputs are expected and what result is returned. Editors and static checkers use the annotations to find mismatches across a codebase before those paths are executed. They improve communication without changing Python's dynamic runtime model.
 
 ```python
 def greet(name: str) -> str:
@@ -928,6 +1004,8 @@ mypy script.py
 
 Isolate project dependencies so they don't clash across projects.
 
+`pip` installs third-party packages, while a virtual environment gives one project its own Python executable and package directory. Without isolation, upgrading a library for one project may break another project that expects an older version. Activate the environment before installing or running project commands so the correct dependencies are used.
+
 ```bash
 # Create a virtual environment
 python3 -m venv venv
@@ -954,6 +1032,8 @@ deactivate
 ---
 
 ## 20. Useful Standard Library Modules
+
+Python ships with a broad standard library, so many common tasks need no third-party dependency. The modules below cover operating-system interaction, command-line behavior, dates, pattern matching, specialized containers, iterator construction, and random selection. Learn what each module is responsible for; you can consult its documentation for the many individual functions later.
 
 ```python
 import os
@@ -997,10 +1077,15 @@ random.shuffle(my_list)
 
 Python has three main concurrency tools, each suited to a different kind of problem.
 
+Concurrency means making progress on multiple tasks during overlapping periods; parallelism means tasks literally execute at the same instant. The right approach depends mainly on whether work spends time waiting for I/O or actively using the CPU. These tools also differ in memory sharing, complexity, and startup cost.
+
 ### The GIL (Global Interpreter Lock)
 CPython only lets **one thread execute Python bytecode at a time**. This means threads don't give you true CPU parallelism — they're great for I/O-bound work (waiting on network/disk) but not CPU-bound work (heavy computation).
 
+The GIL does not make threading useless: another thread can run while one waits for a file, database, or network response. It mainly changes the choice for sustained CPU-heavy Python code.
+
 ### Threading — good for I/O-bound tasks
+Threads run within one process and share its memory, which makes data sharing convenient but requires care around simultaneous mutation. Always wait for required worker threads with `join()` before using their final results or exiting.
 ```python
 import threading
 
@@ -1017,6 +1102,8 @@ for t in threads:
 ### Multiprocessing — good for CPU-bound tasks
 Each process gets its own Python interpreter and memory — bypasses the GIL entirely.
 
+Separate memory enables true parallel CPU work but adds process startup and inter-process communication overhead. Use it when each unit of computation is substantial enough to justify that cost.
+
 ```python
 from multiprocessing import Pool
 
@@ -1028,6 +1115,7 @@ with Pool(processes=4) as pool:
 ```
 
 ### Asyncio — good for many concurrent I/O tasks in a single thread
+Asyncio uses an event loop and cooperative tasks. An `async` function pauses at `await` while an operation is waiting, allowing another task to progress; blocking code that never awaits can still freeze the loop.
 ```python
 import asyncio
 
@@ -1049,6 +1137,7 @@ asyncio.run(main())
 ```
 
 ### When to use which
+Start by classifying the workload, then choose the simplest tool that fits. Measure real performance before adding concurrency because coordination overhead can make small workloads slower.
 
 | Tool | Best for | Why |
 |---|---|---|
@@ -1061,6 +1150,8 @@ asyncio.run(main())
 ## 22. Testing
 
 Python's built-in `unittest`, or the far more popular third-party `pytest`.
+
+A test runs code with a known input and checks that the observed result matches the expected result. Small automated tests catch regressions after changes, document intended behavior, and make refactoring safer. Good tests cover normal behavior, boundary values, and expected failures without depending unnecessarily on one another.
 
 ```python
 # test_math.py
@@ -1095,6 +1186,7 @@ if __name__ == "__main__":
 ```
 
 ### Fixtures (pytest) — reusable setup
+A fixture prepares reusable test data or resources and can also clean them up afterward. This keeps setup out of individual test bodies and makes the behavior under test easier to see.
 ```python
 import pytest
 
@@ -1109,6 +1201,8 @@ def test_name(sample_data):
 ---
 
 ## 23. Common Pitfalls
+
+Some valid-looking Python patterns behave differently from what beginners expect. The examples below explain both the surprising behavior and a safer replacement. Do not merely memorize the corrected line; connect it to mutability, iteration state, closure scope, floating-point representation, or object identity so you can recognize the same issue in new code.
 
 ```python
 # 1. Mutable default arguments — a classic Python trap
@@ -1159,6 +1253,8 @@ x is y   # often False — don't rely on this, always use == for value equality
 
 ## 24. Cheat Sheet
 
+This section is a memory aid after you have studied the fuller explanations above. The left side shows common syntax or a built-in function, and the right side states its usual purpose. When a shortcut is unfamiliar, return to its main section and experiment with a small value in the REPL.
+
 ```
 print(x)                     print to console
 type(x)                      get the type
@@ -1185,6 +1281,8 @@ ternary                   x if cond else y
 ## 25. Where to Go Next
 
 Once you're comfortable with everything above, here's a natural progression:
+
+Learning becomes durable when you use each concept to solve a small real problem. Pick one direction, build the smallest useful version, test it, and expand it only after you understand the current code. You do not need to master every library before starting; projects reveal which topic you need next.
 
 1. **Pick a track and build something small:**
    - Web: Flask or FastAPI (build a small API)
