@@ -40,6 +40,10 @@ Go (also called Golang) is a statically typed, compiled language designed at Goo
 
 ## 2. Basic Syntax
 
+### Gin framework
+
+[Learn Go Gin](./gin-framework.md) — build HTTP APIs with routes, handlers, JSON, middleware, validation, and tests.
+
 ### Hello World
 ```go
 package main
