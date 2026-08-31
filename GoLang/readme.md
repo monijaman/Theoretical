@@ -939,4 +939,61 @@ Context    →  cancel / timeout propagation
 atomic     →  lock-free counters
 ```
 
+## Example Walkthroughs
+
+### Choosing a collection
+
+```go
+names := []string{"Alice", "Bob"}       // slice: ordered, growable list
+scores := map[string]int{"Alice": 90}  // map: lookup by name
+person := Person{Name: "Alice", Age: 30} // struct: related fields
+```
+
+Use a slice when order matters, a map when lookup by key matters, and a struct when several values describe one thing. These types can be combined: a map can store structs, and a struct can contain slices.
+
+### Returning a result and an error
+
+```go
+data, err := os.ReadFile("config.json")
+if err != nil {
+    return fmt.Errorf("load config: %w", err)
+}
+fmt.Println(len(data))
+```
+
+The function stops on failure, adds context, and only uses `data` after confirming that `err` is nil. This pattern prevents invalid or incomplete data from moving deeper into the application.
+
+### Coordinating concurrent work
+
+```go
+results := make(chan int, 3)
+var wg sync.WaitGroup
+
+for _, n := range []int{2, 3, 4} {
+    wg.Add(1)
+    go func(value int) {
+        defer wg.Done()
+        results <- value * value
+    }(n)
+}
+
+go func() {
+    wg.Wait()
+    close(results)
+}()
+
+for result := range results {
+    fmt.Println(result)
+}
+```
+
+Each goroutine calculates one value. The `WaitGroup` knows when all calculations finish, the coordinator closes the results channel, and `range` stops safely. Only the goroutine responsible for producing all results should close that channel.
+
+### Choosing synchronization
+
+- Use a channel to pass work or results between goroutines.
+- Use a `WaitGroup` when you only need to wait for completion.
+- Use a mutex when several goroutines share and modify the same data.
+- Use `select` when waiting for a result, timeout, or cancellation.
+
 > **Golden rule:** prefer channels for communication, use mutexes only when you truly share state.
