@@ -15,6 +15,29 @@ Go (also called Golang) is a statically typed, compiled language designed at Goo
 
 ---
 
+### Common Go terms in simple words
+
+| Term | Short description |
+|---|---|
+| Variable | A named place that stores a value. |
+| Type | The kind of value a variable can hold, such as `int` or `string`. |
+| Function | A reusable block of code that performs a task. |
+| Array | A fixed-size, ordered collection of values of the same type. |
+| Slice | A flexible, growable list backed by an array. |
+| Map | A key-value collection, like a dictionary for fast lookups. |
+| Struct | A custom type that groups related fields, such as a name and age. |
+| Pointer | A value that stores the memory address of another value. |
+| Method | A function attached to a type. |
+| Interface | A set of method requirements that a type can satisfy. |
+| Package | A group of related Go code that can be imported. |
+| Error | A returned value explaining why an operation failed. |
+| Goroutine | A lightweight concurrent task started with the `go` keyword. |
+| Channel | A typed pipe used to send values between goroutines. |
+| Mutex | A lock that protects shared data from simultaneous access. |
+| Context | A value used for cancellation, deadlines, and request data. |
+
+---
+
 ## 2. Basic Syntax
 
 ### Hello World
@@ -149,6 +172,8 @@ default:
 ## 3. Composite Types
 
 ### Arrays (fixed size)
+
+An array is an ordered list whose length cannot change after creation.
 ```go
 var arr [5]int            // [0 0 0 0 0]
 arr := [3]string{"a", "b", "c"}
@@ -156,6 +181,8 @@ arr := [...]int{1, 2, 3}  // compiler counts
 ```
 
 ### Slices (dynamic, most used)
+
+A slice is a flexible list that can grow when you use `append`.
 ```go
 s := []int{1, 2, 3}
 s = append(s, 4, 5)
@@ -170,6 +197,8 @@ copy(dst, src)
 ```
 
 ### Maps
+
+A map stores values by key, such as `userID -> user`, for quick lookups.
 ```go
 m := map[string]int{
     "alice": 90,
@@ -190,6 +219,8 @@ m := make(map[string]int)
 ```
 
 ### Structs
+
+A struct is a custom data shape that keeps related fields together.
 ```go
 type Person struct {
     Name string
