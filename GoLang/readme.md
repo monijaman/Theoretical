@@ -4,6 +4,8 @@
 
 ## 1. What is Go?
 
+Go is designed for readable, maintainable server software. Its compiler catches many mistakes early, and its standard library includes useful tools for HTTP, files, testing, JSON, and concurrency.
+
 Go (also called Golang) is a statically typed, compiled language designed at Google in 2007 by Robert Griesemer, Rob Pike, and Ken Thompson. It was built to fix pain points in large-scale software development — slow builds, complex dependency management, and poor concurrency support.
 
 **Key traits:**
@@ -60,6 +62,8 @@ Every Go file starts with `package`. The `main` package + `main()` function is t
 ---
 
 ### Variables
+
+Variables hold values. Go requires every variable to have a type, either written explicitly or inferred from the assigned value. Unused local variables and imports are compile-time errors.
 ```go
 // Explicit type
 var name string = "Alice"
@@ -82,6 +86,8 @@ var s string  // ""
 ---
 
 ### Data Types
+
+Go’s basic types describe numbers, text, true/false values, and Unicode characters. Choosing the correct type makes data conversions clearer.
 ```go
 bool
 string
@@ -96,6 +102,8 @@ rune   // alias for int32 (Unicode code point)
 ---
 
 ### Functions
+
+Functions package reusable behavior. Go commonly returns both a result and an `error`, making failure handling explicit.
 ```go
 // Basic
 func add(a int, b int) int {
@@ -124,6 +132,8 @@ func minMax(nums []int) (min, max int) {
 ---
 
 ### Control Flow
+
+Go keeps control flow small and predictable: `if`, `for`, and `switch` cover most decisions and loops. Braces are required, and there is no separate `while` keyword.
 ```go
 // if-else (no parentheses needed)
 if x > 10 {
@@ -241,6 +251,8 @@ point := struct{ X, Y int }{X: 1, Y: 2}
 ---
 
 ## 4. Pointers
+
+A pointer lets a function refer to and modify the original value instead of receiving a copy. Use pointers when a value must be changed or needs to represent “no value” with `nil`.
 ```go
 x := 42
 p := &x     // p holds the address of x
@@ -256,6 +268,8 @@ Go has pointers but **no pointer arithmetic** — safer than C.
 ## 5. Methods and Interfaces
 
 ### Methods (functions on types)
+
+Methods give a type behavior. Use a value receiver for a copy and a pointer receiver when the method must modify the original value or avoid copying a large struct.
 ```go
 type Rectangle struct {
     Width, Height float64
@@ -274,6 +288,8 @@ func (r *Rectangle) Scale(factor float64) {
 ```
 
 ### Interfaces
+
+An interface describes what a type can do by listing its required methods. A type automatically satisfies the interface when it has all of those methods—there is no `implements` keyword. Think of it as a contract: any type that follows the contract can be used wherever the interface is expected.
 ```go
 type Shape interface {
     Area()      float64
@@ -299,6 +315,8 @@ val, ok := anything.(string)
 ---
 
 ## 6. Error Handling
+
+Go treats errors as ordinary values returned by functions. Check errors immediately, add useful context when returning them, and avoid ignoring errors without a deliberate reason.
 
 Go has no exceptions. Errors are values.
 
@@ -327,6 +345,8 @@ errors.As(err, &myErrType)      // extract wrapped error type
 ---
 
 ## 7. Packages and Modules
+
+A package groups related code. A module is the project boundary described by `go.mod`; it records the module path and dependency versions.
 
 ```go
 // File: math/calculator.go
@@ -376,6 +396,10 @@ Most languages share memory with locks. Go encourages passing data through chann
 
 A goroutine is a **lightweight thread** managed by the Go runtime, not the OS.
 
+Use a goroutine when work can happen independently, such as handling an HTTP request, reading a file, or processing a job. Starting a goroutine does not wait for it to finish; the next statement runs immediately. The program must provide synchronization or the goroutine may be stopped when `main` returns.
+
+Goroutines are concurrent, but they are not automatically parallel. The Go scheduler decides when they run, and parallel execution depends on available CPU cores. Avoid creating goroutines without an exit plan, because a blocked goroutine can become a goroutine leak.
+
 ```go
 func sayHello(name string) {
     fmt.Printf("Hello, %s!\n", name)
@@ -401,6 +425,14 @@ func main() {
 ## 9. WaitGroups — Waiting for Goroutines
 
 Instead of `time.Sleep`, use `sync.WaitGroup`:
+
+A `WaitGroup` is a counter for a group of goroutines. Call `Add(1)` before starting each goroutine, call `Done()` exactly once when that goroutine finishes, and call `Wait()` when the caller must wait for all work to complete. Put `Done()` in a `defer` statement so early returns do not leave the counter unfinished.
+
+Important rules:
+
+- Call `Add` before launching the goroutine.
+- Do not copy a `WaitGroup` after using it; pass a pointer when needed.
+- A `WaitGroup` only waits. It does not send results or return errors.
 
 ```go
 import "sync"
@@ -445,6 +477,10 @@ for _, name := range names {
 ## 10. Channels
 
 Channels are typed conduits for communication between goroutines.
+
+A channel is a safe queue or handoff point for values of one type. Sending and receiving can block, which gives goroutines a way to synchronize without manually sharing memory. Prefer a channel when goroutines need to pass ownership of work or results; use a mutex when they must protect shared state.
+
+The sender normally closes a channel to announce that no more values will arrive. Closing is not required for a single value, but it is required when a receiver uses `range` and needs to know when to stop. Never send on a closed channel.
 
 ```go
 // Create
@@ -505,6 +541,10 @@ fmt.Println(<-ch)  // "third"
 
 `select` is like a `switch` but for channels. It picks whichever channel is ready.
 
+Use `select` when a goroutine must wait for more than one channel operation. It is useful for combining results, handling cancellation, adding timeouts, and performing non-blocking checks. If several cases are ready at the same time, Go chooses one pseudo-randomly, so do not rely on case order.
+
+Without a `default` case, `select` blocks until a case is ready. A `default` case makes it non-blocking, but using it in a tight loop can waste CPU. A timeout case should usually be paired with cancellation so the underlying work can stop too.
+
 ```go
 func main() {
     ch1 := make(chan string)
@@ -553,6 +593,8 @@ case <-time.After(3 * time.Second):
 ---
 
 ## 12. Mutex — Protecting Shared State
+
+A mutex provides exclusive access to shared memory. Lock only around the smallest section that must be protected, and always unlock with `defer` after acquiring the lock.
 
 When goroutines share memory (maps, structs, counters), use a mutex:
 
@@ -613,6 +655,7 @@ defer rw.Unlock()
 ## 13. Common Concurrency Patterns
 
 ### Worker Pool
+A worker pool limits concurrency to a fixed number of workers. Jobs wait in a channel, workers process them, and results can be sent back through another channel.
 ```go
 func worker(id int, jobs <-chan int, results chan<- int, wg *sync.WaitGroup) {
     defer wg.Done()
@@ -653,6 +696,7 @@ func main() {
 ```
 
 ### Pipeline
+A pipeline splits work into stages. Each stage receives values, transforms them, and sends them to the next stage. Closing output channels lets downstream stages finish cleanly.
 ```go
 func generate(nums ...int) <-chan int {
     out := make(chan int)
@@ -685,6 +729,7 @@ func main() {
 ```
 
 ### Fan-Out / Fan-In
+Fan-out distributes work across multiple goroutines. Fan-in merges their outputs into one channel. Results may arrive out of order unless ordering is added explicitly.
 ```go
 // Fan-out: distribute work across multiple goroutines
 // Fan-in: merge multiple channels into one
@@ -717,6 +762,8 @@ func fanIn(channels ...<-chan int) <-chan int {
 ---
 
 ## 14. Context — Cancellation and Deadlines
+
+`context.Context` carries cancellation signals and deadlines through a call chain. Pass it to I/O or long-running functions and stop when `ctx.Done()` is closed.
 
 `context.Context` is how you cancel goroutines gracefully.
 
@@ -761,6 +808,8 @@ func main() {
 
 ## 15. sync/atomic — Lock-Free Operations
 
+Atomic operations safely update simple counters, flags, and state values without a mutex. They are not a replacement for protecting several related fields together.
+
 For simple counters, atomics are faster than mutexes:
 
 ```go
@@ -789,6 +838,8 @@ go run -race main.go
 go test -race ./...
 ```
 
+A data race occurs when goroutines access the same memory concurrently and at least one access writes. The race detector can find many of these bugs during tests and local runs.
+
 It catches concurrent reads/writes without proper synchronization.
 
 ---
@@ -809,6 +860,8 @@ It catches concurrent reads/writes without proper synchronization.
 ---
 
 ## 18. Complete Real-World Example
+
+This example combines a context deadline, goroutines, a `WaitGroup`, result channels, and clean channel closing.
 
 ```go
 package main
