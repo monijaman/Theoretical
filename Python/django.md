@@ -2,7 +2,9 @@
 
 Build a complete web application with Python using Django. This guide starts with one page and gradually creates a **Task Manager** with a database, forms, authentication, an admin panel, tests, and production-ready settings.
 
-> **You should know:** basic Python, functions, classes, HTML, and a little CSS. If Python is new to you, begin with the [Python guide](readme.md).
+> **You should know:** basic Python, functions, classes, HTML, and a little CSS. If Python is new to you, begin with the [Python learning path](readme.md). Return here after you can complete the readiness checklist on that page.
+
+[Back to the Python learning path](readme.md)
 
 ---
 

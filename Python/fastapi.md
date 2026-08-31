@@ -2,7 +2,9 @@
 
 Build a clean REST API with Python, type hints, automatic validation, and interactive documentation. This guide starts with one endpoint and gradually builds a complete **Task API** with CRUD operations, error handling, dependencies, tests, and a production-friendly structure.
 
-> **You should know:** basic Python, functions, dictionaries, classes, and type hints. If those are new, read the [Python guide](readme.md) first.
+> **You should know:** basic Python, functions, dictionaries, classes, and type hints. If those are new, begin with the [Python learning path](readme.md). Return here after you can complete the readiness checklist on that page.
+
+[Back to the Python learning path](readme.md)
 
 ---
 

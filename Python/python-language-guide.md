@@ -1,6 +1,29 @@
 # Python Language Guide — Beginner to Advanced
 
-A friendly, practical walkthrough of Python: from "Hello, World!" to decorators, generators, and async. Read top to bottom if you're new, or jump straight to a section using the table of contents.
+A practical reference that begins with your first Python program and continues into advanced topics.
+
+> **New to programming?** Start at the [Python learning path](readme.md). Read Sections 1–9 of this guide first and complete the [beginner exercises](beginner-exercises.md). You are not expected to learn all 25 sections at once.
+
+## How to use this guide
+
+This guide has four stages. Finish one stage, write a small program, and only then decide whether you need the next stage.
+
+| Stage | Sections | What you will be able to do |
+|---|---|---|
+| 1. First steps | 1–6 | Run Python, store values, calculate, and work with text |
+| 2. Core Python | 7–9 | Make decisions, repeat work, organize data, and write functions |
+| 3. Practical programs | 10–14, 19, 22–23 | Structure programs, handle errors, use files and packages, and test code |
+| 4. Advanced tools | 15–18, 20–21 | Understand generators, decorators, context managers, typing, and concurrency |
+
+For every example, read it in this order:
+
+1. Identify the values going into the code.
+2. Follow the instructions from top to bottom.
+3. Find the displayed or returned result.
+4. Run the example yourself.
+5. Change one value and predict what will happen.
+
+If a word is unfamiliar, keep reading the explanation before trying to memorize the code.
 
 ---
 
@@ -193,6 +216,25 @@ float("3.14") # 3.14
 bool(0)       # False  (0, "", None, [], {} are all "falsy")
 bool(1)       # True
 ```
+
+### Receiving input from a user
+
+`input()` pauses the program, displays a question, and waits for the user to type an answer. The answer is always returned as a string, even when the user types digits.
+
+```python
+name = input("What is your name? ")
+print(f"Hello, {name}!")
+```
+
+Convert the returned text before doing number calculations:
+
+```python
+age_text = input("How old are you? ")
+age = int(age_text)
+print(f"Next year you will be {age + 1}.")
+```
+
+Read the flow from top to bottom: the program receives text, converts it to an integer, calculates a new value, and displays the result. If the user enters text such as `twenty`, `int()` raises an error; Section 12 explains how to handle that safely.
 
 ---
 
@@ -482,6 +524,8 @@ def modify_global():
 
 ## 10. Comprehensions
 
+> **Beginner checkpoint:** Before continuing, pause and complete Exercises 1–10 in the [beginner exercise set](beginner-exercises.md). You should be able to use input, a condition, a loop, a collection, and a function in one small program. Comprehensions are shorter syntax—not a replacement for understanding ordinary loops.
+
 A compact way to build lists, dicts, and sets from existing iterables.
 
 A comprehension describes both the transformation and the source data in one expression. Read it in this order: the value to produce, the loop that supplies each input, and any optional condition that filters inputs. It is concise, but clarity is more important than minimizing line count.
@@ -515,6 +559,8 @@ Use comprehensions when they stay **readable on one line**. If the logic needs m
 ---
 
 ## 11. Object-Oriented Programming
+
+Object-oriented programming is an intermediate way to keep related data and behavior together. Do not worry if classes feel abstract at first. You can write many useful Python programs using functions, lists, and dictionaries before you need a class.
 
 Object-oriented programming groups related state and behavior into objects. A class is the reusable definition, while an instance is one concrete object created from that class. OOP is useful when a domain contains entities—such as users, orders, or devices—that have their own data and operations.
 
@@ -818,6 +864,8 @@ with open("data.csv", "w", newline="") as f:
 
 ## 15. Iterators & Generators
 
+This is an advanced section. Learn it when you need to process values one at a time or avoid keeping a large collection in memory.
+
 Iteration is Python's common protocol for retrieving a sequence of values one at a time. Lists, files, strings, generator objects, and many library results all work with `for` because they follow this protocol. Understanding it explains both everyday loops and memory-efficient data pipelines.
 
 ### Iterators
@@ -864,6 +912,8 @@ next(squares)   # 0  — computed on demand
 ---
 
 ## 16. Decorators
+
+This is an advanced section. Decorators appear often in Django and FastAPI, but first understand ordinary functions, arguments, return values, and scope.
 
 A decorator wraps a function to add behavior without modifying its code.
 
@@ -1074,6 +1124,8 @@ random.shuffle(my_list)
 ---
 
 ## 21. Concurrency: Threading, Multiprocessing, Asyncio
+
+This is an advanced section for programs that need to coordinate multiple tasks. Beginners can skip it until a real project has slow I/O, CPU-heavy work, or many simultaneous operations.
 
 Python has three main concurrency tools, each suited to a different kind of problem.
 

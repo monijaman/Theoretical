@@ -1,5 +1,11 @@
 # Python — 100 Interview Questions & Answers
 
+> **Purpose:** This file is for review and interview preparation, not for learning Python for the first time. If you are a beginner, follow the [Python learning path](readme.md), study the [language guide](python-language-guide.md), and complete the [beginner exercises](beginner-exercises.md) first.
+
+The answers become more advanced as you move through the sections. You do not need to memorize them. Try to explain each answer in your own words and run its code before comparing it with the written explanation.
+
+[Back to the Python learning path](readme.md)
+
 ---
 
 ## Section 1: Basics & Data Types

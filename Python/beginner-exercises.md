@@ -2,6 +2,8 @@
 
 These exercises turn the first part of the [Python language guide](python-language-guide.md) into small, manageable steps.
 
+[Back to the Python learning path](readme.md)
+
 Create one `.py` file for each exercise. Type your solution, run it, and change the input at least once. An error is useful information: read its last line first because it normally names the problem.
 
 ## 1. Display text

@@ -117,7 +117,7 @@ You do not need to learn both at the same time.
 | [Django tutorial](django.md) | Building a full web application | After learning core Python |
 | [FastAPI tutorial](fastapi.md) | Building a web API | After learning core Python |
 | [Interview questions](questions.md) | Review and interview preparation | After learning the concepts, not at the beginning |
-| [NumPy PDF](npmPy.pdf) | Numerical-array reference material | When starting data or scientific Python |
+| [NumPy PDF](npmPy.pdf) | A large, 119-page collection of NumPy examples | Use as later reference after core Python; it is not the beginner starting point |
 
 ## A simple four-week route
 
