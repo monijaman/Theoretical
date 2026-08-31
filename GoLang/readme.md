@@ -428,6 +428,24 @@ Instead of `time.Sleep`, use `sync.WaitGroup`:
 
 A `WaitGroup` is a counter for a group of goroutines. Call `Add(1)` before starting each goroutine, call `Done()` exactly once when that goroutine finishes, and call `Wait()` when the caller must wait for all work to complete. Put `Done()` in a `defer` statement so early returns do not leave the counter unfinished.
 
+### What does `wg.Add(1)` mean?
+
+`wg` is a `sync.WaitGroup`, and its internal counter tracks unfinished goroutines. `wg.Add(1)` increases that counter by one, meaning: “one more goroutine is about to start.”
+
+```go
+var wg sync.WaitGroup
+
+wg.Add(1) // counter: 0 -> 1
+go func() {
+    defer wg.Done() // counter: 1 -> 0 when this function finishes
+    doWork()
+}()
+
+wg.Wait() // blocks while counter > 0; continues when counter == 0
+```
+
+For three goroutines, call `Add(1)` three times—or use `Add(3)` before starting them. The number added must match the number of `Done()` calls. Call `Add` before `go` starts because otherwise `Wait()` could see a zero counter and return too early.
+
 Important rules:
 
 - Call `Add` before launching the goroutine.
