@@ -446,6 +446,62 @@ wg.Wait() // blocks while counter > 0; continues when counter == 0
 
 For three goroutines, call `Add(1)` three times—or use `Add(3)` before starting them. The number added must match the number of `Done()` calls. Call `Add` before `go` starts because otherwise `Wait()` could see a zero counter and return too early.
 
+### WaitGroup lifecycle
+
+Think of the counter as a list of unfinished tasks:
+
+```text
+Add(3)     counter = 3   three workers are expected
+Done()     counter = 2   worker 1 finished
+Done()     counter = 1   worker 2 finished
+Done()     counter = 0   worker 3 finished
+Wait()     continues     all workers are complete
+```
+
+For a dynamic number of jobs, increment immediately before each launch:
+
+```go
+var wg sync.WaitGroup
+jobs := []string{"email", "report", "backup"}
+
+for _, job := range jobs {
+    wg.Add(1) // register this job before launching its goroutine
+
+    go func(name string) {
+        defer wg.Done() // guaranteed even if the function returns early
+        fmt.Println("working on", name)
+    }(job)
+}
+
+wg.Wait()
+fmt.Println("all jobs finished")
+```
+
+The loop passes `job` as an argument so each goroutine receives its own value. The `defer` is important because every possible path through the goroutine must eventually reduce the counter.
+
+### Common WaitGroup mistakes
+
+```go
+// Wrong: Wait may run before Add, so it can return immediately.
+go func() {
+    wg.Add(1)
+    defer wg.Done()
+}()
+wg.Wait()
+```
+
+```go
+// Wrong: Done is called twice for one Add and may panic with a negative counter.
+wg.Add(1)
+go func() {
+    defer wg.Done()
+    doWork()
+    wg.Done() // remove this extra call
+}()
+```
+
+A `WaitGroup` does not collect return values or errors. Combine it with a results channel, an error channel, or `errgroup` when the caller must receive outcomes from the workers. Do not copy a `WaitGroup`, and do not reuse it for a new batch until the previous `Wait` has completed.
+
 Important rules:
 
 - Call `Add` before launching the goroutine.
