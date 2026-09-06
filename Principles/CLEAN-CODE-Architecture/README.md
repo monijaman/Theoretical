@@ -1,63 +1,217 @@
-# Clean Code Architecture in JavaScript (Functional Approach)
+# Clean Code and Clean Architecture: A Practical Guide
 
-## Clean Code Architecture Diagram
+Clean code helps people understand individual functions and modules. Clean Architecture helps organize the application so business rules are easier to test and less dependent on a particular database, framework, or user interface.
 
-![Clean Code Architecture Diagram](./JS/architecture.png)
+This folder contains JavaScript and Go examples. Start with the small JavaScript registration flow to understand the boundaries, then explore the larger Go application.
 
----
+## Start Here
 
-## Why is this Project Clean Code?
+**Before you begin:** Understand functions, objects, imports, and basic asynchronous JavaScript. You do not need to know an architecture framework.
 
-This project is designed to embody clean code principles by:
+| Your goal | Start with |
+| --- | --- |
+| Understand the main idea | Read the layer table and request walkthrough below. |
+| Follow the JavaScript code | Start at [JS/src/index.js](./JS/src/index.js), then follow its dependencies. |
+| Explore the JavaScript notes | Read the [JavaScript guide](./JS/README.md). |
+| Explore a Go application | Read the [Go guide](./GO/readme.md) and [presentation walkthrough](./GO/PRESENTATION.md). |
 
-- **Separation of Concerns:** Each file and folder has a single, well-defined responsibility. Business logic, data access, and input/output are all separated.
-- **Explicit Dependencies:** All dependencies are injected as arguments, making the code easy to test and reason about. No module imports another layer directly except through explicit composition in the entry point.
-- **Pure Functions:** Core logic (entities and use cases) is implemented as pure functions, which are predictable and have no side effects.
-- **No Framework Lock-in:** The business logic is decoupled from frameworks and infrastructure, so you can swap out delivery mechanisms (e.g., HTTP, CLI) or data storage (e.g., in-memory, database) without changing the core logic.
-- **Readability and Maintainability:** The code is modular, easy to follow, and each part can be understood in isolation.
+The implementations are learning examples. Use this README to understand their structure; some comments and older examples in the source use “pure” more broadly than its technical meaning.
 
-## How the Layers Work and Depend on Each Other
+## Contents
 
-- **Entities:** Contain only domain logic and validation. They do not depend on any other layer.
-- **Use Cases:** Contain application-specific business rules. They depend on entities and receive gateways (e.g., repositories) as arguments. They never import or know about delivery mechanisms.
-- **Gateways:** Abstract external systems (like databases). They are passed into use cases as dependencies, so the use cases are not tied to any specific implementation.
-- **Delivery:** Handles input/output (e.g., API controllers). They depend on use cases, never the other way around. They format requests and responses but do not contain business logic.
-- **Composition Root (index.js):** Wires everything together by injecting dependencies. This is the only place where layers are composed.
+- [One idea to remember](#one-idea-to-remember)
+- [The layers and their responsibilities](#the-layers-and-their-responsibilities)
+- [Follow a registration request](#follow-a-registration-request)
+- [Understand dependency injection](#understand-dependency-injection)
+- [Pure functions and side effects](#pure-functions-and-side-effects)
+- [What makes the structure useful](#what-makes-the-structure-useful)
+- [Read the example with realistic expectations](#read-the-example-with-realistic-expectations)
+- [Diagrams](#diagrams)
+- [Practice and review](#practice-and-review)
 
-**Dependency Direction:**
+## One Idea to Remember
 
-- All dependencies point inward: delivery → use cases → entities.
-- Outer layers depend on inner layers, never the reverse.
-- This makes the core logic (entities, use cases) independent and reusable.
+**Business rules should not need to know which web framework or database you use.**
 
----
+Consider registering a user. Checking whether a user already exists is part of the registration workflow. Constructing a SQL query is a storage detail. Formatting an HTTP response is a delivery detail.
 
-![Clean Code Architecture Diagram](./JS/flow.png)
+Separating those responsibilities lets you change one part with fewer changes elsewhere. The boundaries still need compatible contracts and tests; switching databases is not automatically effortless.
 
-## Clean Architecture Layers Explained (Ordering Machine Example)
+### A simple restaurant analogy
 
-- **Frameworks and Drivers (Outer Layer):**
+A customer places an order through a screen. The screen translates their choices into an order request. The application checks the ordering rules, and a storage component saves the result.
 
-  - This is where your app talks to the outside world. It could be a touchscreen, a web page, or a payment device.
-  - _Example:_ The screen where you tap to order food, or the card reader for payments.
+The rule “an order must contain an item” should make sense whether the customer uses a touchscreen, a website, or a command-line tool. Screen layout and database column names should not define that rule.
 
-- **Interface Adapters:**
+## The Layers and Their Responsibilities
 
-  - These are like translators. They take what the user does (like pressing buttons) and turn it into something the app can use.
-  - _Example:_ Code that takes your order from the screen and sends it to the app logic.
+| Part | Question it answers | In the JavaScript example |
+| --- | --- | --- |
+| **Entity / domain logic** | What makes a valid user, and what can a user do? | [entities/user.js](./JS/src/entities/user.js) validates user values and provides behavior. |
+| **Use case** | What steps make up registration? | [usecases/createUser.js](./JS/src/usecases/createUser.js) checks for duplicates, creates a user, and requests a save. |
+| **Repository / gateway adapter** | How do we read and save users? | [gateways/userRepository.js](./JS/src/gateways/userRepository.js) handles storage mapping, caching, and logging. |
+| **Delivery / controller** | How does a caller provide input and receive an outcome? | [delivery/userController.js](./JS/src/delivery/userController.js) calls the use case and formats a response object. |
+| **Composition root** | Which implementations are connected together? | [index.js](./JS/src/index.js) creates the dependencies and simulates requests. |
 
-- **Application Business Rules / Use Cases:**
+A **repository** provides operations such as `getUserByEmail` and `saveUser`. The use case relies on those operations rather than knowing SQL or the database client's API.
 
-  - This is the brain of your app. It decides what happens when you order food, checks your balance, and calculates the total.
-  - _Example:_ Logic that checks if you have enough money and processes your order.
+A **composition root** is the place where you assemble the application. It can know about both inner business logic and outer implementations because connecting them is its responsibility.
 
-- **Enterprise Business Rules / Entities (Core):**
-  - These are the most important rules that never change, no matter where the app runs. They are shared across different apps.
-  - _Example:_ Rules for what makes a valid order, or how to securely store user info.
+### Dependency direction versus execution order
 
-_In short: The outside layers handle user actions and devices, the middle layers adapt data, and the inner layers do the real work. Everything depends on the core, but the core depends on nothing else!_
+Clean Architecture's dependency rule concerns what the code knows about. Inner business logic should avoid depending on outer implementation details. Outer adapters may depend on domain code—for example, this repository imports the user entity when mapping stored data.
 
-![Clean Code Architecture Diagram](./JS/cleancode.png)
+At runtime, a use case can still call a repository supplied to it. The call goes to an outer implementation, while the use case only knows the required operations. Runtime calls and source-code dependencies are related, but they are not the same diagram.
 
-- [Clean Architecture Example](https://github.com/dev-mastery/comments-api/tree/master/src)
-- [Clean Architecture Example Video](https://www.youtube.com/watch?v=CnailTcJV_U&list=PLcb3YuQNaC-uM1vHqdBP9yOw-hB1IZmAB)
+Entities contain domain rules, not rules that literally never change. Business requirements can change too.
+
+## Follow a Registration Request
+
+The JavaScript entry point builds a request like this:
+
+```javascript
+const req = {
+  name: 'Alice Johnson',
+  email: 'alice@example.com',
+  birthYear: 1990,
+};
+```
+
+Follow it through the application:
+
+1. **The controller receives the request.** It passes the request values to the registration use case.
+2. **The use case checks for a duplicate.** It calls `userRepository.getUserByEmail(email)`.
+3. **The entity factory validates the user.** It checks the supplied values and constructs a user object.
+4. **The use case requests persistence.** It calls `userRepository.saveUser(user)`.
+5. **The repository translates and stores the data.** It uses the injected storage implementation and maps the result back to the domain shape.
+6. **The controller formats the result.** Success becomes an object with `status: 201`; a caught error becomes an error response.
+
+```text
+Request
+  -> Controller
+  -> Registration use case
+       -> Repository: look up existing user
+       -> Entity factory: validate and create user
+       -> Repository: save user
+  -> Controller formats response
+  -> Caller receives result
+```
+
+This is a simulated request flow. The entry point does not start an HTTP server; it invokes the controller directly with a JavaScript object and logs the response.
+
+## Understand Dependency Injection
+
+**Dependency injection means supplying a collaborator from outside instead of constructing or selecting it inside the business operation.**
+
+The entry point contains this composition:
+
+```javascript
+const userRepository = createUserRepository(mockDatabase, mockLogger, mockCache);
+
+const createUserUseCase = createUser({
+  userRepository,
+  createUserEntity,
+});
+
+const registerUser = userController({ createUserUseCase });
+```
+
+Read it in three steps:
+
+- Build a repository using the chosen database, logger, and cache.
+- Build a use case using that repository and the entity factory.
+- Build a controller using that use case.
+
+The `createUser` function returns another function that remembers the supplied dependencies. That remembered access is a **closure**. You configure the dependencies once, then call the returned function with request data.
+
+### Why this helps testing
+
+To test the duplicate-user path, supply a repository whose `getUserByEmail` returns an existing user. To test a successful registration, make it return no match and capture what reaches `saveUser`.
+
+The test can inspect the business behavior without connecting to a real database. Separate integration tests are still needed to verify the real repository and its storage behavior.
+
+## Pure Functions and Side Effects
+
+A **pure function** returns the same result for the same inputs and does not change observable state outside itself. Reading the current time makes a result depend on something beyond the explicit inputs.
+
+| Operation | Pure? | Why |
+| --- | --- | --- |
+| Validate a name from an input string | Can be | It can depend only on that string. |
+| Calculate age from a birth year and an explicitly supplied year | Can be | All required values are inputs. |
+| Calculate age using `new Date()` | Not strictly | The result depends on the clock. |
+| Save a user to a database or cache | No | It changes external state. |
+| Log a message | No | It produces an observable effect. |
+
+The current use case reads `Date.now()` and calls the repository. Some entity methods read the current year. These functions can be understandable and testable without being pure.
+
+Using functions instead of classes does not remove side effects. Injecting a repository makes those effects easier to control; it does not make them disappear. A useful improvement is to pass in a clock or ID generator when tests need deterministic values.
+
+## What Makes the Structure Useful
+
+The architecture is useful when its boundaries reduce the work required to understand, test, or change behavior.
+
+| Change | Main place to start |
+| --- | --- |
+| Change user validation rules | Entity/domain logic. |
+| Add a step to registration | Use case. |
+| Change database field names | Repository mapping. |
+| Expose the use case through a CLI | A new delivery adapter and composition. |
+| Replace a real dependency during a test | Test composition. |
+
+Readable names and focused functions matter inside every layer. Creating more folders does not by itself improve design. Keep abstractions that clarify a real responsibility; a small application may need fewer components.
+
+## Read the Example with Realistic Expectations
+
+The source illustrates boundaries rather than a complete production registration system:
+
+- The entry point uses mock storage, a logger, and an in-memory cache.
+- A duplicate lookup followed by a separate save is not enough to prevent concurrent duplicate registrations. A real datastore needs appropriate uniqueness and consistency guarantees.
+- `Date.now()` illustrates ID creation but is not a general uniqueness guarantee.
+- Birth-year-based age checks are approximate and need stronger input handling for real requirements.
+- The controller maps all caught errors to `400`. A real delivery adapter should distinguish invalid input, conflicts, and unexpected server failures.
+- `Object.freeze()` prevents direct changes to the returned object's own properties; it does not make all behavior pure or recursively freeze nested objects.
+
+These are useful next improvements after you understand the request flow. They do not require mixing database or HTTP details into the domain rules.
+
+## Diagrams
+
+Use these illustrations after reading the walkthrough. Focus on the responsibilities and boundaries rather than memorizing the number of rings or folders.
+
+### Architecture overview
+
+![Architecture overview showing the application's layers](./JS/architecture.png)
+
+### Request flow
+
+![Existing illustration of the application's request flow](./JS/flow.png)
+
+### Additional architecture illustration
+
+![Additional Clean Architecture illustration](./JS/cleancode.png)
+
+## Practice and Review
+
+Try these small exercises:
+
+1. Trace the sample request from `index.js` to the response and explain each file's role.
+2. Change one validation rule and identify which tests should change.
+3. Test duplicate registration using a fake repository.
+4. Supply an ID generator to make the use case deterministic in a test.
+5. Sketch a CLI adapter that calls the existing use case.
+
+Before moving on, answer:
+
+- What is the difference between an entity and a use case?
+- Why does the use case receive a repository?
+- Why is the registration use case not a pure function?
+- What does the composition root know that the business logic should not know?
+- Which responsibilities would change if storage moved to another database?
+
+### Additional examples
+
+- [JavaScript guide in this folder](./JS/README.md)
+- [Go authentication example](./GO/readme.md)
+- [Comments API example repository](https://github.com/dev-mastery/comments-api/tree/master/src)
+- [Related video walkthrough](https://www.youtube.com/watch?v=CnailTcJV_U&list=PLcb3YuQNaC-uM1vHqdBP9yOw-hB1IZmAB)
+
+[Back to contents](#contents)
