@@ -1,10 +1,40 @@
-# API Design — Build APIs That Stand the Test of Time
+# API Design
 
-A well-designed API is a product. Engineers integrate against it, partners build businesses on it, and once it is public, breaking changes are expensive. This module covers RESTful design principles, versioning strategies, request/response contracts, error formats, GraphQL trade-offs, and the patterns used by Stripe, GitHub, and Twilio — some of the best-designed APIs in the industry.
+Design an API that clients can understand and use consistently. Follow the examples from naming resources through documenting behavior and handling retries.
 
----
+## Start Here
 
-## ⚡ Quick Analogy
+**Before you begin:** HTTP requests, JSON, and a simple Express route.
+
+Read the explanation before each code example, then follow the data through the normal path and one failure case. The snippets teach individual concepts; application helpers, package setup, credentials, and deployment configuration are not all included.
+
+## Contents
+
+- [Quick Analogy](#quick-analogy)
+- [1. RESTful URL Design](#1-restful-url-design)
+- [2. Consistent Response Contracts](#2-consistent-response-contracts)
+- [3. API Versioning](#3-api-versioning)
+- [4. Request & Response Design Details](#4-request--response-design-details)
+- [5. Idempotency Keys](#5-idempotency-keys)
+- [6. Pagination Patterns](#6-pagination-patterns)
+- [7. GraphQL vs REST — When to Use Which](#7-graphql-vs-rest--when-to-use-which)
+- [8. API Documentation](#8-api-documentation)
+- [9. Real-World API Design Patterns (Stripe-inspired)](#9-real-world-api-design-patterns-stripe-inspired)
+- [10. API Design Checklist](#10-api-design-checklist)
+- [API Maturity Model](#api-maturity-model)
+- [Practice Check](#practice-check)
+
+## Key Terms
+
+| Term | Meaning |
+| --- | --- |
+| REST | an architectural style often used for resource-oriented HTTP APIs. |
+| Contract | the requests and responses clients can rely on. |
+| Idempotent | repeating an operation has the same intended effect as performing it once. |
+| Cursor | a marker identifying where the next page should begin. |
+
+
+## Quick Analogy
 
 An API is like a **restaurant menu**. The menu (contract) tells customers exactly what they can order, what it costs, and what they will receive. A good menu is clear, predictable, and stable — you do not change the name of "Margherita Pizza" every week. A bad menu is ambiguous, inconsistent, and breaks customer expectations. API design is writing that menu for developers.
 
@@ -12,9 +42,11 @@ An API is like a **restaurant menu**. The menu (contract) tells customers exactl
 
 ## 1. RESTful URL Design
 
+A resource is something your API exposes, such as an order or a user. Use the URL to identify the resource and the HTTP method to describe the operation. The examples below compare names, methods, and relationships.
+
 ### Resource naming — nouns, not verbs
 
-```
+```text
 // ❌ Bad — verbs in URLs (RPC-style)
 GET  /getUser?id=123
 POST /createOrder
@@ -35,14 +67,14 @@ PATCH  /users/123
 | `GET`    | Read              | ✅ Yes     | ✅ Yes |
 | `POST`   | Create            | ❌ No      | ❌ No |
 | `PUT`    | Replace (full)    | ✅ Yes     | ❌ No |
-| `PATCH`  | Partial update    | ✅ Yes*    | ❌ No |
+| `PATCH`  | Partial update    | Depends*    | ❌ No |
 | `DELETE` | Delete            | ✅ Yes     | ❌ No |
 
 *PATCH idempotency depends on implementation — prefer idempotent patch semantics.
 
 ### Nested resources — express relationships, but avoid deep nesting
 
-```
+```text
 // ❌ Bad — too deep, fragile
 GET /users/123/orders/456/items/789/reviews/1
 
@@ -54,7 +86,7 @@ GET /reviews?itemId=789&userId=123        # use query params for associations
 
 ### Query parameters for filtering, sorting, pagination
 
-```
+```text
 GET /products?category=electronics&inStock=true
 GET /orders?status=pending&sortBy=createdAt&order=desc
 GET /users?page=2&limit=20
@@ -65,7 +97,9 @@ GET /orders?cursor=eyJpZCI6MTAwfQ==&limit=20   # cursor pagination
 
 ## 2. Consistent Response Contracts
 
-Consistency is the single most important API quality. Every endpoint should return the same shape.
+A response contract tells clients what fields and status codes to expect. Keep equivalent responses consistent so clients can share parsing and error-handling code.
+
+Use predictable conventions for equivalent responses. A collection, a single resource, and an empty response may have different documented shapes.
 
 ### Success response envelope
 
@@ -126,7 +160,7 @@ Consistency is the single most important API quality. Every endpoint should retu
 
 ### HTTP Status codes — use them semantically
 
-```
+```text
 200 OK             — Successful GET, PUT, PATCH
 201 Created        — Successful POST that creates a resource
 204 No Content     — Successful DELETE (no body)
@@ -145,31 +179,33 @@ Consistency is the single most important API quality. Every endpoint should retu
 
 ## 3. API Versioning
 
-Never make breaking changes to a live API. Always version.
+Versioning helps clients move between incompatible contracts. Before choosing URL or header versioning, decide which changes are compatible and how long older clients will be supported.
+
+Avoid surprising existing clients with incompatible changes. Use an explicit migration and deprecation policy when a contract must change.
 
 ### URI versioning (most common, most explicit)
 
-```
+```text
 https://api.example.com/v1/users
 https://api.example.com/v2/users
 ```
 
-**Pros:** Immediately visible, easy to route at the load balancer level, easy to deprecate old versions.  
-**Used by:** Stripe, GitHub, Twilio.
+**Pros:** Immediately visible, easy to route at the load balancer level, easy to deprecate old versions.
+**Decision point:** Choose a versioning scheme based on client compatibility and routing needs.
 
 ### Header versioning
 
-```
+```text
 GET /users
 Accept: application/vnd.example.v2+json
 ```
 
-**Pros:** Clean URLs.  
+**Pros:** Clean URLs.
 **Cons:** Hidden from casual inspection, harder to test in a browser.
 
 ### What counts as a breaking change?
 
-```
+```text
 BREAKING — requires a new major version
   ❌ Renaming a field (data.user_name → data.userName)
   ❌ Removing a field
@@ -197,6 +233,8 @@ res.set('Link', '</v2/users>; rel="successor-version"');
 ---
 
 ## 4. Request & Response Design Details
+
+Small format choices become long-lived client dependencies. Document timestamp units and time zones, identifier formats, and which fields appear after a mutation.
 
 ### Use ISO 8601 for all dates
 
@@ -258,7 +296,11 @@ app.post('/users', async (req, res) => {
 
 ## 5. Idempotency Keys
 
+A retry can arrive after the first request succeeded but its response was lost. Reusing an operation key lets the server recognize that retry and return the original outcome.
+
 For mutations that must not be duplicated (payment processing, order creation), accept a client-supplied idempotency key.
+
+The cache-based sketch below only illustrates returning a stored response. Its separate check, charge, and cache write do not prevent concurrent charges or a crash after charging. A complete implementation needs atomic ownership, a key scoped to the caller and operation, request-payload validation, and provider-level idempotency or reconciliation.
 
 ```typescript
 // Client sends: POST /payments
@@ -289,6 +331,8 @@ app.post('/payments', authenticate, async (req, res) => {
 
 ## 6. Pagination Patterns
 
+Pagination returns a bounded portion of a collection. Offset pagination skips a number of rows; cursor pagination continues after a known position. Stable ordering and an appropriate index matter for both.
+
 ### Offset Pagination — simple, but problematic at scale
 
 ```typescript
@@ -298,7 +342,7 @@ app.post('/payments', authenticate, async (req, res) => {
 // ❌ Problems:
 //   - Items shift between pages if new records are inserted
 //   - COUNT(*) query is expensive on large tables
-//   - Page 500 = OFFSET 10000 = full scan
+//   - Large offsets require skipping more rows; inspect the query plan.
 ```
 
 ### Cursor Pagination — stable, scalable (recommended)
@@ -333,7 +377,9 @@ async function getPosts(cursor?: string, limit = 20) {
 
 ## 7. GraphQL vs REST — When to Use Which
 
-```
+REST endpoints expose resources through an HTTP contract. GraphQL lets clients request fields from a schema. Compare client needs, caching, authorization, and query cost before choosing.
+
+```text
 REST is better when:
   ✅ Public API consumed by third-party developers
   ✅ Simple CRUD resources with predictable shapes
@@ -343,7 +389,7 @@ REST is better when:
 GraphQL is better when:
   ✅ Mobile clients with different field requirements than web
   ✅ Complex, deeply nested data (avoids N+1 with DataLoader)
-  ✅ Rapid frontend iteration (add new fields without backend change)
+  ✅ Client flexibility (select different fields already exposed by the schema)
   ✅ Internal BFF (Backend For Frontend) layer
   ✅ Many different consumer types with different data needs
 
@@ -353,6 +399,8 @@ Both can coexist: REST for public API, GraphQL for internal frontend BFF
 ---
 
 ## 8. API Documentation
+
+Document a complete request and response, including authentication, validation failures, and pagination. The OpenAPI fragment below shows the structure; its referenced components must be defined in a complete specification.
 
 A great API with poor documentation is a bad API.
 
@@ -394,6 +442,8 @@ Generate docs from code with tools like `tsoa` or `@nestjs/swagger` to keep docs
 ---
 
 ## 9. Real-World API Design Patterns (Stripe-inspired)
+
+Prefixed identifiers make logs and support requests easier to read. Expandable resources let a client request related data in one response, at the cost of more server work.
 
 ### Prefixed IDs for readability
 
@@ -438,7 +488,7 @@ app.get('/orders/:id', authenticate, async (req, res) => {
 
 Before shipping any new endpoint, verify:
 
-```
+```text
 URL Design
   [ ] Uses nouns (not verbs) for resources
   [ ] Uses plural resource names (/users, not /user)
@@ -474,7 +524,7 @@ Documentation
 
 ---
 
-## 📊 API Maturity Model
+## API Maturity Model
 
 | Level | Description                                | Example                                      |
 | ----- | ------------------------------------------ | -------------------------------------------- |
@@ -482,8 +532,13 @@ Documentation
 | 1     | Individual resources                       | `GET /users/1`                               |
 | 2     | HTTP verbs + status codes                  | `DELETE /users/1` → 204                      |
 | 3     | HATEOAS — hypermedia links in response     | Response includes `links.nextPage`           |
-| 4     | Contract-first with OpenAPI + versioning   | API spec committed before implementation     |
 
-**Most production APIs target Level 2-3. Level 4 is for public platforms.**
+Contract-first development and versioning are separate practices; they do not add a fourth level to the Richardson maturity model.
 
 **Time Commitment:** 2-3 weeks | **Difficulty:** ⭐⭐⭐⭐
+
+## Practice Check
+
+Design an orders endpoint with validation, pagination, an error response, and a documented retry policy. Explain one trade-off and one failure mode before moving on.
+
+[Back to contents](#contents) · [Backend learning guide](../readme.md)

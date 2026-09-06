@@ -2,6 +2,22 @@
 
 This guide explains what to learn to move from general software development toward enterprise AI engineering. It combines AI strategy, cloud architecture, AI system design, career development, and practical production-debugging skills.
 
+## Start Here
+
+This is an optional extension after the backend and system design foundations. AI means artificial intelligence; RAG means retrieval-augmented generation, where an application retrieves relevant material before generating an answer. Read the strategy sections first, then choose one project from the learning plan.
+
+
+## Contents
+
+- [Top Commands and References](#top-commands-and-references)
+- [1. Enterprise AI Strategy](#1-enterprise-ai-strategy)
+- [2. Cloud Computing Evolution](#2-cloud-computing-evolution)
+- [3. System Design for AI](#3-system-design-for-ai)
+- [4. Career Pivot: Developer to AI Specialist](#4-career-pivot-developer-to-ai-specialist)
+- [5. High-Yield Technical Skills](#5-high-yield-technical-skills)
+- [Suggested 12-Week Learning Plan](#suggested-12-week-learning-plan)
+- [Definition of “Learned”](#definition-of-learned)
+
 ## Top Commands and References
 
 Keep these resources nearby while working through the examples in this guide.
@@ -235,3 +251,5 @@ You understand a topic when you can:
 The goal is not merely to call an AI API. The goal is to design, deploy, evaluate, secure, and operate an AI-enabled system that solves a real business problem.
 
 
+
+[System Design guide](../readme.md) · [Backend learning guide](../../readme.md)
