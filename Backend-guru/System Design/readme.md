@@ -28,15 +28,25 @@ This folder is a practical study guide for system design, not just a collection 
 
 ## Section overview
 
-- [1. Scaling & Traffic Management](01-scaling-traffic/)
-- [2. Data & Storage](02-data-storage/)
-- [3. Consistency & Distributed Theory](03-consistency-distributed/)
-- [4. Caching](04-caching/)
-- [5. Messaging & Event-Driven Architecture](05-messaging-event-driven/)
-- [6. Communication Protocols](06-communication-protocols/)
-- [7. Architecture Patterns](07-architecture-patterns/)
-- [8. Reliability & Operations](08-reliability-operations/)
-- [9. Large-Scale Data Systems](09-large-scale-data-systems/)
-- [10. Full System Design Practice](10-system-design-practice/)
+- [1. Scaling & Traffic Management](01-scaling-traffic/readme.md)
+- [2. Data & Storage](02-data-storage/readme.md)
+- [3. Consistency & Distributed Theory](03-consistency-distributed/readme.md)
+- [4. Caching](04-caching/readme.md)
+- [5. Messaging & Event-Driven Architecture](05-messaging-event-driven/readme.md)
+- [6. Communication Protocols](06-communication-protocols/readme.md)
+- [7. Architecture Patterns](07-architecture-patterns/readme.md)
+- [8. Reliability & Operations](08-reliability-operations/readme.md)
+- [9. Large-Scale Data Systems](09-large-scale-data-systems/readme.md)
+- [10. Full System Design Practice](10-system-design-practice/readme.md)
 
 > Tip: if you are preparing for interviews, focus on the first 8 sections first and use the practice section as your final review set.
+
+## Optional Extension
+
+[Enterprise AI, Cloud, and System Design](11-upgrade/readme.md) connects these foundations to AI applications. Study it after the core topics if that matches your goals.
+
+## Practice Check
+
+Pick one design, describe the request flow in plain language, and explain where data could be delayed, duplicated, or lost. Use those questions to choose the next topic to study.
+
+[Backend learning guide](../readme.md)
