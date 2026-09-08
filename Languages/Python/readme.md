@@ -54,6 +54,7 @@ If a word is unfamiliar, keep reading the explanation before trying to memorize 
 23. [Common Pitfalls](#23-common-pitfalls)
 24. [Cheat Sheet](#24-cheat-sheet)
 25. [Where to Go Next](#25-where-to-go-next)
+26. [Python Libraries Roadmap](#26-python-libraries-roadmap)
 
 ### Topic overview
 
@@ -88,6 +89,147 @@ Use this quick summary to understand what each part of the guide teaches before 
 | Where to Go Next | Suggests practical learning paths and small projects for continued practice. |
 
 ---
+
+## 26. Python Libraries Roadmap
+
+You do not need to learn every Python package. Learn the standard library first, then choose packages based on the kind of software you want to build. The list below is a practical map of the most useful and widely encountered libraries.
+
+### Before installing a package
+
+Use a virtual environment for every project and record dependencies in `requirements.txt` or `pyproject.toml`:
+
+```bash
+python -m venv .venv
+# Windows PowerShell
+.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install <package-name>
+python -m pip freeze > requirements.txt
+```
+
+Prefer a package's official documentation and check whether it is actively maintained. Avoid installing a package when a capable standard-library module already solves the problem.
+
+### Standard library: learn these first
+
+These modules ship with Python, so they do not need `pip`:
+
+| Module | What it is useful for |
+|---|---|
+| `pathlib` | Cross-platform file and directory paths |
+| `os`, `shutil` | Environment variables and file operations |
+| `sys`, `platform` | Interpreter arguments and operating-system details |
+| `json`, `csv` | Reading and writing common data formats |
+| `datetime`, `zoneinfo` | Dates, times, and time zones |
+| `re` | Regular expressions and text matching |
+| `collections` | `Counter`, `defaultdict`, `deque`, and named records |
+| `itertools`, `functools` | Efficient iteration and reusable function helpers |
+| `math`, `statistics`, `decimal` | Numeric operations and precise decimal arithmetic |
+| `random`, `secrets` | Simulation versus security-safe random values |
+| `logging` | Structured application logs |
+| `argparse` | Command-line interfaces |
+| `subprocess` | Running external programs safely |
+| `sqlite3` | A built-in, file-based SQL database |
+| `urllib`, `http` | Basic HTTP and URL handling |
+| `dataclasses`, `enum` | Clear data objects and fixed choices |
+| `typing` | Type hints and static analysis support |
+| `unittest` | Built-in test framework |
+| `concurrent.futures`, `asyncio` | Threads, processes, and asynchronous I/O |
+
+### Web development and APIs
+
+| Library | Learn it for |
+|---|---|
+| `requests` | Simple synchronous HTTP requests |
+| `httpx` | Modern HTTP client with sync and async support |
+| `FastAPI` | Typed, high-performance APIs; see [`fastapi.md`](fastapi.md) |
+| `Django` | Full web framework with ORM, admin, authentication, and templates; see [`django.md`](django.md) |
+| `Flask` | Small, flexible web applications and APIs |
+| `pydantic` | Validating and serializing Python data |
+| `SQLAlchemy` | SQL toolkit and database ORM |
+| `Alembic` | Database schema migrations with SQLAlchemy |
+| `Celery` | Distributed background jobs and task queues |
+| `beautifulsoup4` | Parsing HTML and extracting web content |
+| `selenium`, `playwright` | Browser automation and end-to-end testing |
+
+### Data analysis, visualization, and scientific computing
+
+| Library | Learn it for |
+|---|---|
+| `NumPy` | Fast arrays and numerical computation |
+| `pandas` | Tables, cleaning, joins, grouping, and time-series data |
+| `Polars` | Fast DataFrame workflows, especially for larger datasets |
+| `Matplotlib` | Foundational charts and publication-quality plots |
+| `Seaborn` | Statistical charts with a simpler interface |
+| `Plotly` | Interactive charts and dashboards |
+| `SciPy` | Scientific algorithms, optimization, and signal processing |
+| `Jupyter` | Interactive notebooks and experiments |
+| `openpyxl` | Reading and writing Excel `.xlsx` files |
+| `pyarrow` | Apache Arrow, Parquet, and columnar data |
+
+### Machine learning and AI
+
+| Library | Learn it for |
+|---|---|
+| `scikit-learn` | Classical machine learning and preprocessing |
+| `PyTorch` | Deep learning and neural-network research or production |
+| `TensorFlow` / `Keras` | Deep learning ecosystems and model deployment |
+| `transformers` | Pre-trained language and vision models |
+| `datasets` | Loading and processing machine-learning datasets |
+| `OpenAI` SDK | Calling OpenAI APIs from Python |
+| `spaCy` | Production natural-language processing |
+| `NLTK` | Teaching, research, and traditional NLP workflows |
+
+### Databases and messaging
+
+| Library | Learn it for |
+|---|---|
+| `psycopg` | PostgreSQL from Python |
+| `mysql-connector-python` | MySQL connections |
+| `pymongo` | MongoDB applications |
+| `redis` | Redis caching, queues, and key-value storage |
+| `motor` | Async MongoDB applications (check current project guidance) |
+| `kafka-python` or `confluent-kafka` | Kafka producers and consumers |
+| `pika` | RabbitMQ messaging |
+
+### Testing, quality, and developer tools
+
+| Library | Learn it for |
+|---|---|
+| `pytest` | The most common flexible Python test runner |
+| `pytest-cov` | Test coverage reports |
+| `hypothesis` | Property-based testing |
+| `ruff` | Fast linting and formatting |
+| `black` | Opinionated code formatting |
+| `mypy` or `pyright` | Static type checking |
+| `pre-commit` | Running quality checks before commits |
+| `tox` or `nox` | Testing across environments |
+| `bandit` | Finding common Python security problems |
+| `pip-audit` | Checking dependencies for known vulnerabilities |
+
+### CLI, configuration, and production operations
+
+| Library | Learn it for |
+|---|---|
+| `Typer` or `Click` | Building friendly command-line tools |
+| `python-dotenv` | Loading local environment variables from `.env` files |
+| `PyYAML` or `tomllib` | YAML or TOML configuration (`tomllib` is built in) |
+| `rich` | Readable terminal output, tables, and tracebacks |
+| `structlog` | Structured logs |
+| `psutil` | Process and system metrics |
+| `gunicorn` | Serving WSGI applications on Unix-like systems |
+| `uvicorn` | Serving ASGI applications such as FastAPI |
+| `boto3` | AWS services |
+| `docker` | Controlling Docker from Python |
+
+### A sensible learning order
+
+1. Standard library: `pathlib`, `json`, `datetime`, `collections`, `logging`, and `sqlite3`.
+2. Project tooling: virtual environments, `pip`, `pyproject.toml`, `pytest`, `ruff`, and type hints.
+3. One application path: `FastAPI` or `Django` for web, `pandas` and `Matplotlib` for data, or `NumPy` and `PyTorch` for ML.
+4. Supporting tools: `pydantic`, `SQLAlchemy`, `requests`/`httpx`, and a database driver.
+5. Production concerns: configuration, logging, migrations, background jobs, security, packaging, and deployment.
+
+The goal is not to memorize APIs. Learn each library's core abstraction, read its documentation, build a small project, and understand when not to use it.
 
 ## 1. What is Python?
 

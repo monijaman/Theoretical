@@ -1,5 +1,60 @@
 # Kafka vs RabbitMQ: Choosing the Right Message Broker
 
+## Communication Patterns at a Glance
+
+Before comparing Kafka and RabbitMQ, it helps to understand the common ways that services communicate.
+
+### Request–Response: Answer Now
+
+A client sends a request and waits for a response. This is the usual model for APIs. It is simple and useful when the caller needs an immediate result, but the caller must wait for the service and is affected by its latency or downtime.
+
+**Example:** A frontend requests a user's profile from an API.
+
+### Message Queue: Process Later
+
+A producer sends a task to a queue, and a worker processes it asynchronously. The producer can continue without waiting for the task to finish.
+
+Queues are useful for background jobs, handling traffic bursts, and decoupling services.
+
+**Example:** An API adds an email-sending task to a queue, and a worker sends the email later.
+
+### Publish–Subscribe: Notify Many
+
+A publisher sends an event to a topic. Multiple independent subscribers receive the event and respond in their own way.
+
+**Example:** After an order is placed, separate services update inventory, send a confirmation email, and record analytics.
+
+### Streaming: Process Continuously
+
+Data flows continuously, and consumers process it as it arrives. Streaming platforms usually retain events, so consumers can pause, resume, or replay them later.
+
+**Example:** Real-time fraud detection, monitoring, or clickstream analytics.
+
+### Batch Processing: Process in Groups
+
+Batch processing handles a bounded collection of data at scheduled intervals instead of processing each item immediately.
+
+**Example:** Generating a daily sales report or reprocessing last year's data.
+
+### What Is a Message Broker?
+
+A **message broker is infrastructure that moves, stores, and delivers messages between producers and consumers**. It is not a communication pattern on its own.
+
+Depending on its features, a broker can support message queues, publish–subscribe messaging, and sometimes event streaming.
+
+Examples include RabbitMQ, Apache Kafka, Amazon SQS/SNS, and Google Pub/Sub. RabbitMQ is commonly used for task queues and routing messages, while Kafka is commonly used for durable event streams and replayable data pipelines.
+
+### The Easy Version
+
+➟ Request–response = answer now  
+➟ Message queue = process later  
+➟ Publish–subscribe = notify many  
+➟ Streaming = process continuously  
+➟ Batch processing = process in groups  
+➟ Message broker = infrastructure that moves and manages messages
+
+Real systems often combine these patterns. For example, an API may accept a request, put background work into a queue, publish an event when the work is complete, and later process the resulting data in a batch.
+
 ## Introduction
 
 The first time I worked with queues was in 2019 as a Data Engineer for Terragon. I was managing a system where I got data through an endpoint, then pushed it to a queue for another service to consume and process, push to another queue, then the final service would consume and process.

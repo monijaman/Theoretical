@@ -1,40 +1,54 @@
-# Architecture Patterns — Master System Design Like a Senior Architect
+# Architecture Patterns
 
-Master the design and documentation of scalable, maintainable architectures. Learn to justify architectural decisions using real-world migration patterns, event-driven systems, and serverless design. Build the communication skills to present architecture decisions like a principal engineer.
+Compare ways to organize and deploy a backend. Start with the product requirements, then choose boundaries that your team can build, test, and operate.
 
-## ⚡ Quick Start: Real-World Analogies
+## Start Here
 
-Understand architecture patterns with these foundational analogies:
+**Before you begin:** A basic API, a database, and the difference between a process and a service.
 
-- **Monolith:** Like a huge vacation cruise ship. One giant structure where everything is controlled from a central bridge. If the kitchen breaks, it affects the whole ship. Easy to manage when small (one tech team can maintain it). But impossible to scale if one system needs upgrades—the entire ship shuts down. Cost per room doesn't improve as you add more rooms. (All code, services, database in one place)
-  - Startup advantage: Single deployment, unified codebase
-  - Breaking point: 100+ engineers = chaos; 10K rps = latency problems
+Read the explanation before each code example, then follow the data through the normal path and one failure case. The snippets teach individual concepts; application helpers, package setup, credentials, and deployment configuration are not all included.
 
-- **Microservices:** Like multiple charter boats/companies operating independently. Each boat is a specialized cruise line (Carnival, Royal Caribbean, Disney). They share the same docks/ports (shared infrastructure) but operate autonomously. Can scale one boat independently. When one breaks, others keep operating. But coordination is harder (booking across companies takes APIs). Cost: Each boat needs its own crew (operational overhead). (Multiple independent services, each with own DB)
-  - Growth advantage: 100 engineers can work 100x faster
-  - Trade-off: Operational complexity 10x higher
+## Contents
 
-- **Serverless:** Like an Airbnb marketplace. You don't own/operate properties or deal with guests directly. You pay per guest night. Infrastructure scales automatically when demand spikes. Zero operational cost when nobody books. But you have limits (cold starts = new host availability checks). You can't predict exact latency. (Function calls, auto-scaling, pay-per-use)
-  - Startup advantage: $0 baseline cost, infinite scaling, no servers to manage
-  - Use case: Bursty traffic (batch jobs, webhooks, event handlers)
+- [Quick Start: Real-World Analogies](#quick-start-real-world-analogies)
+- [Architectural Patterns Deep Dive](#architectural-patterns-deep-dive)
+- [Building Production Architectures](#building-production-architectures)
+- [Career Impact & Interview Questions](#career-impact--interview-questions)
+- [ADR Template: Documenting Architectural Decisions](#adr-template-documenting-architectural-decisions)
+- [Next Steps: Build Your First Microservices System](#next-steps-build-your-first-microservices-system)
+- [Practice Check](#practice-check)
 
-- **Hybrid:** Like an airline. Core operations (airports, main routes) are scaled vertically like a monolith. but peak-season spikes handled by third-party charters (serverless).
+## Key Terms
+
+| Term | Meaning |
+| --- | --- |
+| Monolith | an application deployed as one unit. |
+| Microservice | a service with its own deployment and a defined responsibility. |
+| Serverless | infrastructure managed by a provider with an execution model and service limits. |
+| ADR | architecture decision record; a short explanation of a decision and its trade-offs. |
+
+
+## Quick Start: Real-World Analogies
+
+Think of a monolith as one workshop: people share tools and release the application together. Microservices are separate workshops with explicit delivery agreements between them. Serverless functions are jobs run on provider-managed infrastructure.
+
+Each option can work well. Compare release independence, data ownership, latency, failure handling, and operating cost; avoid choosing by team size or traffic count alone.
 
 ---
 
-## 🏗️ Architectural Patterns Deep Dive
+## Architectural Patterns Deep Dive
+
+Compare deployment units, ownership, data boundaries, and operational work. Traffic figures in worked examples are assumptions to examine, not thresholds that force an architecture change.
 
 ### 1. **Monolith Architecture** - Start here, graduate when needed
 
 **What it is:** All code, services, and data in one codebase, one process, one deployment. Think: `npm start` runs the entire business.
 
-**Real-world examples:**
-- **Etsy 2005-2015:** Single Rails monolith. Worked great for 10 years, but at 1M requests/day, database became bottleneck
-- **Amazon early 2000s:** Started monolithic, then pioneered Microservices to handle exponential growth
-- **Shopify (today):** Still primarily monolithic internally + selective microservices on edge
+**Example:** A small store can keep catalog, orders, and account logic in one application while using modules to separate responsibilities. The application can run multiple replicas when its state and dependencies support that.
 
 **Advantages:**
-```
+
+```text
 ✅ Simple:        One codebase, one deployment, one database
 ✅ Fast:          Function calls across features (no network latency)
 ✅ Consistent:    ACID transactions span entire business logic
@@ -44,7 +58,8 @@ Understand architecture patterns with these foundational analogies:
 ```
 
 **Disadvantages:**
-```
+
+```text
 ❌ Scaling:       One slow feature slows entire app (auth slow = checkout slow)
 ❌ Team friction: 100 engineers need code review on same database layer
 ❌ Deployment:    One bug in email feature breaks payments for everyone
@@ -52,19 +67,12 @@ Understand architecture patterns with these foundational analogies:
 ❌ Development:   Full regression test needed for every feature (2+ hour CI pipelines)
 ```
 
-**When monolith makes sense:**
-- Startup stage (<50 engineers)
-- Single team (< 10 people)
-- Consistent business logic (traditional CRUD app)
-- Predictable scale (not viral growth)
+**When a monolith makes sense:** One deployment simplifies coordination, especially when features share transactions and the team can manage the codebase together.
 
-**When monolith breaks:**
-- Team size > 50 (deployment conflicts, 100+ PRs/day)
-- QPS > 10K (database bottleneck, caching becomes desperate)
-- Geographic distribution (latency, can't put everything in one data center)
-- Different scaling needs (auth: 100K rps vs payment: 10 rps)
+**When to consider extracting a service:** A component has a clear owner, needs independent releases or capacity, and can expose a stable interface. Measure the coordination benefit against the additional network and operational work.
 
 **Design a scalable monolith (if staying monolithic):**
+
 ```typescript
 // Architecture: Layered monolith with clear boundaries
 src/
@@ -76,16 +84,16 @@ src/
     Order/
       Order.ts
       OrderService.ts
-  
+
   application/              // Use cases, orchestration
     CreateOrderUseCase.ts   // Coordinates domain + repositories
     UserAuthUseCase.ts
-  
+
   infrastructure/           // DB, HTTP, external services
     PostgresUserRepository.ts
     UserController.ts       // HTTP endpoint
     RabbitMQEventBus.ts
-  
+
   shared/                   // Shared utilities
     dto/
     filters/
@@ -96,19 +104,20 @@ src/
 ```
 
 **Code example: Layered monolith**
+
 ```typescript
 // ❌ BAD: Monolith without layers = spaghetti code
 app.post('/orders', async (req, res) => {
   // All logic in one place
   const user = await db.query('SELECT * FROM users WHERE id = ?', [req.body.userId]);
   const order = await db.query('INSERT INTO orders VALUES (?, ?, ?)', [user.id, req.body.items, Date.now()]);
-  
+
   // Payment logic mixed with order logic
   const payment = stripe.charge(req.body.paymentToken, order.total);
-  
+
   // Email logic mixed here
   await sendEmail(user.email, `Order ${order.id} confirmed`);
-  
+
   // Hard to extract, hard to test, hard to scale
   res.json(order);
 });
@@ -117,7 +126,7 @@ app.post('/orders', async (req, res) => {
 // Domain Layer
 class Order {
   constructor(public userId: string, public items: Item[], public total: number) {}
-  
+
   getOrderNumber(): string {
     return `ORD-${this.total}-${Date.now()}`;
   }
@@ -125,14 +134,14 @@ class Order {
 
 class OrderService {
   constructor(private orderRepo: OrderRepository, private paymentGateway: PaymentGateway) {}
-  
+
   async createOrder(userId: string, items: Item[]): Promise<Order> {
     const total = items.reduce((sum, item) => sum + item.price, 0);
     const order = new Order(userId, items, total);
-    
+
     // Charge payment
     await this.paymentGateway.charge(userId, order.total);
-    
+
     // Save order
     return this.orderRepo.save(order);
   }
@@ -141,13 +150,13 @@ class OrderService {
 // Application Layer
 class CreateOrderUseCase {
   constructor(private orderService: OrderService, private eventBus: EventBus) {}
-  
+
   async execute(userId: string, items: Item[]): Promise<Order> {
     const order = await this.orderService.createOrder(userId, items);
-    
+
     // Publish event (for email service to consume)
     this.eventBus.publish(new OrderCreatedEvent(order));
-    
+
     return order;
   }
 }
@@ -156,7 +165,7 @@ class CreateOrderUseCase {
 @Controller('/orders')
 export class OrderController {
   constructor(private createOrderUseCase: CreateOrderUseCase) {}
-  
+
   @Post()
   async createOrder(req: Request, res: Response) {
     const order = await this.createOrderUseCase.execute(
@@ -176,22 +185,11 @@ export class OrderController {
 
 **What it is:** Multiple services, each with own database, own deployment, own tech stack. Services communicate via APIs/events.
 
-**Real-world transformation:**
-```
-Netflix 2008: Single monolithic Java app
-↓ (Hit 1M customers, database groaning)
-Netflix 2012: First microservices extraction (video recommendations)
-↓ (Worked! Could scale independently)
-Netflix 2018: 700+ microservices, 5000+ engineers deploying independently
-↓ (Each engineer can deploy without affecting others)
-Netflix 2024: Reduced to ~300 services (consolidated non-critical ones)
-
-Lesson: Microservices solved Netflix's scaling problem
-Cost: Operational complexity + distributed systems issues (network latency, eventual consistency)
-```
+**Illustrative transformation:** Start with one deployment, extract a clearly bounded background task, and measure whether the separate service improves releases or reliability. Extraction introduces new failure paths that need ownership and monitoring.
 
 **When to adopt microservices:**
-```
+
+```text
 Signals you NEED microservices:
 ✅ Team size: > 50 engineers
 ✅ Deployment frequency: Want to deploy multiple teams/day
@@ -208,7 +206,7 @@ Signals you DON'T need microservices:
 
 **Migration case study: Monolith → Microservices**
 
-```
+```text
 Phase 0: Legacy Monolith (Rails)
 - Single database (PostgreSQL, 100GB)
 - 50 engineers, deployment takes 30 mins
@@ -233,7 +231,7 @@ Phase 2: Extract High-Churn Services (Week 3–6)
 Extract: User Service, Authentication Service, Notification Service
 (Services that change frequently, scale independently)
 
-Pattern: 
+Pattern:
   - Each service owns its data (no shared database)
   - Services communicate via REST APIs + Events
   - Each service has own CI/CD + deployment
@@ -261,7 +259,8 @@ But operational cost increases 10x (RabbitMQ, monitoring, coordination)
 ```
 
 **Microservices architecture pattern:**
-```
+
+```text
 User calls API Gateway
          ↓
 Service Registry (which services exist?)
@@ -302,8 +301,6 @@ Key differences:
 | **Latency** | Function calls (sub-ms) | Network calls (5-100ms) |
 | **Debugging** | Single process (easy) | Spans 5+ services (hard, need distributed tracing) |
 | **Operations** | Monitoring one service | Monitoring 50+ services |
-| **Cost at 10K RPS** | 1 large server ($5K/mo) | 10 smaller services ($50K/mo infra) |
-| **Cost at 100K RPS** | 20 large servers ($100K/mo) | Microservices still cleanly scale ($200K/mo infra) |
 
 **Code example: API gateway + 2 microservices**
 
@@ -315,13 +312,13 @@ app.post('/checkout', async (req, res) => {
   try {
     // Call User Service
     const user = await fetch('http://user-service:3001/users/' + req.user.id);
-    
+
     // Call Order Service
     const order = await fetch('http://order-service:3002/orders', {
       method: 'POST',
       body: JSON.stringify({ userId: req.user.id, items: req.body.items })
     });
-    
+
     res.json(order);
   } catch (err) {
     res.status(500).json({ error: 'Checkout failed' });
@@ -337,10 +334,10 @@ app.get('/users/:id', async (req, res) => {
 // Order Service (separate team, can scale independently)
 app.post('/orders', async (req, res) => {
   const order = await orderDb.create(req.body);
-  
+
   // Publish event (async, non-blocking)
   eventBus.publish('order.created', order);
-  
+
   res.json(order);
 });
 
@@ -352,30 +349,13 @@ eventBus.subscribe('order.created', async (order) => {
 
 ### 3. **Serverless Architecture** - Pay-per-use scaling machine
 
-**What it is:** Write functions, cloud provider manages infrastructure. Auto-scales to zero when not used. Pay for execution time only.
+**What it is:** Run code on provider-managed infrastructure. Scaling, billing, execution limits, and idle costs depend on the product and configuration.
 
-**Real-world use cases:**
-```
-Uber Eats (Lambda for order processing):
-- Peak times: 100K requests = 100K functions spawn instantly
-- Off-peak: $0 cost, zero servers running
-- Each function processes one order independently
-- Total cost: $0.0002 per order (vs $1+ with traditional servers)
-
-Slack (Lambda for webhooks):
-- Receives webhook from integration
-- Triggers Lambda to process & store
-- Never worry about infrastructure
-- Scales from 1 → 1M concurrent events automatically
-
-Netflix (Lambda for recommendations):
-- User watches movie → Lambda triggered
-- Generates personalized recommendations
-- Returns in <100ms, cold start acceptable (user doesn't wait)
-```
+**Example use cases:** Process an uploaded image, handle a webhook, or run a scheduled report. Check execution limits, concurrency quotas, startup latency, and downstream capacity for the chosen provider.
 
 **When serverless makes sense:**
-```
+
+```text
 ✅ Bursty traffic (webhooks, scheduled jobs, events)
 ✅ Unknown scale (viral feature, new market, can't predict)
 ✅ Cheap computation (process images, send emails, transform data)
@@ -391,7 +371,8 @@ Netflix (Lambda for recommendations):
 ```
 
 **Serverless deployment architecture:**
-```
+
+```text
 User Request
     ↓
 API Gateway (handles routing)
@@ -418,10 +399,8 @@ API Gateway (handles routing)
            ↓
     DynamoDB (results)
 
-Cost for 1M orders/month:
-- 3 Lambda invocations × $0.0000002 × 1M = $0.60
-- DynamoDB writes: 1M × $0.00125/1M = $1.25
-- Total: ~$3/month (vs $1000+/month with servers)
+Cost planning: include execution duration, memory, request volume, storage,
+network transfer, and supporting services. Estimate with the actual workload.
 ```
 
 **Code example: Serverless order processing**
@@ -431,7 +410,7 @@ Cost for 1M orders/month:
 export const handler = async (event) => {
   // event = API Gateway POST /orders
   const { userId, items } = event.body;
-  
+
   // Validate
   if (!userId || items.length === 0) {
     return {
@@ -439,10 +418,10 @@ export const handler = async (event) => {
       body: JSON.stringify({ error: 'Invalid order' })
     };
   }
-  
+
   // Calculate total
   const total = items.reduce((sum, item) => sum + item.price, 0);
-  
+
   // Save to DynamoDB (serverless database)
   const orderId = await dynamodb.put({
     id: `order_${Date.now()}`,
@@ -451,13 +430,13 @@ export const handler = async (event) => {
     total,
     status: 'PROCESSING'
   });
-  
+
   // Publish to SQS for async processing
   await sqs.sendMessage({
     QueueUrl: 'https://sqs.../email-queue',
     MessageBody: JSON.stringify({ orderId, userId, total })
   });
-  
+
   return {
     statusCode: 200,
     body: JSON.stringify({ orderId, total })
@@ -467,18 +446,18 @@ export const handler = async (event) => {
 // Lambda 2: Email sending (triggered by SQS)
 export const emailHandler = async (event) => {
   // event = SQS message with order data
-  
+
   for (const record of event.Records) {
     const { orderId, userId, total } = JSON.parse(record.body);
-    
+
     try {
       const user = await dynamodb.get(`user_${userId}`);
-      
+
       await sendEmail(user.email, `Order ${orderId} for \$${total}`);
-      
+
       // Mark order as sent
       await dynamodb.update(orderId, { status: 'EMAIL_SENT' });
-      
+
     } catch (error) {
       // Automatic retry by SQS (3x default)
       throw error;
@@ -487,9 +466,6 @@ export const emailHandler = async (event) => {
 };
 
 // Cost breakdown:
-// - 1M orders processed: ~$3/month
-// - 1M emails sent: ~$5/month  
-// - Total: $8/month (vs $5000+/month with servers)
 // - Scale: 1M → 100M orders automatically (no changes)
 ```
 
@@ -499,9 +475,7 @@ export const emailHandler = async (event) => {
 |--------|----------|---------------|-----------|
 | **Setup time** | 1 hour | 1 week | 30 mins |
 | **Deployment** | 1 command | 10+ commands | 1 CLI command |
-| **Scaling** | Vertical (bigger server) | Horizontal (more services) | Automatic |
-| **Cost @ 10K RPS** | $5K/mo | $50K/mo | $2K/mo (if bursty) |
-| **Cost @ 100K RPS** | $100K+/mo | $200K/mo | $10K+/mo (cheaper) |
+| **Scaling** | Larger instances or more application replicas | Scale individual services | Provider-managed within configured limits |
 | **Team needed** | 5 engineers | 50 engineers | 10 engineers |
 | **Latency** | <10ms | 50-200ms | 100-500ms |
 | **Operational overhead** | Low | Very high | Low |
@@ -509,11 +483,14 @@ export const emailHandler = async (event) => {
 
 ---
 
-## 🎯 Building Production Architectures
+## Building Production Architectures
+
+Treat the following as a design exercise inspired by a photo-sharing product. Establish the workload and user requirements before deciding how many components to introduce.
 
 ### Project: Design Instagram's Architecture
 
 **Requirements:**
+
 - 100M active users
 - Millions of posts per day
 - Real-time feed (< 1s latency)
@@ -521,7 +498,8 @@ export const emailHandler = async (event) => {
 - High availability (99.99% uptime)
 
 **Architecture decision:**
-```
+
+```text
 Monolith: ❌ Would collapse at 1M users
 Microservices: ✅ Needed for scale, team size
 
@@ -560,16 +538,17 @@ Breaking down:
 | Cache (Redis) | Feed queries would kill DB | Eventual consistency |
 | CDN for images | Photos stored globally | Complexity, cost |
 | Event-driven architecture | Services decouple, scale independently | Distributed systems complexity |
-| Eventual consistency | Can't guarantee ACID at 100M scale | App must handle temporary inconsistency |
+| Eventual consistency | Allows selected views to update asynchronously | The application must handle temporary differences |
 
 ---
 
-## 💼 Career Impact & Interview Questions
+## Career Impact & Interview Questions
 
 ### Interview: "Design an e-commerce platform that must support 100K QPS"
 
-✅ Perfect answer:
-```
+Example answer structure:
+
+```text
 1. Clarification:
    - 100K QPS averaged or peak?
    - Geographic distribution needed?
@@ -601,7 +580,7 @@ Breaking down:
 
 ### What makes you a senior architect?
 
-```
+```text
 Junior: "I learned REST APIs and deployed to Heroku"
 Mid: "I designed a microservice system for 50K users"
 Senior: "I led a migration from monolith to microservices, managed eventual consistency issues, built decision frameworks for when to split services"
@@ -612,7 +591,9 @@ The progression = understanding not just WHAT to build, but WHY and WHEN
 
 ---
 
-## 📋 ADR Template: Documenting Architectural Decisions
+## ADR Template: Documenting Architectural Decisions
+
+An ADR records the context, decision, and consequences so a later reader can understand why an option was chosen. Include alternatives and conditions that would make the team revisit the decision.
 
 ```markdown
 # ADR-001: Extract Email Service from Monolith
@@ -650,7 +631,7 @@ Expected ROI: 30% checkout latency reduction
 
 ---
 
-## 🚀 Next Steps: Build Your First Microservices System
+## Next Steps: Build Your First Microservices System
 
 ### Project: Refactor a Monolith into Microservices
 
@@ -661,6 +642,7 @@ Expected ROI: 30% checkout latency reduction
 5. **Present decision** (as if explaining to CTO)
 
 Success criteria:
+
 - ✅ New service deployed independently
 - ✅ Old monolith doesn't need changes (event-driven)
 - ✅ ADR explains why this decision
@@ -668,4 +650,9 @@ Success criteria:
 
 ---
 
-**Master architecture like you own the company. Your decisions will define how your team ships for years.** 🏗️
+Record the assumptions behind your design and revisit them as the product changes.
+## Practice Check
+
+Draw an order-processing application, compare two deployment options, and record your choice in an ADR. Explain one trade-off and one failure mode before moving on.
+
+[Back to contents](#contents) · [Backend learning guide](../readme.md)

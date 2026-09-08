@@ -1,16 +1,48 @@
-# Coding Styles — Write Code Like a Senior Engineer
+# Readable Backend Code
 
-Clean, consistent, readable code is not a preference — it is engineering discipline. This module covers the conventions, naming rules, structural patterns, and formatting standards that separate junior from senior backend code. Every example uses Node.js / TypeScript but the principles apply universally.
+Use consistent names, small responsibilities, and clear error handling to make backend code easier to change. The examples use JavaScript and TypeScript.
 
----
+## Start Here
 
-## ⚡ Quick Analogy
+**Before you begin:** JavaScript functions, objects, promises, and basic TypeScript types.
+
+Read the explanation before each code example, then follow the data through the normal path and one failure case. The snippets teach individual concepts; application helpers, package setup, credentials, and deployment configuration are not all included.
+
+## Contents
+
+- [Quick Analogy](#quick-analogy)
+- [1. Naming Conventions](#1-naming-conventions)
+- [2. Function Design](#2-function-design)
+- [3. Code Structure & Project Layout](#3-code-structure--project-layout)
+- [4. Error Handling Style](#4-error-handling-style)
+- [5. Comments & Documentation Style](#5-comments--documentation-style)
+- [6. Immutability & Pure Functions](#6-immutability--pure-functions)
+- [7. Async / Await Style](#7-async--await-style)
+- [8. TypeScript-Specific Style](#8-typescript-specific-style)
+- [9. Linting & Formatting Tools](#9-linting--formatting-tools)
+- [10. Code Review Checklist](#10-code-review-checklist)
+- [Skill Progression](#skill-progression)
+- [Practice Check](#practice-check)
+
+## Key Terms
+
+| Term | Meaning |
+| --- | --- |
+| Guard clause | an early return that handles a special case before the main path. |
+| Pure function | a function whose result depends on its inputs and has no observable side effects. |
+| Dependency injection | supplying collaborators to a function or class. |
+| Linting | automated checks for code patterns and likely mistakes. |
+
+
+## Quick Analogy
 
 Think of coding style as **grammar in a language**. Two people can both speak English, but one uses run-on sentences, inconsistent tenses, and vague words while the other writes clearly and precisely. Both are technically "correct," but only one is easy to follow at scale. Coding style is what lets 50 engineers read and modify the same codebase without confusion.
 
 ---
 
 ## 1. Naming Conventions
+
+Choose names that reveal purpose and follow the conventions already used by the project. The casing rules below are examples of a consistent JavaScript and TypeScript style.
 
 Names are the most-read part of any codebase. A good name eliminates the need for a comment.
 
@@ -72,7 +104,7 @@ const shouldSendWelcomeEmail = !user.onboardingCompleted;
 
 ### Files & Directories — use kebab-case
 
-```
+```text
 // ❌ Bad
 UserService.ts
 orderController.ts
@@ -87,6 +119,8 @@ payment.helper.ts
 ---
 
 ## 2. Function Design
+
+A function is easier to follow when its main task is visible. Use early returns for exceptional cases and extract helpers when doing so gives a meaningful name to a distinct operation.
 
 ### Single Responsibility — one function does one thing
 
@@ -125,9 +159,9 @@ async function processOrder(orderId: string): Promise<Order> {
 }
 ```
 
-### Keep functions short (target < 20 lines)
+### Keep functions focused
 
-If a function is scrolling past your screen, it is doing too much. Extract sub-tasks into named helper functions — named helpers serve as readable documentation.
+Length is a signal to review, not a fixed rule. Extract a helper when its name clarifies a distinct operation; avoid splitting a clear sequence only to meet a line count.
 
 ### Avoid deep nesting — use early returns (guard clauses)
 
@@ -169,7 +203,7 @@ A consistent project layout lets any engineer find a file in under 10 seconds.
 
 ### Layered Architecture (most Node.js backends)
 
-```
+```text
 src/
 ├── controllers/        # HTTP layer — parse request, call service, return response
 │   ├── user.controller.ts
@@ -203,19 +237,21 @@ src/
 
 ### Dependency direction rule
 
-```
+```text
 Controller → Service → Repository → Database
 ```
 
-A controller never talks directly to a repository. A repository never calls a service. Violations of this create spaghetti dependencies.
+In the layered example below, controllers call services and services call repositories. Keep that direction consistent when using this structure; simpler applications may choose fewer layers.
 
 ---
 
 ## 4. Error Handling Style
 
+Make expected failures understandable to callers while preserving useful diagnostic information. A central handler can translate application errors into consistent HTTP responses.
+
 Errors are first-class citizens — not afterthoughts.
 
-### Always use custom error classes
+### Use custom error classes when callers need distinct handling
 
 ```typescript
 // Base error
@@ -291,6 +327,8 @@ try {
 
 ## 5. Comments & Documentation Style
 
+Comments are most useful when they explain a decision, constraint, or surprising behavior. Keep them close to the code and update them when behavior changes.
+
 ### Comments explain WHY, not WHAT
 
 ```typescript
@@ -308,7 +346,7 @@ for (const user of users) {
 }
 ```
 
-### Use JSDoc for public interfaces only
+### Document public interfaces and non-obvious contracts
 
 ```typescript
 /**
@@ -326,6 +364,8 @@ function applyMembershipDiscount(price: number, user: User): number {
 ---
 
 ## 6. Immutability & Pure Functions
+
+Avoiding hidden changes to shared objects makes code easier to reason about. A pure function is especially easy to test because its inputs determine its output.
 
 Prefer immutable data transformations. Side effects should be explicit.
 
@@ -350,6 +390,8 @@ function addDiscount(order: Order, discount: number): Order {
 ---
 
 ## 7. Async / Await Style
+
+Use sequential awaits when one operation depends on another. Independent work can run concurrently, but the amount of concurrency should fit your database and downstream capacity.
 
 ```typescript
 // ❌ Bad — callback hell / raw promise chains
@@ -388,6 +430,8 @@ const [user, settings] = await Promise.all([
 ---
 
 ## 8. TypeScript-Specific Style
+
+Types describe valid inputs and outputs before the program runs. Use them to make invalid states harder to represent, while still validating data received from external sources.
 
 ### Prefer `interface` for shapes, `type` for aliases/unions
 
@@ -441,12 +485,14 @@ The best style guide is one enforced automatically — not by code review debate
 
 | Tool         | Purpose                                       | Config file       |
 | ------------ | --------------------------------------------- | ----------------- |
-| **ESLint**   | Catch bugs, enforce patterns, ban bad code    | `.eslintrc.json`  |
+| **ESLint** | Catch likely mistakes and enforce conventions | `eslint.config.js` for flat config; legacy example below |
 | **Prettier** | Consistent formatting (semicolons, quotes)    | `.prettierrc`     |
 | **Husky**    | Run lint/format on git commit (pre-commit hook) | `.husky/`       |
 | **lint-staged** | Only lint changed files (fast commits)    | `package.json`    |
 
-### Recommended `.eslintrc.json` for Node.js + TypeScript
+### Legacy `.eslintrc.json` Example
+
+This example uses the older ESLint configuration format. For projects using flat configuration, follow the [ESLint migration guide](https://eslint.org/docs/latest/use/configure/migration-guide) and use the configuration expected by your installed version.
 
 ```json
 {
@@ -484,7 +530,7 @@ The best style guide is one enforced automatically — not by code review debate
 
 Before submitting or approving a PR, check:
 
-```
+```text
 Naming
   [ ] Variables, functions, and files follow the conventions above
   [ ] Boolean variables start with is/has/can/should
@@ -512,7 +558,7 @@ Tests
 
 ---
 
-## 📊 Skill Progression
+## Skill Progression
 
 | Habit                       | Junior               | Mid                    | Senior                      |
 | --------------------------- | -------------------- | ---------------------- | --------------------------- |
@@ -524,3 +570,9 @@ Tests
 | Code review comments        | "Fix this"           | Explains the why       | Teaches the pattern         |
 
 **Time Commitment:** 2 weeks (concepts) + ongoing practice | **Difficulty:** ⭐⭐⭐
+
+## Practice Check
+
+Refactor one request handler, explain the changes, and check that its behavior stays the same. Explain one trade-off and one failure mode before moving on.
+
+[Back to contents](#contents) · [Backend learning guide](../readme.md)

@@ -1,19 +1,52 @@
-# Security & Performance — Build Fast, Bulletproof Backends
+# Backend Security & Performance
 
-Security and performance are not features you add at the end — they are architectural decisions made from day one. This module covers the most critical backend attack vectors (mapped to OWASP Top 10), proven mitigation patterns, and the performance engineering techniques used at companies like Netflix, Cloudflare, and Stripe.
+Learn how to protect an API and investigate slow requests. Work through security boundaries first, then use measurements to decide which performance changes are worth making.
 
----
+## Start Here
 
-## ⚡ Quick Analogies
+**Before you begin:** HTTP, Express middleware, database queries, and authentication basics.
+
+Read the explanation before each code example, then follow the data through the normal path and one failure case. The snippets teach individual concepts; application helpers, package setup, credentials, and deployment configuration are not all included.
+
+## Contents
+
+- [Quick Analogies](#quick-analogies)
+- [Part 1: Security](#part-1-security)
+- [1. OWASP Top 10 — Mapped to Node.js](#1-owasp-top-10--mapped-to-nodejs)
+- [2. CORS Configuration](#2-cors-configuration)
+- [3. Secrets Management](#3-secrets-management)
+- [Part 2: Performance](#part-2-performance)
+- [4. Caching Strategy](#4-caching-strategy)
+- [5. Database Performance](#5-database-performance)
+- [6. HTTP Performance](#6-http-performance)
+- [7. Async & Concurrency](#7-async--concurrency)
+- [8. Performance Monitoring & Profiling](#8-performance-monitoring--profiling)
+- [Security & Performance Quick Reference](#security--performance-quick-reference)
+- [Practice Check](#practice-check)
+
+## Key Terms
+
+| Term | Meaning |
+| --- | --- |
+| Authentication | verifying an identity. |
+| Authorization | deciding what that identity may access. |
+| CORS | browser rules controlling which origins may read a response. |
+| N+1 queries | one query followed by an extra query for each returned item. |
+| Connection pool | a reusable set of database connections. |
+
+
+## Quick Analogies
 
 - **Security:** Like building a bank vault. The door lock is not enough — you also need security cameras (logging), guards (rate limiting), visitor logs (audit trails), and a silent alarm (intrusion detection). Every layer adds friction for the attacker.
 - **Performance:** Like a restaurant kitchen. The total order time (latency) depends on the slowest station. You optimize by parallelizing prep work, caching frequently-made sauces, and never letting the dishwasher block the chef.
 
 ---
 
-# PART 1 — SECURITY
+## Part 1: Security
 
 ## 1. OWASP Top 10 — Mapped to Node.js
+
+The category labels below follow selected items from the OWASP Top 10:2021 list. This is a set of examples, not complete coverage of every category. Consult the [2021 reference](https://owasp.org/Top10/2021/) when following these labels.
 
 ### A01 — Broken Access Control
 
@@ -283,7 +316,7 @@ app.post('/api/orders', authenticate, validate(CreateOrderSchema), orderControll
 
 ### A09 — Security Logging and Monitoring Failures
 
-Every security event must be logged with structured data.
+Define which security events you need to investigate and record them consistently, with appropriate access and retention controls.
 
 ```typescript
 // Security events to always log
@@ -312,12 +345,14 @@ logSecurityEvent(SECURITY_EVENTS.LOGIN_FAILURE, {
 });
 ```
 
-**What to log:** event type, timestamp, user/IP, resource accessed, outcome.  
+**What to log:** event type, timestamp, user/IP, resource accessed, outcome.
 **What NOT to log:** passwords, tokens, full credit card numbers, SSNs.
 
 ---
 
 ## 2. CORS Configuration
+
+CORS affects which browser origins can read responses. It does not authenticate a caller or replace server-side authorization. Keep allowed origins tied to the clients you intend to support.
 
 ```typescript
 import cors from 'cors';
@@ -342,6 +377,8 @@ app.use(cors({
 
 ## 3. Secrets Management
 
+Keep credentials out of source code and logs. Decide how the application receives secrets, which identity can read them, and how they are rotated without interrupting service.
+
 ```typescript
 // ❌ Bad — secrets in code
 const DB_URL = 'postgresql://admin:password123@prod-db:5432/app';
@@ -352,6 +389,7 @@ if (!DB_URL) throw new Error('DATABASE_URL is required');
 ```
 
 **Secret managers by platform:**
+
 - AWS: Secrets Manager + Parameter Store
 - GCP: Secret Manager
 - Azure: Key Vault
@@ -361,9 +399,11 @@ if (!DB_URL) throw new Error('DATABASE_URL is required');
 
 ---
 
-# PART 2 — PERFORMANCE
+## Part 2: Performance
 
 ## 4. Caching Strategy
+
+A cache adds a second representation of data. For each example, identify the source of truth, the invalidation behavior, and what happens if only one write succeeds.
 
 The fastest request is the one you never make to the database.
 
@@ -439,7 +479,11 @@ async function getWithSingleFlight<T>(
 
 ## 5. Database Performance
 
-### Use indexes for every column in WHERE, JOIN, and ORDER BY
+Start with a slow query and its execution plan. Indexes, query shape, and connection pooling solve different bottlenecks, so change the part supported by measurements.
+
+### Choose indexes from actual query patterns
+
+An index can speed up selected reads but adds storage and write work. Check the execution plan and representative data before adding one; not every filter needs a separate index. See [PostgreSQL indexes](https://www.postgresql.org/docs/17/indexes.html).
 
 ```sql
 -- Slow: full table scan
@@ -522,6 +566,8 @@ async function getOrders(userId: string, cursor?: string, limit = 20) {
 
 ## 6. HTTP Performance
 
+Reduce unnecessary work and transferred bytes while preserving the API contract. Measure end-to-end latency as well as the cost of compression or extra requests.
+
 ### Compression
 
 ```typescript
@@ -574,6 +620,8 @@ res.json({
 
 ## 7. Async & Concurrency
 
+Asynchronous I/O lets a process handle other work while waiting. CPU-heavy JavaScript still occupies the event loop; worker threads can move that computation to another thread.
+
 ### Non-blocking code — never block the event loop
 
 ```typescript
@@ -615,6 +663,8 @@ if (!isMainThread) {
 
 ## 8. Performance Monitoring & Profiling
 
+Metrics show when performance changes; a profile helps locate where time or memory is spent. Compare measurements before and after a change using the same workload.
+
 ### Request duration metrics (Prometheus-style)
 
 ```typescript
@@ -649,7 +699,7 @@ app.get('/metrics', async (req, res) => {
 
 ---
 
-## 📊 Security & Performance Quick Reference
+## Security & Performance Quick Reference
 
 | Area              | Key Principle                          | Tool / Pattern                        |
 | ----------------- | -------------------------------------- | ------------------------------------- |
@@ -665,3 +715,9 @@ app.get('/metrics', async (req, res) => {
 | Event loop        | Never block — use async/worker threads | `fs.promises`, Worker threads         |
 
 **Time Commitment:** 3-4 weeks | **Difficulty:** ⭐⭐⭐⭐⭐
+
+## Practice Check
+
+Review one endpoint for authorization and input handling, then measure and improve its slowest dependency. Explain one trade-off and one failure mode before moving on.
+
+[Back to contents](#contents) · [Backend learning guide](../readme.md)

@@ -45,6 +45,7 @@ Master full-stack engineering with production-ready content covering frontend, b
 | **Monitoring**            | [Observability & Reliability](./Backend-guru/Observability%20%26%20Reliability/readme.md)                                | ✅ Complete |
 | **Testing @ Scale**       | [Production Simulation](./Backend-guru/Production%20Simulation/readme.md)                                                | ✅ Complete |
 | **Status Report**         | [Full Curriculum Status](./CURRICULUM_STATUS.md)                                                                         | ✅ Complete |
+| **AI Engineering**        | Context handling, memory, and prompt boundaries                                                                       | ✅ Complete |
 
 ---
 
@@ -79,6 +80,29 @@ Master full-stack engineering with production-ready content covering frontend, b
 ---
 
 ## 📈 Content Highlights
+
+---
+
+## Context Handling
+
+Context handling is the practice of selecting, organizing, and maintaining the information an AI system needs to produce accurate and consistent responses. It includes conversation history, user instructions, retrieved documents, tool results, and relevant application state.
+
+### Key Practices
+
+- Keep only relevant context to reduce noise and token usage.
+- Separate system instructions, user input, retrieved data, and tool results.
+- Preserve important conversation state across turns.
+- Prioritize trusted and recent information when context conflicts.
+- Never treat private model reasoning as user-visible context.
+
+### Example
+
+```text
+System instructions → User request → Relevant conversation history
+→ Retrieved documents → Tool results → Final response
+```
+
+Good context handling improves reliability, reduces hallucinations, and helps AI applications remain consistent as conversations become longer.
 
 ---
 

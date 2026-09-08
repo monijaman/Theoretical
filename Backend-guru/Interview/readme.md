@@ -1,8 +1,32 @@
 # Node.js Backend Interview — Deep Dive
 
-> These questions were asked in a real Node.js backend interview. Each answer goes beyond surface-level — covering *how it works*, *how it scales*, and the *trade-offs*.
+Use these 100 questions to practice explaining backend behavior, design choices, and failure handling. Examples use Node.js and common backend tools; implementation details depend on the versions and application setup you use.
 
 ---
+
+## Start Here
+
+Treat this as a reference you can revisit. Pick three related questions, explain each aloud before reading, then compare your answer with the examples.
+
+| Focus | Suggested questions |
+| --- | --- |
+| Application foundations | [Event loop](#13-nodejs-event-loop-phases), [error handling](#49-error-handling-patterns-in-nodejs), [middleware](#50-middleware-architecture-in-express) |
+| API development | [REST design](#82-rest-api-design-best-practices), [validation](#86-schema-validation), [pagination](#22-pagination--offset-vs-cursor) |
+| Storage and caching | [Indexes](#11-database-indexing-strategy), [Redis caching](#2-caching-with-redis), [replication](#16-database-replication) |
+| Reliable background work | [Queues](#1-message-queues--reliability), [outbox](#20-outbox-pattern), [consumer idempotency](#85-idempotency-in-event-consumers) |
+| Operating services | [Observability](#96-observability--the-three-pillars), [service objectives](#68-slo-sli-sla--error-budgets), [load testing](#88-load-testing) |
+| Putting it together | [Architecture choices](#83-microservices-vs-monolith-vs-modular-monolith), [URL shortener](#100-system-design-url-shortener) |
+
+## How to Build an Answer
+
+1. **Define the idea.** Explain it in one or two plain-language sentences.
+2. **Describe the flow.** Follow a request, message, or data item through the system.
+3. **Test a failure case.** Consider a timeout, duplicate, concurrent update, or unavailable dependency.
+4. **Explain the trade-off.** State what the approach improves and what it costs.
+
+Code blocks are learning examples, sometimes abbreviated. A short snippet does not include every dependency, security control, concurrency guarantee, or recovery step. Read the related module when you need more context.
+
+**Common abbreviations:** TTL = time to live; DLQ = dead letter queue; CQRS = command query responsibility segregation; SSE = server-sent events; JWT = JSON Web Token. Reliability terms such as SLI and SLO are explained in [question 68](#68-slo-sli-sla--error-budgets).
 
 ## Table of Contents
 
@@ -113,11 +137,11 @@
 
 ### What happens if your RabbitMQ consumer crashes before processing a message?
 
-By default, if a consumer crashes **after** receiving a message but **before** acknowledging it, RabbitMQ will **re-queue** the message and deliver it to another available consumer.
+With manual acknowledgments enabled, if a consumer crashes **after** receiving a message but **before** acknowledging it, RabbitMQ will **re-queue** the message and deliver it to another available consumer.
 
 **How acknowledgments work:**
 
-```
+```text
 Producer → Queue → Consumer (receives msg)
                         ↓
                    [processes msg]
@@ -138,15 +162,17 @@ If the consumer crashes before calling `ack()`, RabbitMQ marks the message as un
 **Dead Letter Queue (DLQ):**
 
 A DLQ catches messages that:
+
 - Were rejected with `requeue: false`
 - Exceeded the max retry count
 - Expired (TTL)
 
-```
+```text
 Queue → Consumer crashes → nack → Dead Letter Exchange → DLQ
 ```
 
 **Best practices:**
+
 - Always use manual `ack`, never auto-ack in production
 - Set a retry limit to avoid infinite redelivery loops
 - Use a DLQ to inspect and replay failed messages
@@ -164,7 +190,7 @@ Queue → Consumer crashes → nack → Dead Letter Exchange → DLQ
 
 ### Cache-Aside (Lazy Loading) — Most Common
 
-```
+```text
 Read:
   1. Check Redis
   2. Cache HIT → return data
@@ -197,7 +223,7 @@ async function updateUser(id, data) {
 
 Write to DB and cache **at the same time**. Cache is always fresh, but every write hits both.
 
-```
+```text
 Write → DB + Redis (simultaneously)
 Read  → always from Redis
 ```
@@ -210,7 +236,7 @@ Read  → always from Redis
 
 Write to Redis first, then sync to DB **asynchronously**.
 
-```
+```text
 Write → Redis (immediate) → DB (async, batched)
 ```
 
@@ -256,7 +282,7 @@ Services call each other and **wait for a response**.
 - **REST (HTTP)** — universal, human-readable, stateless
 - **gRPC** — binary (Protocol Buffers), fast, strongly typed, great for internal services
 
-```
+```text
 Service A ──HTTP/gRPC──► Service B
            ◄─────────────
 ```
@@ -269,11 +295,12 @@ Service A ──HTTP/gRPC──► Service B
 
 Services communicate through a **message broker** (RabbitMQ, Kafka). They don't wait.
 
-```
+```text
 Service A ──publish──► Broker ──consume──► Service B
 ```
 
 **Benefits:**
+
 - Decoupled: A doesn't care if B is down
 - Durable: messages persist until consumed
 - Scalable: multiple consumers can process in parallel
@@ -300,7 +327,7 @@ Service A ──publish──► Broker ──consume──► Service B
 
 Without an API Gateway, every client would need to know the address of every microservice. The gateway is a **single entry point** for all client requests.
 
-```
+```text
 Client
   │
   ▼
@@ -340,7 +367,7 @@ Never let one service failure cascade into a full system outage.
 
 Like an electrical circuit breaker — it "opens" (stops requests) when failures exceed a threshold, giving Service B time to recover.
 
-```
+```text
 States:
   CLOSED  → requests flow normally
   OPEN    → requests fail immediately (no calls to B)
@@ -363,7 +390,7 @@ const breaker = new CircuitBreaker(callServiceB, {
 
 Retry failed requests, but wait longer between each attempt.
 
-```
+```text
 Attempt 1 → fail → wait 1s
 Attempt 2 → fail → wait 2s
 Attempt 3 → fail → wait 4s → give up
@@ -458,6 +485,7 @@ readinessProbe:
 ```
 
 **Key difference:**
+
 - Liveness failure → restart the pod
 - Readiness failure → remove from load balancer, don't send traffic (but don't restart)
 
@@ -516,6 +544,7 @@ app.use('/api', rateLimit({
 ```
 
 **Algorithms:**
+
 - **Fixed Window** — simple, but can burst at boundary
 - **Sliding Window** — smoother, more accurate
 - **Token Bucket** — allows bursts up to a limit
@@ -536,6 +565,7 @@ const schema = Joi.object({
 ```
 
 Protect against:
+
 - **SQL Injection** → use parameterized queries / ORM
 - **NoSQL Injection** → sanitize MongoDB operators (`$where`, `$gt`)
 - **XSS** → escape HTML output, use `helmet`
@@ -573,7 +603,7 @@ WebSockets are **stateful** — the client is pinned to one server. This breaks 
 
 ### The Problem
 
-```
+```text
 Client A connects to Server 1
 Client B connects to Server 2
 
@@ -594,7 +624,7 @@ Route the same client to the same server using load balancer session affinity. B
 
 Each server subscribes to a shared Redis channel. When a message arrives, it's broadcast to all servers.
 
-```
+```text
 Client A → Server 1 → Redis PUBLISH "room:xyz" msg
                               ↓
                     Server 2 SUBSCRIBE → delivers to Client B
@@ -676,7 +706,7 @@ async function authenticate(req, res, next) {
 - Refresh token: stored in DB, can be deleted on logout
 - On logout: delete the refresh token — new access tokens can't be issued
 
-```
+```text
 Login    → issue access_token (15m) + refresh_token (7d, stored in DB)
 Request  → use access_token
 Refresh  → exchange refresh_token for new access_token
@@ -769,7 +799,7 @@ socket.leave('room:game-42');
 
 ### Visual Comparison
 
-```
+```text
 Namespace: /chat
   ├── Room: room:general    ← socket A, socket B
   ├── Room: room:random     ← socket C
@@ -788,6 +818,8 @@ Namespace: /admin
 
 ---
 
+[Back to question list](#table-of-contents)
+
 ## 11. Database Indexing Strategy
 
 ### How do you decide indexing strategy based on different query patterns?
@@ -799,24 +831,28 @@ An index speeds up reads but slows down writes. The key is to **index what you q
 ### Index Types (MongoDB-focused, concepts apply broadly)
 
 **Single Field Index**
+
 ```js
 db.users.createIndex({ email: 1 });
 ```
 Use when you frequently query by one field.
 
 **Compound Index**
+
 ```js
 db.orders.createIndex({ userId: 1, createdAt: -1 });
 ```
 Use for queries that filter on multiple fields. **Order matters** — matches queries that use the leftmost fields (prefix rule).
 
 **Text Index**
+
 ```js
 db.products.createIndex({ name: 'text', description: 'text' });
 ```
 Use for full-text search.
 
 **Partial Index**
+
 ```js
 db.orders.createIndex(
   { createdAt: 1 },
@@ -826,6 +862,7 @@ db.orders.createIndex(
 Only indexes documents that match the filter. Smaller, faster for specific query patterns.
 
 **Sparse Index**
+
 ```js
 db.users.createIndex({ phoneNumber: 1 }, { sparse: true });
 ```
@@ -908,7 +945,7 @@ When multiple TTL indexes or expiry sources exist (e.g., session TTL + token TTL
 3. **Redis for short-lived data** — use Redis with `SETEX` for sub-minute precision; MongoDB TTL for long-lived document cleanup
 4. **Background jobs** — for complex expiry logic, use a cron job (Bull, Agenda) to process expirations with retry logic
 
-```
+```text
 User request → App checks expiresAt in document → expired? → reject + cleanup
                                                → valid? → serve
 MongoDB TTL → runs every ~60s → deletes expired docs (cleanup pass)
@@ -926,7 +963,7 @@ The event loop is what makes Node.js non-blocking. It processes different types 
 
 ### The 6 Phases
 
-```
+```text
    ┌───────────────────────────┐
 ┌─►│         timers            │ ← setTimeout, setInterval callbacks
 │  └─────────────┬─────────────┘
@@ -953,7 +990,7 @@ The event loop is what makes Node.js non-blocking. It processes different types 
 
 ### Priority Order (Highest to Lowest)
 
-```
+```text
 process.nextTick()   ← runs after current operation, before any I/O
 Promise callbacks    ← microtask queue
 setImmediate()       ← check phase (after poll)
@@ -979,7 +1016,8 @@ console.log('6 - sync');
 ```
 
 **Output:**
-```
+
+```text
 1 - sync
 6 - sync
 4 - nextTick       ← microtask: runs first
@@ -1018,12 +1056,14 @@ console.log('6 - sync');
 ### When to Use What
 
 **Use RabbitMQ/Kafka when:**
+
 - Order processing, payment events, email jobs
 - Messages must not be lost
 - Consumer might be offline temporarily
 - You need retries, DLQ, or message replay
 
 **Use Redis Pub/Sub when:**
+
 - Live score updates, real-time dashboard metrics
 - Presence indicators (online/offline)
 - Cache invalidation signals across servers
@@ -1053,7 +1093,7 @@ console.log('6 - sync');
 
 Add more power to the **same machine** — more CPU, more RAM, bigger disk.
 
-```
+```text
 Before:  [Server: 2 CPU, 4GB RAM]
 After:   [Server: 16 CPU, 64GB RAM]
 ```
@@ -1067,7 +1107,7 @@ After:   [Server: 16 CPU, 64GB RAM]
 
 Add **more machines** running the same service behind a load balancer.
 
-```
+```text
 Before:                    After:
 [Server 1]          [Load Balancer]
                     ├── [Server 1]
@@ -1117,7 +1157,7 @@ Replication is the process of copying data from one database server (primary) to
 
 All **writes** go to the primary. Replicas receive a copy of changes asynchronously and serve **reads**.
 
-```
+```text
 Write  →  Primary  →  replicates async  →  Replica 1
                                         →  Replica 2
 
@@ -1125,6 +1165,7 @@ Read   →  Replica 1 or 2 (load balanced)
 ```
 
 **Benefits:**
+
 - Read throughput scales horizontally
 - Replicas can be used for backups without hitting the primary
 - Failover: promote a replica to primary if primary goes down
@@ -1148,6 +1189,7 @@ Read   →  Replica 1 or 2 (load balanced)
 A common problem: user updates their profile, then immediately reads it — but gets the old value from a replica.
 
 **Solutions:**
+
 1. Route reads that follow writes to the primary for a short window
 2. Pass a replication token — client sends the write timestamp, replica waits until it's caught up
 3. Always read from primary for that user's own data
@@ -1171,7 +1213,7 @@ db.collection.find().readPreference('secondaryPreferred');
 
 Sharding is **horizontal partitioning** — splitting data across multiple database instances, where each instance (shard) holds a subset of the data.
 
-```
+```text
 Without sharding:       With sharding:
 [All 100M users]        [Shard A: users 0–33M]
                         [Shard B: users 33M–66M]
@@ -1183,7 +1225,8 @@ Without sharding:       With sharding:
 ### Sharding Strategies
 
 **Range-based sharding**
-```
+
+```text
 userId 0–1M  → Shard A
 userId 1M–2M → Shard B
 userId 2M+   → Shard C
@@ -1191,7 +1234,8 @@ userId 2M+   → Shard C
 Simple, but creates **hot spots** — most new users land on the latest shard.
 
 **Hash-based sharding**
-```
+
+```text
 shard = hash(userId) % numShards
 ```
 Distributes evenly. No hot spots. But range queries span all shards.
@@ -1218,7 +1262,7 @@ A lookup table maps each key to its shard. Flexible, but the lookup table itself
 
 Different columns of a table go into different tables/stores:
 
-```
+```text
 users table (frequently queried):  id, email, name
 user_profile (rarely queried):     id, bio, avatar, preferences
 ```
@@ -1239,7 +1283,7 @@ Useful when some columns are large (BLOBs) or accessed infrequently.
 
 In a standard CRUD app, the same model handles both reads and writes:
 
-```
+```text
 POST /orders   → validate, apply business logic, save to DB
 GET  /orders   → complex join: orders + items + user + shipping
 ```
@@ -1250,7 +1294,7 @@ The write model is optimized for consistency and business rules. The read model 
 
 ### CQRS Architecture
 
-```
+```text
 Client
   │
   ├── Command (write) ──► Command Handler ──► Write DB (normalized)
@@ -1286,11 +1330,13 @@ async function getOrderDetails(orderId) {
 ### When to Use CQRS
 
 **Use it when:**
+
 - Read and write workloads are very different in shape or scale
 - You need separate scaling for reads vs writes
 - Read models require complex aggregations that shouldn't touch the write DB
 
 **Don't use it when:**
+
 - Simple CRUD with no complex read requirements
 - Small team / early product — the extra infrastructure overhead is not worth it
 
@@ -1314,7 +1360,7 @@ A saga is a sequence of local transactions. Each step publishes an event that tr
 
 Each service listens for events and decides what to do. No central coordinator.
 
-```
+```text
 Order Service  →  order.created  →  Payment Service
                                          ↓
                                    payment.completed  →  Inventory Service
@@ -1323,7 +1369,8 @@ Order Service  →  order.created  →  Payment Service
 ```
 
 **If payment fails:**
-```
+
+```text
 payment.failed  →  Order Service compensates → cancels order
 ```
 
@@ -1336,7 +1383,7 @@ payment.failed  →  Order Service compensates → cancels order
 
 A central **Saga Orchestrator** tells each service what to do and handles failures.
 
-```
+```text
 Orchestrator:
   1. Tell OrderService   → create order     ✅
   2. Tell PaymentService → charge card      ❌ (failed)
@@ -1384,7 +1431,7 @@ The order is in the DB but the event was never sent — downstream services neve
 
 Write both the data **and** the event to the database in a single transaction. A separate background process (outbox processor) reads unpublished events and publishes them.
 
-```
+```text
 Step 1: Single DB Transaction
   INSERT INTO orders (...)
   INSERT INTO outbox (event_type='order.created', payload=..., published=false)
@@ -1441,13 +1488,15 @@ setInterval(processOutbox, 2000);
 
 ---
 
+[Back to question list](#table-of-contents)
+
 ## 21. Idempotency in APIs
 
 ### What is idempotency and how do you design idempotent APIs?
 
 An operation is **idempotent** if doing it multiple times produces the same result as doing it once.
 
-```
+```text
 GET /users/123        → always safe, no side effects
 DELETE /users/123     → first call deletes, second call returns 404 (still idempotent — end state is the same)
 POST /payments        → NOT idempotent — calling twice charges twice
@@ -1533,6 +1582,7 @@ const posts = await db.posts
 ```
 
 **Problems:**
+
 - **Performance degrades** — at page 1000 with limit 20, the DB scans and discards 20,000 rows
 - **Inconsistent results** — if a new post is inserted between page 1 and page 2 requests, items shift and you either miss or duplicate an item
 
@@ -1557,6 +1607,7 @@ const posts = await db.posts
 ```
 
 **Response includes next cursor:**
+
 ```json
 {
   "data": [...],
@@ -1590,7 +1641,7 @@ const posts = await db.posts
 
 Client sends a request. Server **holds it open** until data is available (or timeout), then responds. Client immediately sends another request.
 
-```
+```text
 Client → GET /events (holds open)
 Server → waits... waits... data arrives → responds
 Client → GET /events (immediately again)
@@ -1797,6 +1848,7 @@ clearInterval(timer);
 ### Detecting Memory Leaks
 
 **1. Monitor heap usage in production**
+
 ```js
 setInterval(() => {
   const used = process.memoryUsage();
@@ -1805,6 +1857,7 @@ setInterval(() => {
 ```
 
 **2. Take a heap snapshot**
+
 ```bash
 node --inspect server.js
 # Open Chrome → chrome://inspect → take heap snapshot
@@ -1812,6 +1865,7 @@ node --inspect server.js
 ```
 
 **3. Use clinic.js**
+
 ```bash
 npx clinic doctor -- node server.js
 ```
@@ -1828,7 +1882,7 @@ Some work should not happen in a request-response cycle — sending emails, resi
 
 ### BullMQ Architecture
 
-```
+```text
 Producer (API server) → adds job to Redis queue → Worker processes job
 ```
 
@@ -1909,7 +1963,7 @@ Regular hashing (`shard = hash(key) % N`) breaks when you add or remove a node �
 
 Imagine a ring (hash space 0 → 2³² wrapped around). Both nodes and keys are placed on the ring by hashing. Each key is owned by the **next node clockwise**.
 
-```
+```text
          Node A (hash 100)
               │
    Key X ────►│
@@ -1931,7 +1985,7 @@ Ring ─────────────────────── Node 
 
 To avoid uneven distribution, each physical node is represented by multiple virtual nodes on the ring. This spreads the load evenly.
 
-```
+```text
 Node A → represented at ring positions 45, 160, 310, 420...
 Node B → represented at ring positions 80, 200, 355, 500...
 ```
@@ -1959,7 +2013,7 @@ In a static environment you could hardcode `http://payment-service:3001`. In a d
 
 The client queries a **service registry** (like Consul, Eureka) to get the list of available instances, then picks one using a load balancing algorithm.
 
-```
+```text
 Service A → ask Registry: "where is payment-service?"
          ← Registry: "10.0.0.5:3001, 10.0.0.6:3001"
          → picks 10.0.0.5:3001 and calls it
@@ -1974,7 +2028,7 @@ Service A → ask Registry: "where is payment-service?"
 
 The client calls a **load balancer or API gateway**. The gateway handles service discovery internally.
 
-```
+```text
 Service A → calls "http://api-gateway/payment"
 API Gateway → queries registry → picks instance → forwards request
 ```
@@ -1988,7 +2042,7 @@ API Gateway → queries registry → picks instance → forwards request
 
 In Kubernetes, every Service gets a DNS name. Pods find each other by name.
 
-```
+```text
 payment-service.default.svc.cluster.local → resolves to the Service ClusterIP
 ```
 
@@ -2024,7 +2078,7 @@ When you need to make breaking changes, you must version your API. Here are the 
 
 ### 1. URI Path Versioning (Most Common)
 
-```
+```text
 GET /api/v1/users
 GET /api/v2/users
 ```
@@ -2036,7 +2090,7 @@ GET /api/v2/users
 
 ### 2. Header Versioning
 
-```
+```text
 GET /api/users
 Accept-Version: 2
 ```
@@ -2056,7 +2110,7 @@ app.get('/api/users', (req, res) => {
 
 ### 3. Query Parameter Versioning
 
-```
+```text
 GET /api/users?version=2
 ```
 
@@ -2067,7 +2121,7 @@ GET /api/users?version=2
 
 ### 4. Content Negotiation (Accept Header)
 
-```
+```text
 GET /api/users
 Accept: application/vnd.myapi.v2+json
 ```
@@ -2134,7 +2188,7 @@ logger.info({ userId, action: 'login', ip: req.ip }, 'User logged in');
 
 When a request spans multiple services, you need a shared ID to stitch the logs together.
 
-```
+```text
 Request arrives → generate requestId (UUID)
                 → attach to all logs in this service
                 → forward in headers to downstream services
@@ -2179,6 +2233,8 @@ app.post('/orders', async (req, res) => {
 | `trace` | Very verbose — almost never in prod |
 
 ---
+
+[Back to question list](#table-of-contents)
 
 ## 31. gRPC vs REST vs GraphQL
 
@@ -2282,7 +2338,7 @@ Distribute requests to each server in order: S1 → S2 → S3 → S1 → ...
 
 Servers with higher weight receive more requests.
 
-```
+```text
 Server A (weight 3): gets 3 requests
 Server B (weight 1): gets 1 request
 Ratio: A:B = 3:1
@@ -2304,7 +2360,7 @@ Route to the server with fewest active connections.
 
 Hash the client's IP to always route them to the same server.
 
-```
+```text
 hash(client_ip) % numServers → always same server
 ```
 
@@ -2350,7 +2406,7 @@ Opening a database connection is expensive — it involves TCP handshake, auth, 
 
 A pool maintains a set of **pre-opened, reusable connections**. When a request needs the DB, it borrows a connection. When done, it returns it to the pool.
 
-```
+```text
 Without pooling:
 Request 1 → open connection → query → close connection
 Request 2 → open connection → query → close connection  (repeated overhead)
@@ -2394,7 +2450,8 @@ try {
 ### Pool Sizing
 
 **Rule of thumb for PostgreSQL:**
-```
+
+```text
 connections = (num_cores * 2) + effective_spindle_count
 ```
 
@@ -2409,7 +2466,7 @@ For a 4-core DB server: ~10 connections per application instance is a good start
 
 For high-concurrency apps, even pool connections can be too many for the DB. **PgBouncer** is a connection pooler that sits between your app and PostgreSQL, multiplexing thousands of app connections into a handful of real DB connections.
 
-```
+```text
 App (100 connections) → PgBouncer → PostgreSQL (10 connections)
 ```
 
@@ -2425,7 +2482,7 @@ App (100 connections) → PgBouncer → PostgreSQL (10 connections)
 
 Count requests in a fixed time window. Reset the counter at the end of the window.
 
-```
+```text
 Window: 0s–60s  → 100 requests allowed
 At 59s: 100 requests sent → blocked
 At 60s: counter resets → 100 more allowed
@@ -2439,7 +2496,7 @@ At 60s: counter resets → 100 more allowed
 
 Store timestamp of each request. Count requests in the past 60 seconds.
 
-```
+```text
 Request arrives at t=75s
 → count requests with timestamp > 15s (75-60)
 → if count < limit → allow
@@ -2454,7 +2511,7 @@ Request arrives at t=75s
 
 Hybrid: approximate the sliding window using two fixed windows.
 
-```
+```text
 Current window (partial): 30s elapsed, 40 requests
 Previous window (full):   100 requests
 Weight = (60-30)/60 = 0.5
@@ -2470,7 +2527,7 @@ Estimated count = 40 + (100 * 0.5) = 90 → under limit
 
 A bucket holds tokens. Each request consumes one token. Tokens refill at a fixed rate. Allows bursts up to bucket capacity.
 
-```
+```text
 Bucket capacity: 10 tokens
 Refill rate: 1 token/second
 
@@ -2506,7 +2563,7 @@ async function consumeToken(userId) {
 
 Requests enter a queue (bucket). The queue drains at a constant rate. Excess requests are dropped.
 
-```
+```text
 Incoming: bursty traffic → queued
 Outgoing: constant rate (e.g., 10 req/s)
 ```
@@ -2535,6 +2592,7 @@ Outgoing: constant rate (e.g., 10 req/s)
 ### CAP Theorem
 
 A distributed system can only guarantee **2 of 3**:
+
 - **Consistency** — every read gets the latest write
 - **Availability** — every request gets a (possibly stale) response
 - **Partition Tolerance** — system works despite network splits
@@ -2604,7 +2662,7 @@ Each request gets a `traceId`. Every service passes it along in headers and logs
 
 Every service should expose:
 
-```
+```text
 GET /health  → { status: 'ok' }            (liveness)
 GET /ready   → { status: 'ok', db: 'ok' }  (readiness — checks dependencies)
 ```
@@ -2890,7 +2948,7 @@ Instead of storing the **current state** of an entity, event sourcing stores a *
 
 ### Traditional vs Event Sourcing
 
-```
+```text
 Traditional:
 orders table → { id: 1, status: 'shipped', total: 150 }
 (current snapshot — history is lost)
@@ -2941,6 +2999,8 @@ function rebuildOrder(events) {
 
 ---
 
+[Back to question list](#table-of-contents)
+
 ## 41. Two-Phase Commit (2PC)
 
 ### What is Two-Phase Commit and why is it rarely used in microservices?
@@ -2956,10 +3016,11 @@ The coordinator asks all participants: "Can you commit?"
 Each participant locks its resources and votes Yes or No.
 
 **Phase 2 — Commit or Abort**
+
 - If all vote Yes → coordinator sends Commit to all
 - If any vote No → coordinator sends Abort to all
 
-```
+```text
 Coordinator → PREPARE → Service A (DB)
            → PREPARE → Service B (DB)
 
@@ -2991,7 +3052,7 @@ Service B votes YES  ↗
 
 A **cache stampede** (also called thundering herd) happens when a popular cached item expires. Hundreds of requests simultaneously find a cache miss and all query the database at the same time — overwhelming it.
 
-```
+```text
 t=0:  cache miss → 1 DB query, 999 requests wait
 t=X:  cached key expires
 t=X+1ms: 1000 concurrent requests → all see cache miss → 1000 DB queries at once → DB crashes
@@ -3085,6 +3146,7 @@ This is not "SQL is old, NoSQL is modern." Each excels in different scenarios.
 ### SQL (Relational) — PostgreSQL, MySQL
 
 **Strengths:**
+
 - Strong ACID guarantees
 - Powerful joins across normalized tables
 - Schema enforces data integrity
@@ -3092,6 +3154,7 @@ This is not "SQL is old, NoSQL is modern." Each excels in different scenarios.
 - Excellent for complex reporting
 
 **Use when:**
+
 - Data has clear relationships (users → orders → products)
 - You need strong consistency (financial, healthcare)
 - Schema is relatively stable
@@ -3102,6 +3165,7 @@ This is not "SQL is old, NoSQL is modern." Each excels in different scenarios.
 ### NoSQL — MongoDB, DynamoDB, Cassandra
 
 **MongoDB (Document)**
+
 - Flexible schema — fields can vary per document
 - Nested objects avoid joins
 - Scales horizontally well
@@ -3109,12 +3173,14 @@ This is not "SQL is old, NoSQL is modern." Each excels in different scenarios.
 **Use when:** Content management, user profiles, catalogs with variable attributes
 
 **DynamoDB (Key-Value / Wide Column)**
+
 - Extremely fast, horizontally scalable
 - But: queries limited to primary key and GSIs
 
 **Use when:** Session storage, gaming leaderboards, IoT data, anything with a simple access pattern
 
 **Cassandra (Wide Column)**
+
 - Write-optimized, massive scale
 - Eventual consistency by default
 
@@ -3147,7 +3213,7 @@ This is not "SQL is old, NoSQL is modern." Each excels in different scenarios.
 
 Split data into multiple tables to eliminate redundancy. Related by foreign keys.
 
-```
+```text
 Normalized:
 users:    { id, name, email }
 orders:   { id, userId, createdAt }
@@ -3164,7 +3230,7 @@ order_items: { orderId, productId, qty }
 
 Embed related data into a single table/document to avoid joins.
 
-```
+```text
 Denormalized order document:
 {
   orderId: 1,
@@ -3205,6 +3271,7 @@ Denormalized order document:
 ### Step 1: Find Slow Queries
 
 **PostgreSQL:**
+
 ```sql
 -- Enable slow query logging (queries > 1 second)
 ALTER SYSTEM SET log_min_duration_statement = '1000';
@@ -3217,6 +3284,7 @@ LIMIT 20;
 ```
 
 **MongoDB:**
+
 ```js
 db.setProfilingLevel(1, { slowms: 100 }); // log queries > 100ms
 db.system.profile.find().sort({ ts: -1 }).limit(10);
@@ -3234,6 +3302,7 @@ WHERE o.status = 'pending' AND o.created_at > NOW() - INTERVAL '7 days';
 ```
 
 Look for:
+
 - `Seq Scan` on large tables → missing index
 - `Hash Join` or `Nested Loop` on huge datasets → wrong join order or missing index
 - High `rows` estimates vs actual → stale statistics → run `ANALYZE`
@@ -3243,11 +3312,13 @@ Look for:
 ### Step 3: Common Fixes
 
 **Add missing indexes:**
+
 ```sql
 CREATE INDEX idx_orders_status_created ON orders(status, created_at DESC);
 ```
 
 **Avoid SELECT *:**
+
 ```sql
 -- Bad: fetches all columns including large BLOBs
 SELECT * FROM products WHERE category = 'electronics';
@@ -3259,6 +3330,7 @@ SELECT id, name, price FROM products WHERE category = 'electronics';
 **Avoid N+1 queries** (see section 35).
 
 **Use covering indexes** — include all columns the query needs so it never touches the main table:
+
 ```sql
 CREATE INDEX idx_orders_covering
 ON orders(user_id, status)
@@ -3598,7 +3670,7 @@ Middleware is a function with access to `req`, `res`, and `next`. Express proces
 
 ### The Middleware Pipeline
 
-```
+```text
 Incoming Request
       │
       ▼
@@ -3669,6 +3741,8 @@ app.use('/api/users', userRouter);
 ```
 
 ---
+
+[Back to question list](#table-of-contents)
 
 ## 51. Dependency Injection in Node.js
 
@@ -3819,7 +3893,7 @@ OAuth 2.0 allows a third-party app to access resources on behalf of a user **wit
 
 **Authorization Code Flow (most secure, for server-side apps):**
 
-```
+```text
 1. User clicks "Login with Google"
 2. App redirects to Google: ?client_id=...&redirect_uri=...&scope=email&state=xyz
 3. User logs in on Google, grants permission
@@ -3832,6 +3906,7 @@ OAuth 2.0 allows a third-party app to access resources on behalf of a user **wit
 ```
 
 **Key tokens:**
+
 - `access_token` — short-lived (1 hour), used to access resources
 - `refresh_token` — long-lived, used to get new access tokens without re-login
 - `authorization_code` — single-use, exchanged for tokens
@@ -3844,7 +3919,7 @@ OIDC is a layer on top of OAuth 2.0 that adds **identity** — it tells you *who
 
 It adds an `id_token` (a JWT) containing user info: sub (user ID), email, name, picture.
 
-```
+```text
 OAuth 2.0:  "This app can access your Google Drive"
 OIDC:       "This app knows who you are (your Google identity)"
 ```
@@ -3867,7 +3942,7 @@ OIDC:       "This app knows who you are (your Google identity)"
 
 For SPAs and mobile apps (no client secret), use PKCE to prevent authorization code interception:
 
-```
+```text
 App generates: code_verifier (random string)
                code_challenge = SHA256(code_verifier)
 
@@ -3890,7 +3965,7 @@ Google verifies: SHA256(code_verifier) === stored code_challenge
 
 Users are assigned **roles**, and roles have **permissions**.
 
-```
+```text
 Roles:       admin, editor, viewer
 Permissions: articles:create, articles:edit, articles:delete, articles:read
 
@@ -3920,7 +3995,7 @@ app.delete('/articles/:id', requireAuth, requireRole('admin', 'editor'), deleteA
 
 Access decisions based on **attributes** of the user, resource, and environment.
 
-```
+```text
 Policy: "A user can edit an article if user.id === article.authorId OR user.role === 'admin'"
 
 Attributes:
@@ -3968,7 +4043,7 @@ app.put('/articles/:id', requireAuth, async (req, res, next) => {
 
 ### Same-Origin Policy
 
-```
+```text
 Page at:  https://myapp.com
 API at:   https://api.myapp.com  ← DIFFERENT origin (different subdomain)
           https://myapp.com:8080 ← DIFFERENT origin (different port)
@@ -3985,7 +4060,7 @@ Browsers block cross-origin fetch requests by default.
 
 **Preflight requests** (PUT, DELETE, custom headers): Browser first sends an `OPTIONS` request to ask permission.
 
-```
+```text
 Browser → OPTIONS /api/orders
           Origin: https://myapp.com
           Access-Control-Request-Method: DELETE
@@ -4030,7 +4105,7 @@ Uploading files directly through your API server is inefficient — large files 
 
 ### Direct Upload Anti-Pattern
 
-```
+```text
 Client → POST file → API Server → S3
 ```
 Server receives and re-uploads the entire file. Wastes bandwidth and compute.
@@ -4039,7 +4114,7 @@ Server receives and re-uploads the entire file. Wastes bandwidth and compute.
 
 ### Presigned URL Pattern
 
-```
+```text
 Client → GET /upload-url → API Server → generates presigned S3 URL → returns URL
 Client → PUT file directly → S3 (bypasses API server entirely)
 Client → POST /confirm-upload → API Server → records the file URL in DB
@@ -4201,7 +4276,7 @@ function verifyWebhook(req, secret) {
 - **Server push:** Server can proactively send resources (CSS, JS) before the client asks.
 - **Binary framing:** More efficient than text-based HTTP/1.1.
 
-```
+```text
 HTTP/1.1: 6 TCP connections × 1 request each = 6 sequential streams
 HTTP/2:   1 TCP connection × 100 concurrent streams
 ```
@@ -4256,7 +4331,7 @@ HTTPS = HTTP + TLS (Transport Layer Security). TLS encrypts and authenticates th
 
 ### TLS Handshake (TLS 1.3 simplified)
 
-```
+```text
 Client → Server: ClientHello (supported cipher suites, TLS version, random bytes)
 Server → Client: ServerHello (chosen cipher, certificate, random bytes)
 Client:          verifies certificate (is it signed by a trusted CA? is it for this domain?)
@@ -4271,7 +4346,7 @@ Server → Client: Finished
 
 ### Certificate Chain of Trust
 
-```
+```text
 Root CA (self-signed, built into OS/browser)
   └── Intermediate CA (signed by Root CA)
         └── Your Certificate (signed by Intermediate CA)
@@ -4320,7 +4395,7 @@ A CDN is a globally distributed network of **edge servers** that cache and serve
 
 ### How It Works
 
-```
+```text
 Without CDN:
 User (Tokyo) → request → Origin Server (New York) → 150ms latency
 
@@ -4357,6 +4432,7 @@ res.setHeader('Cache-Control', 'private, no-store');
 ### CDN for APIs
 
 Modern CDNs (Cloudflare, Fastly) can also:
+
 - **Cache API responses** at the edge
 - **Run edge functions** (Cloudflare Workers) — execute your JS logic at the edge
 - **DDoS protection** — absorb attacks before they reach your origin
@@ -4364,6 +4440,8 @@ Modern CDNs (Cloudflare, Fastly) can also:
 - **Bot detection** — filter malicious traffic
 
 ---
+
+[Back to question list](#table-of-contents)
 
 ## 61. Compression (gzip, Brotli)
 
@@ -4375,7 +4453,7 @@ Compression reduces response payload size, lowering bandwidth costs and improvin
 
 ### How It Works
 
-```
+```text
 Client sends: Accept-Encoding: gzip, br
 Server compresses response body
 Server sends: Content-Encoding: br (+ compressed body)
@@ -4444,7 +4522,7 @@ brotli_static on;
 
 Run two identical production environments: **Blue** (current) and **Green** (new version).
 
-```
+```text
 Current: load balancer → Blue (v1)
 
 Deploy:  update Green to v2, run smoke tests
@@ -4462,7 +4540,7 @@ Rollback: load balancer → Blue (v1)  ← instant
 
 Route a small % of traffic to the new version. Gradually increase if metrics look good.
 
-```
+```text
 Week 1:  1%  → v2,  99% → v1  (monitor error rate, latency)
 Week 2:  10% → v2,  90% → v1
 Week 3:  50% → v2,  50% → v1
@@ -4478,7 +4556,7 @@ Week 4:  100%→ v2   (full rollout)
 
 Replace instances one at a time (Kubernetes default).
 
-```
+```text
 [v1] [v1] [v1] [v1]
 [v2] [v1] [v1] [v1]  ← replace one
 [v2] [v2] [v1] [v1]
@@ -4633,7 +4711,7 @@ Automatically adjusts CPU/memory **requests and limits** for a pod based on actu
 
 Scales the **number of nodes** in the cluster when pods can't be scheduled due to insufficient resources.
 
-```
+```text
 HPA adds pods → no node has capacity → Cluster Autoscaler adds nodes → pods scheduled
 ```
 
@@ -4893,18 +4971,21 @@ groups:
 ### Definitions
 
 **SLI (Service Level Indicator):** A specific metric that measures service health.
-```
+
+```text
 SLI = (good requests / total requests) × 100%
 ```
 
 **SLO (Service Level Objective):** The internal target for an SLI.
-```
+
+```text
 SLO: 99.9% of requests succeed in < 200ms
      (measured over 30 days)
 ```
 
 **SLA (Service Level Agreement):** A contract with customers. If violated, there are consequences (refunds, credits).
-```
+
+```text
 SLA: 99.5% monthly uptime. Breach → 10% credit.
 ```
 
@@ -4916,14 +4997,14 @@ SLA: 99.5% monthly uptime. Breach → 10% credit.
 
 The error budget is the allowed amount of downtime/errors within the SLO window.
 
-```
+```text
 SLO: 99.9% availability over 30 days
 → Error budget = 0.1% of 30 days = 43.2 minutes of allowed downtime
 
 If budget is exhausted:
   - No new feature deployments
   - All effort goes to reliability
-  
+
 If budget has headroom:
   - Ship features, accept some risk
 ```
@@ -5000,6 +5081,7 @@ A backup is useless if you've never tested restoring it.
 ### PostgreSQL Backup Strategies
 
 **Logical backup (pg_dump):**
+
 ```bash
 # Full logical backup
 pg_dump -h localhost -U postgres mydb > backup_$(date +%Y%m%d).sql
@@ -5054,6 +5136,8 @@ For production: use **Atlas automated backups** or **Ops Manager**.
 
 ---
 
+[Back to question list](#table-of-contents)
+
 ## 71. Data Encryption at Rest & in Transit
 
 ### How do you protect data with encryption?
@@ -5081,11 +5165,13 @@ app.use((req, res, next) => {
 Data encrypted while stored on disk.
 
 **Database level:**
+
 - PostgreSQL: **pgcrypto** extension for column-level encryption
 - MongoDB: **Encrypted Storage Engine** (Atlas)
 - Full disk encryption (AWS EBS encryption, GCP disk encryption)
 
 **Application level (sensitive fields):**
+
 ```js
 const crypto = require('crypto');
 const ALGO = 'aes-256-gcm';
@@ -5195,6 +5281,7 @@ const users = await db.collection('users').find({
 **Cons:** Tenant data isolation relies entirely on your application code. A bug can expose cross-tenant data. Requires row-level security or careful query discipline.
 
 **PostgreSQL Row-Level Security (RLS) for safety:**
+
 ```sql
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON users
@@ -5205,7 +5292,7 @@ CREATE POLICY tenant_isolation ON users
 
 ### Identifying the Tenant
 
-```
+```text
 Subdomain:  acme.myapp.com → tenantId = 'acme'
 Header:     X-Tenant-ID: acme
 JWT claim:  { tenantId: 'acme', userId: '...' }
@@ -5322,12 +5409,14 @@ orderSchema.pre(/^find/, function() {
 ### When to Use Soft Delete
 
 **Use it when:**
+
 - Legal/compliance requires audit history (GDPR has a nuance — "right to erasure" still applies)
 - Users might want to undo deletes
 - Other records reference the deleted record (avoid dangling references)
 - You need a recycle bin / restore feature
 
 **Don't use it when:**
+
 - Truly sensitive data that must be removed (GDPR erasure requests)
 - High-churn tables — soft-deleted rows accumulate and hurt query performance
 - Simple data with no need for history
@@ -5366,6 +5455,7 @@ await db.collection('products').insertMany(items, { ordered: false });
 ```
 
 **PostgreSQL bulk insert with COPY:**
+
 ```js
 // 10–100x faster than individual INSERTs for large datasets
 const { from } = require('pg-copy-streams');
@@ -5494,7 +5584,7 @@ const resolvers = {
 
 ### How DataLoader Works Internally
 
-```
+```text
 Resolver for order 1 → userLoader.load('user-1')  ┐
 Resolver for order 2 → userLoader.load('user-2')  ├── DataLoader batches in one tick
 Resolver for order 3 → userLoader.load('user-1')  ┘   user-1 deduplicated!
@@ -5530,7 +5620,7 @@ Serverless means running code without managing servers. You deploy functions and
 
 ### How It Works
 
-```
+```text
 HTTP Request → API Gateway → Lambda/Cloud Function → (auto-scale from 0 to thousands) → Response
 ```
 
@@ -5543,6 +5633,7 @@ HTTP Request → API Gateway → Lambda/Cloud Function → (auto-scale from 0 to
 When no instance is running, the first request must spin up a new one — this takes 200ms–2s (Node.js is one of the faster runtimes).
 
 **Mitigation:**
+
 - Keep functions small and fast to initialize
 - Use **provisioned concurrency** (pre-warm instances)
 - Avoid heavy imports at startup — lazy load
@@ -5563,6 +5654,7 @@ async function handler(event) {
 ### When Serverless Makes Sense
 
 **Good fit:**
+
 - Event-driven tasks (image resizing on upload, email on signup)
 - Unpredictable or spiky traffic
 - Cron jobs and scheduled tasks
@@ -5570,6 +5662,7 @@ async function handler(event) {
 - Prototypes and MVPs (low operational overhead)
 
 **Not a good fit:**
+
 - Long-running processes (Lambda max 15 minutes)
 - WebSocket connections (stateful)
 - High constant traffic (always-on servers are cheaper)
@@ -5621,10 +5714,11 @@ channel.bindQueue('inventory-queue', 'orders', 'order.created');
 ### Topic Exchange
 
 Routes based on **routing key patterns** using wildcards.
+
 - `*` matches exactly one word
 - `#` matches zero or more words
 
-```
+```text
 Routing key: 'order.europe.created'
 
 Binding: 'order.#'        → matches (any order event)
@@ -5724,6 +5818,7 @@ await redis.lrange('notifications:user:123', 0, 9);  // get latest 10
 ```
 
 **FIFO queue:**
+
 ```js
 await redis.rpush('job-queue', JSON.stringify(job));  // enqueue
 const job = await redis.blpop('job-queue', 5);        // dequeue (block 5s if empty)
@@ -5793,6 +5888,7 @@ node --prof-process isolate-*.log > profile.txt
 ```
 
 Or use Chrome DevTools:
+
 ```bash
 node --inspect server.js
 # Open chrome://inspect → Profiler tab → record CPU profile
@@ -5846,6 +5942,8 @@ npx clinic flame -- node server.js
 
 ---
 
+[Back to question list](#table-of-contents)
+
 ## 81. Database Deadlocks
 
 ### What is a database deadlock and how do you handle it?
@@ -5856,7 +5954,7 @@ A deadlock occurs when two or more transactions are each waiting for a lock held
 
 ### Example
 
-```
+```text
 Transaction A:
   1. LOCK row in users WHERE id = 1
   2. (waiting for) LOCK row in accounts WHERE id = 1
@@ -5918,7 +6016,7 @@ async function transferFunds(fromId, toId, amount) {
 
 ### Resource Naming
 
-```
+```text
 # Use nouns, not verbs
 GET  /orders          ✅  (not /getOrders)
 POST /orders          ✅  (not /createOrder)
@@ -5936,7 +6034,7 @@ GET  /orders/123/items         ✅  (items in order 123)
 
 ### HTTP Status Codes
 
-```
+```text
 200 OK              — successful GET, PUT, PATCH
 201 Created         — successful POST (include Location header)
 204 No Content      — successful DELETE
@@ -5972,7 +6070,7 @@ GET  /orders/123/items         ✅  (items in order 123)
 
 ### Filtering, Sorting, Pagination
 
-```
+```text
 GET /orders?status=pending&userId=42       ← filter
 GET /orders?sort=createdAt&order=desc      ← sort
 GET /orders?limit=20&cursor=xyz            ← paginate
@@ -5983,7 +6081,7 @@ GET /orders?fields=id,total,status        ← sparse fieldsets
 
 ### Idempotency
 
-```
+```text
 POST /orders  → not idempotent (can create duplicates)
 POST /orders + Idempotency-Key: uuid → idempotent
 PUT /orders/123 → idempotent (always results in same state)
@@ -6001,7 +6099,7 @@ PUT /orders/123 → idempotent (always results in same state)
 
 All code in one deployable unit. Single process, shared database.
 
-```
+```text
 [Single Server]
 ├── Auth Module
 ├── Orders Module
@@ -6032,7 +6130,7 @@ Each business capability is a separate service with its own database.
 
 One deployable unit, but code is organized into strict modules with defined boundaries. Modules don't call each other's internals — they use explicit interfaces.
 
-```
+```text
 [Single Server]
 ├── /modules/auth     → public interface only
 ├── /modules/orders   → public interface only
@@ -6049,7 +6147,7 @@ One deployable unit, but code is organized into strict modules with defined boun
 
 ### Migration Path
 
-```
+```text
 New product → Monolith
 Growing → Modular Monolith
 Scale/team needs → Extract hot modules to Microservices
@@ -6068,6 +6166,7 @@ A service mesh is an infrastructure layer for handling **service-to-service comm
 ### The Problem
 
 In a microservices architecture, you need:
+
 - mTLS between every service pair
 - Circuit breaking on every client
 - Retries on every outbound call
@@ -6082,7 +6181,7 @@ Implementing all of this in every service is duplicated work and error-prone.
 
 Each service pod gets a **sidecar proxy** (Envoy) injected automatically. All traffic goes through the sidecar.
 
-```
+```text
 Service A → [Envoy sidecar] ──network──► [Envoy sidecar] → Service B
                ↕                                ↕
            Control Plane (Istio)        Control Plane (Istio)
@@ -6128,7 +6227,7 @@ Message queues guarantee **at-least-once delivery** — in failure scenarios, a 
 
 ### Why Duplicates Happen
 
-```
+```text
 Consumer receives message → processes it → crash before ack
 Queue redelivers the message → consumer processes it again
 ```
@@ -6275,7 +6374,7 @@ if (error) {
 
 ### The Testing Pyramid
 
-```
+```text
          ┌────────────┐
          │  E2E Tests │  ← few, slow, expensive
          │  (Cypress, │    test the full system
@@ -6354,7 +6453,7 @@ Test full user journeys through the real deployed system or staging.
 | Business logic functions | Unit tests |
 | API routes + DB | Integration tests (TestContainers) |
 | Auth flows | Integration tests |
-| Queue consumers | Integration tests (in-memory queue) |
+| Queue consumers | Integration tests with the real broker; mocks for isolated business logic. |
 | Full user journeys | E2E (staging environment) |
 
 ---
@@ -6417,7 +6516,7 @@ k6 run load-test.js --out json=results.json
 | Response time (p95, p99) | Latency under load |
 | Error rate | When does the system start failing |
 | CPU usage | Is the app CPU-bound? |
-| Memory | Any memory growth = leak |
+| Memory | Sustained growth may indicate retained data; investigate with profiles. |
 | DB connection wait time | Need more pool connections? |
 | Event loop lag | Is Node.js being blocked? |
 
@@ -6452,37 +6551,43 @@ app.use(helmet()); // sets secure defaults for all headers below
 ### Key Headers
 
 **Content-Security-Policy (CSP)**
-```
+
+```text
 Content-Security-Policy: default-src 'self'; script-src 'self' https://cdn.example.com
 ```
 Prevents XSS — restricts which scripts/resources the browser will load.
 
 **Strict-Transport-Security (HSTS)**
-```
+
+```text
 Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
 ```
 Forces HTTPS — browsers will not load the site over HTTP after first visit.
 
 **X-Content-Type-Options**
-```
+
+```text
 X-Content-Type-Options: nosniff
 ```
 Prevents MIME-type sniffing — browser won't try to "guess" the content type.
 
 **X-Frame-Options**
-```
+
+```text
 X-Frame-Options: DENY
 ```
 Prevents clickjacking — page can't be embedded in an iframe.
 
 **Referrer-Policy**
-```
+
+```text
 Referrer-Policy: strict-origin-when-cross-origin
 ```
 Controls what referrer info is sent with requests.
 
 **Permissions-Policy**
-```
+
+```text
 Permissions-Policy: geolocation=(), camera=(), microphone=()
 ```
 Restricts browser features the page can use.
@@ -6564,6 +6669,8 @@ knex.raw('SELECT * FROM users WHERE name = ?', [name]); // safe
 ```
 
 ---
+
+[Back to question list](#table-of-contents)
 
 ## 91. NoSQL Injection Prevention
 
@@ -6965,7 +7072,7 @@ async function createOrder(data) {
 
 ### How They Work Together
 
-```
+```text
 Alert fires: P99 latency spike (Metrics)
   → Find the affected requests (Logs: requestId filter)
     → Trace one slow request (Traces: see which service/DB is slow)
@@ -6986,7 +7093,7 @@ Alert fires: P99 latency spike (Metrics)
 
 Services publish lightweight events ("something happened"). Consumers decide what to do.
 
-```
+```text
 Order Service → publishes: { type: 'order.created', orderId: '123' }
   ← Email Service: fetches order details, sends confirmation
   ← Inventory Service: fetches order details, reserves stock
@@ -7001,7 +7108,7 @@ Order Service → publishes: { type: 'order.created', orderId: '123' }
 
 Event contains all the data consumers need — no need to call back.
 
-```
+```text
 Order Service → publishes: {
   type: 'order.created',
   orderId: '123',
@@ -7040,7 +7147,7 @@ Write side publishes events. Read side builds optimized projections from events.
 
 Events that can't be processed go to a DLQ for investigation and replay.
 
-```
+```text
 Queue → Consumer → fails after 3 retries → Dead Letter Queue
                               ↑
                       Ops team investigates → fixes code → replays DLQ
@@ -7142,7 +7249,7 @@ Beyond basic routing (section 4), modern API Gateways support sophisticated patt
 
 Combine multiple microservice calls into a single response for the client.
 
-```
+```text
 Client: GET /dashboard
   └── API Gateway:
         ├── GET /users/123      → { user data }
@@ -7159,7 +7266,7 @@ Reduces round trips for mobile clients with slow connections.
 
 A specialized API Gateway per client type (mobile, web, third-party). Each BFF is optimized for its client's needs.
 
-```
+```text
 Mobile App → BFF-Mobile  → aggregates, compresses, sends minimal data
 Web App    → BFF-Web     → full data, richer responses
 Partner    → BFF-Partner → rate-limited, versioned, authenticated differently
@@ -7171,7 +7278,7 @@ Partner    → BFF-Partner → rate-limited, versioned, authenticated differentl
 
 Modify requests/responses at the gateway level.
 
-```
+```text
 Client sends:    { "user_name": "Alice" }    (snake_case)
 Gateway rewrites: { "userName": "Alice" }    (camelCase — what backend expects)
 ```
@@ -7180,7 +7287,7 @@ Gateway rewrites: { "userName": "Alice" }    (camelCase — what backend expects
 
 ### API Mocking / Circuit Breaker at Gateway
 
-```
+```text
 If /payment-service is down:
   Gateway returns: { error: 'Payment service unavailable', canRetry: true }
   (instead of cascading failure through to client)
@@ -7192,7 +7299,7 @@ If /payment-service is down:
 
 Multiple GraphQL services expose a partial schema. The Gateway stitches them into one unified schema.
 
-```
+```text
 Product Service: type Product { id, name, price }
 Review Service:  type Product { reviews: [Review] }
 
@@ -7212,12 +7319,14 @@ This is a classic system design question. Walk through requirements, components,
 ### Requirements
 
 **Functional:**
+
 - Shorten a long URL → return a short code (e.g., `short.ly/abc123`)
 - Redirect short code → original URL
 - Custom aliases (optional)
 - Analytics: click count, location, device (optional)
 
 **Non-Functional:**
+
 - 100M URLs created/day, 10B redirects/day
 - Redirect latency < 10ms
 - High availability (99.99%)
@@ -7248,7 +7357,7 @@ function toBase62(num) {
 
 ### System Architecture
 
-```
+```text
 Client
   │
   ▼
@@ -7286,7 +7395,7 @@ CREATE INDEX idx_urls_short_code ON urls(short_code); -- critical for redirect l
 
 ### Redirect Flow
 
-```
+```text
 1. Request: GET /abc123
 2. Check Redis: hit? → 301 redirect (< 1ms)
 3. Cache miss: query DB → cache it → 301 redirect (< 10ms)
@@ -7319,7 +7428,7 @@ CREATE INDEX idx_urls_short_code ON urls(short_code); -- critical for redirect l
 
 ## Key Takeaways
 
-> It's not about **what you use** — it's about **how it works**, **how it scales**, and the **trade-offs**.
+Use this table as a reminder after studying the explanations. Each entry is a starting point for reasoning, not a universal implementation rule.
 
 | Topic | The Real Answer |
 |---|---|
@@ -7336,7 +7445,7 @@ CREATE INDEX idx_urls_short_code ON urls(short_code); -- critical for redirect l
 | Sharding | hash vs range, resharding cost, avoid premature sharding |
 | CQRS | separate read/write models, eventual consistency on read side |
 | Saga | compensating transactions, choreography vs orchestration |
-| Outbox pattern | single DB transaction for data + event = no message loss |
+| Outbox pattern | commit data and event together; retry publication and deduplicate consumers |
 | Idempotency | idempotency keys in Redis, safe retries |
 | Pagination | cursor-based for feeds; offset for admin tables |
 | Real-time | SSE for server→client; WebSocket for bidirectional |
@@ -7349,7 +7458,7 @@ CREATE INDEX idx_urls_short_code ON urls(short_code); -- critical for redirect l
 | Structured logging | JSON logs + correlation IDs to trace across services |
 | gRPC vs REST | gRPC for internal services; REST for public APIs |
 | Load balancing | least connections for variable workloads |
-| Connection pooling | pre-open, reuse, size to CPU cores × 2 |
+| Connection pooling | reuse connections; size against database capacity and measured wait time |
 | Rate limiting | token bucket for APIs; leaky bucket to protect downstream |
 | Isolation levels | read committed default; serializable for financial ops |
 | Optimistic locking | version field — no blocking, retry on conflict |
@@ -7383,7 +7492,7 @@ CREATE INDEX idx_urls_short_code ON urls(short_code); -- critical for redirect l
 | Secrets | env vars baseline; Vault for dynamic, rotating, audited secrets |
 | Container security | non-root, minimal image, read-only FS, drop all capabilities |
 | Monitoring | p95/p99 latency, error rate, traffic, saturation |
-| SLO/SLA/Error budget | SLO tighter than SLA; budget exhausted → freeze features |
+| SLO/SLA/Error budget | define measurement windows and agree on release policies before incidents |
 | Chaos engineering | inject failures in staging before they hit production |
 | Backup | test restores; 3-2-1 rule; PITR for PostgreSQL |
 | Encryption | TLS in transit; AES-256-GCM at application layer; bcrypt for passwords |
@@ -7416,3 +7525,9 @@ CREATE INDEX idx_urls_short_code ON urls(short_code); -- critical for redirect l
 | PM2 clustering | cluster mode, one process per core, zero-downtime reload |
 | API Gateway patterns | BFF, request aggregation, transformation, GraphQL federation |
 | URL shortener | Base62 ID, Redis cache, 302 redirect, async analytics via Kafka |
+
+## Practice Check
+
+Choose a question you found difficult and build a small example. Record the normal behavior, one failure case, and the evidence you would use to debug it.
+
+[Back to question list](#table-of-contents) · [Backend learning guide](../readme.md)

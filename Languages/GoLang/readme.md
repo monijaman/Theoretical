@@ -131,6 +131,138 @@ func minMax(nums []int) (min, max int) {
 
 ---
 
+### `defer`: run cleanup when a function finishes
+
+`defer` schedules a function call to run when the surrounding function is
+about to return. It is useful for cleanup that must happen on every path,
+including paths that return early because of an error.
+
+```go
+func example() {
+    defer fmt.Println("third: cleanup")
+    fmt.Println("first")
+    fmt.Println("second")
+}
+
+// Output:
+// first
+// second
+// third: cleanup
+```
+
+The deferred call runs after the normal statements in the function, but before
+the function actually returns. A common pattern is to acquire a resource and
+defer its release immediately:
+
+```go
+func readConfig() error {
+    file, err := os.Open("config.json")
+    if err != nil {
+        return err
+    }
+    defer file.Close() // runs on success and on every later return
+
+    // Read and process the file here.
+    return nil
+}
+```
+
+#### Deferred calls run in reverse order
+
+Multiple `defer` statements behave like a stack: last in, first out (LIFO).
+
+```go
+func process() {
+    defer fmt.Println("close database")
+    defer fmt.Println("close transaction")
+    defer fmt.Println("write log")
+
+    fmt.Println("processing")
+}
+
+// Output:
+// processing
+// write log
+// close transaction
+// close database
+```
+
+This reverse order is helpful when cleanup has dependencies: the most recent
+resource is usually released first.
+
+#### Arguments are evaluated immediately
+
+The function call is delayed, but its arguments are evaluated when the
+`defer` statement is reached:
+
+```go
+func example() {
+    message := "before"
+    defer fmt.Println(message)
+    message = "after"
+}
+
+// Output: before
+```
+
+If the deferred code should read the latest value, use a closure:
+
+```go
+func example() {
+    message := "before"
+    defer func() {
+        fmt.Println(message)
+    }()
+    message = "after"
+}
+
+// Output: after
+```
+
+#### `defer` with named return values
+
+A deferred closure can change a named return value before the function exits.
+This is useful, but should be used sparingly because it can hide how a value
+changes:
+
+```go
+func calculate() (result int) {
+    defer func() {
+        result++ // runs just before returning
+    }()
+    return 10
+}
+
+fmt.Println(calculate()) // 11
+```
+
+#### `defer` and panics
+
+Deferred functions still run when a panic is unwinding the stack. A deferred
+function can call `recover` to stop a panic inside the same function:
+
+```go
+func safeOperation() {
+    defer func() {
+        if recovered := recover(); recovered != nil {
+            fmt.Println("recovered:", recovered)
+        }
+    }()
+
+    panic("unexpected failure")
+}
+```
+
+Use `recover` only at a deliberate boundary, such as an HTTP request wrapper.
+For ordinary expected failures, return an `error` instead of using panic.
+
+#### Common mistakes
+
+- Put `defer` after checking that resource acquisition succeeded.
+- Do not defer inside a long loop when cleanup is needed on every iteration; call a helper function so each iteration gets its own cleanup point.
+- Remember that deferred calls run when the current function returns, not when the surrounding block ends.
+- Keep deferred cleanup small and reliable. If it can fail, decide whether its error must be logged or returned.
+
 ### Control Flow
 
 Go keeps control flow small and predictable: `if`, `for`, and `switch` cover most decisions and loops. Braces are required, and there is no separate `while` keyword.
@@ -196,6 +328,9 @@ arr := [...]int{1, 2, 3}  // compiler counts
 
 ### Slices (dynamic, most used)
 
+A slice is a flexible, growable list. It has a length (`len`) and capacity
+(`cap`) and is the collection type used most often in Go.
+
 A slice is a flexible list that can grow when you use `append`.
 ```go
 s := []int{1, 2, 3}
@@ -210,7 +345,36 @@ dst := make([]int, len(src))
 copy(dst, src)
 ```
 
+#### Slice example: managing shopping items
+
+```go
+items := []string{"keyboard", "mouse"}
+items = append(items, "monitor", "headphones")
+fmt.Println(items[0])    // keyboard
+fmt.Println(len(items))  // 4
+
+for index, item := range items {
+    fmt.Println(index, item)
+}
+
+copied := make([]string, len(items))
+copy(copied, items)
+copied[0] = "laptop"
+fmt.Println(items[0])  // keyboard
+fmt.Println(copied[0]) // laptop
+```
+
+`items[1:3]` creates a view over the same underlying array. Use `copy` when
+you need independent data. To remove an item at index `i`:
+
+```go
+items = append(items[:i], items[i+1:]...)
+```
+
 ### Maps
+
+A map stores values by key, such as `userID -> user`, for fast lookups. A map
+must be initialized before adding entries.
 
 A map stores values by key, such as `userID -> user`, for quick lookups.
 ```go
@@ -232,7 +396,36 @@ if val, ok := m["alice"]; ok {
 m := make(map[string]int)
 ```
 
+#### Map example: a score book
+
+```go
+scores := make(map[string]int)
+scores["Alice"] = 90
+scores["Bob"] = 85
+
+score, found := scores["Alice"]
+if found {
+    fmt.Println("Alice scored", score)
+}
+
+if _, found := scores["Charlie"]; !found {
+    fmt.Println("Charlie has no score")
+}
+
+delete(scores, "Bob")
+for name, score := range scores {
+    fmt.Println(name, score)
+}
+```
+
+Map iteration order is not guaranteed. Reading a missing key returns its zero
+value, but writing to a nil map causes a panic. Use a mutex when goroutines
+read and write the same map concurrently.
+
 ### Structs
+
+A struct is a custom data shape that groups related fields together. Structs
+are commonly used for domain objects, request data, and configuration.
 
 A struct is a custom data shape that keeps related fields together.
 ```go
@@ -248,9 +441,35 @@ p.Name = "Bob"
 point := struct{ X, Y int }{X: 1, Y: 2}
 ```
 
+#### Struct example: a product with behavior
+
+```go
+type Product struct {
+    Name    string
+    Price   float64
+    InStock bool
+}
+
+func (p Product) DiscountedPrice(percent float64) float64 {
+    return p.Price * (1 - percent/100)
+}
+
+product := Product{Name: "Keyboard", Price: 120, InStock: true}
+product.Price = 100
+fmt.Println(product.DiscountedPrice(10)) // 90
+```
+
+Prefer keyed fields because they are clear and safe if fields are reordered.
+Struct values are copied on assignment, although slices and maps inside them
+may still refer to shared underlying data.
+
 ---
 
 ## 4. Pointers
+
+A pointer stores the address of another value. It lets a function modify the
+original value instead of receiving a copy. A pointer can also be `nil`, which
+is useful when “no value” is meaningful.
 
 A pointer lets a function refer to and modify the original value instead of receiving a copy. Use pointers when a value must be changed or needs to represent “no value” with `nil`.
 ```go
@@ -259,6 +478,46 @@ p := &x     // p holds the address of x
 *p = 100    // dereference — changes x to 100
 
 fmt.Println(x) // 100
+```
+
+#### Pointer example: modifying a struct
+
+```go
+type Account struct {
+    Owner   string
+    Balance float64
+}
+
+func Deposit(account *Account, amount float64) {
+    account.Balance += amount
+}
+
+account := Account{Owner: "Alice", Balance: 100}
+Deposit(&account, 50)
+fmt.Println(account.Balance) // 150
+```
+
+`&account` gets the address of the value. Inside `Deposit`, Go automatically
+dereferences the pointer when accessing `account.Balance`.
+
+Always check pointers that may be nil before dereferencing:
+
+```go
+var account *Account
+if account == nil {
+    fmt.Println("no account was provided")
+}
+```
+
+Pointer receivers are used when a method must mutate the original value:
+
+```go
+func (a *Account) Deposit(amount float64) {
+    a.Balance += amount
+}
+
+account := Account{Balance: 100}
+account.Deposit(25) // Go automatically uses &account here
 ```
 
 Go has pointers but **no pointer arithmetic** — safer than C.
@@ -311,6 +570,276 @@ anything = struct{ X int }{X: 5}
 // Type assertion
 val, ok := anything.(string)
 ```
+
+### Interfaces: practical examples
+
+An interface describes a capability rather than a concrete data type. In other
+words, it answers the question: “What can this value do?” A type satisfies an
+interface automatically when its method set contains every required method.
+There is no `implements` keyword in Go.
+
+#### 1. A simple interface: animals that can speak
+
+```go
+package main
+
+import "fmt"
+
+type Animal interface {
+    Speak() string
+}
+
+type Dog struct{}
+
+func (Dog) Speak() string { return "Woof!" }
+
+type Cat struct{}
+
+func (Cat) Speak() string { return "Meow!" }
+
+func MakeSound(animal Animal) {
+    fmt.Println(animal.Speak())
+}
+
+func main() {
+    MakeSound(Dog{})
+    MakeSound(Cat{})
+}
+```
+
+`Dog` and `Cat` are different types, but both have `Speak() string`, so both
+can be passed to `MakeSound`. The function only cares about the capability.
+
+#### 2. One interface, multiple implementations
+
+```go
+type PaymentProcessor interface {
+    Pay(amount float64) error
+}
+
+type CreditCard struct{}
+
+func (CreditCard) Pay(amount float64) error {
+    fmt.Printf("Paid $%.2f using credit card\n", amount)
+    return nil
+}
+
+type PayPal struct{}
+
+func (PayPal) Pay(amount float64) error {
+    fmt.Printf("Paid $%.2f using PayPal\n", amount)
+    return nil
+}
+
+func Checkout(processor PaymentProcessor, amount float64) error {
+    return processor.Pay(amount)
+}
+
+func main() {
+    Checkout(CreditCard{}, 100)
+    Checkout(PayPal{}, 50)
+}
+```
+
+`Checkout` does not need separate code for every payment provider. Later, a
+`Stripe` type can be added with its own `Pay` method without changing
+`Checkout`.
+
+#### 3. Interfaces with multiple methods
+
+A type must implement every method in the interface—not just some of them.
+
+```go
+type UserRepository interface {
+    Save(name string) error
+    FindByID(id int) (string, error)
+}
+
+type PostgresUserRepository struct{}
+
+func (PostgresUserRepository) Save(name string) error {
+    fmt.Println("Saving user:", name)
+    return nil
+}
+
+func (PostgresUserRepository) FindByID(id int) (string, error) {
+    return "Monir", nil
+}
+
+var repository UserRepository = PostgresUserRepository{}
+```
+
+The assignment compiles because both methods exist. If `FindByID` is missing,
+Go reports a compile-time error. This is useful because an incomplete
+implementation is detected before the program runs.
+
+#### 4. Notification service: add providers safely
+
+```go
+type Notifier interface {
+    Send(message string) error
+}
+
+type EmailNotifier struct{}
+
+func (EmailNotifier) Send(message string) error {
+    fmt.Println("Email:", message)
+    return nil
+}
+
+type SMSNotifier struct{}
+
+func (SMSNotifier) Send(message string) error {
+    fmt.Println("SMS:", message)
+    return nil
+}
+
+func NotifyUser(notifier Notifier) error {
+    return notifier.Send("Your order has been shipped")
+}
+
+func main() {
+    NotifyUser(EmailNotifier{})
+    NotifyUser(SMSNotifier{})
+}
+```
+
+`NotifyUser` is independent of email and SMS details. A future
+`WhatsAppNotifier` only needs to implement `Send`.
+
+#### 5. Store an interface in a struct (dependency injection)
+
+```go
+type OrderService struct {
+    notifier Notifier
+}
+
+func (s OrderService) CompleteOrder() error {
+    fmt.Println("Completing order...")
+    return s.notifier.Send("Your order is complete")
+}
+
+func main() {
+    service := OrderService{notifier: EmailNotifier{}}
+    service.CompleteOrder()
+
+    service.notifier = SMSNotifier{}
+    service.CompleteOrder()
+}
+```
+
+`OrderService` receives its dependency from outside instead of constructing an
+email sender internally. This is dependency injection and makes the service
+easy to reconfigure and test.
+
+#### 6. Testing with a fake implementation
+
+Interfaces let tests replace a database, API, or other slow external service.
+
+```go
+type Storage interface {
+    Save(data string) error
+}
+
+type UserService struct {
+    storage Storage
+}
+
+func (s UserService) CreateUser(name string) error {
+    return s.storage.Save(name)
+}
+
+type FakeStorage struct {
+    SavedData string
+}
+
+func (f *FakeStorage) Save(data string) error {
+    f.SavedData = data
+    return nil
+}
+```
+
+Example test:
+
+```go
+func TestCreateUser(t *testing.T) {
+    fake := &FakeStorage{}
+    service := UserService{storage: fake}
+
+    if err := service.CreateUser("Monir"); err != nil {
+        t.Fatal(err)
+    }
+    if fake.SavedData != "Monir" {
+        t.Errorf("expected Monir, got %s", fake.SavedData)
+    }
+}
+```
+
+The test verifies the service logic without requiring a PostgreSQL connection.
+
+#### 7. Pointer receivers and interface satisfaction
+
+```go
+type MemoryStorage struct {
+    items []string
+}
+
+func (m *MemoryStorage) Save(data string) error {
+    m.items = append(m.items, data)
+    return nil
+}
+
+var storage Storage = &MemoryStorage{} // works
+```
+
+Because `Save` has a pointer receiver (`*MemoryStorage`), only
+`*MemoryStorage` satisfies `Storage`:
+
+```go
+var storage Storage = MemoryStorage{} // compile-time error
+```
+
+The pointer is appropriate because `Save` changes `items`. A value receiver
+would operate on a copy and would not preserve that mutation.
+
+#### 8. Standard library example: `io.Writer`
+
+The standard library defines a small interface for anything that can receive
+bytes:
+
+```go
+type Writer interface {
+    Write(p []byte) (n int, err error)
+}
+```
+
+The real interface is `io.Writer`. Files, network connections, HTTP response
+writers, and `bytes.Buffer` all satisfy it.
+
+```go
+func WriteGreeting(writer io.Writer) error {
+    _, err := writer.Write([]byte("Hello, Monir!"))
+    return err
+}
+
+WriteGreeting(os.Stdout) // write to the terminal
+
+var buffer bytes.Buffer
+WriteGreeting(&buffer)   // write to memory
+fmt.Println(buffer.String())
+```
+
+The same function writes to two completely different destinations because it
+depends only on the `Write` capability.
+
+#### Interface rules to remember
+
+- Interfaces define behavior, not data.
+- Implementation is implicit; there is no `implements` keyword.
+- Every required method must be implemented.
+- Prefer small interfaces, often with one or two methods.
+- Accept an interface when a function needs behavior, not a specific type.
+- Create an interface when it provides real flexibility, substitution, or easier testing.
 
 ---
 
