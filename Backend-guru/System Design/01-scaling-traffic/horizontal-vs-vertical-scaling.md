@@ -1,4 +1,3 @@
-````markdown
 # Horizontal vs Vertical Scaling
 
 > Scaling means increasing your application's capacity to handle more users or more traffic.
@@ -133,6 +132,9 @@ Instead of buying a larger server, you add more servers.
 Traffic is distributed across multiple servers.
 
 ---
+
+<details>
+<summary><strong>Optional deep dive</strong></summary>
 
 ## Advantages
 
@@ -474,3 +476,5 @@ Common techniques include:
 - [Database Sharding](../02-data-storage/database-sharding.md)
 - [High Availability](../08-reliability-operations/high-availability.md)
 - [Multi-Region Architecture](../09-large-scale-data-systems/multi-region-architecture.md)
+
+</details>

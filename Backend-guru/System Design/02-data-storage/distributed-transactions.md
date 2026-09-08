@@ -132,6 +132,9 @@ Architecture:
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## Phase 1: Prepare Phase
 
 The coordinator asks every service:
@@ -836,3 +839,5 @@ For modern microservices:
 - [Outbox Pattern](../05-messaging-event-driven/outbox-pattern.md)
 - [Event Sourcing](../05-messaging-event-driven/event-sourcing.md)
 - [Payment System](../10-system-design-practice/payment-system.md)
+
+</details>

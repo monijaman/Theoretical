@@ -162,6 +162,9 @@ during a partition.
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## CAP Decision Tree
 
 ```
@@ -691,3 +694,5 @@ A strong interview answer:
 - [Consensus Algorithms](consensus-algorithms.md) — how CP systems like etcd/ZooKeeper actually achieve their consistency guarantee
 - [Database Replication](../02-data-storage/database-replication.md) — sync vs async replication is the mechanism behind the CP/AP choice
 - [Distributed Transactions](../02-data-storage/distributed-transactions.md) — 2PC/Saga trade-offs are a CAP-adjacent concern across services
+
+</details>

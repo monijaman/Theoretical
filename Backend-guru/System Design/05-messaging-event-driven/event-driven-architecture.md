@@ -133,6 +133,9 @@ The broker stores or forwards events to interested consumers.
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## 3. Consumer
 
 Consumes events.
@@ -714,3 +717,5 @@ Use:
 - [Strong vs. Eventual Consistency](../03-consistency-distributed/strong-vs-eventual-consistency.md)
 - [Distributed Tracing](../08-reliability-operations/distributed-tracing.md)
 - [Microservices Architecture](../07-architecture-patterns/microservices-architecture.md)
+
+</details>

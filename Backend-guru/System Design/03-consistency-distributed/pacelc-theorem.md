@@ -124,6 +124,9 @@ Server C
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## Strong Consistency
 
 Wait until replicas confirm.
@@ -803,3 +806,5 @@ Latency vs C
 - [Database Replication](../02-data-storage/database-replication.md) — sync vs async replication is the literal mechanism behind EC vs EL
 - [Consensus Algorithms](consensus-algorithms.md) — why PC/EC systems pay a latency cost on every write
 - [Multi-Region Architecture](../09-large-scale-data-systems/multi-region-architecture.md) — PACELC trade-offs become dominant once replicas cross regions
+
+</details>

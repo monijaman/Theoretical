@@ -146,6 +146,9 @@ Found 60
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## B-Tree Index
 
 B-tree is the default index type in:
@@ -1066,3 +1069,5 @@ Remember these points:
 - [SQL vs NoSQL](sql-vs-nosql.md)
 - [Database Migration at Scale](database-migration-at-scale.md)
 - [Search Architecture / Elasticsearch](../09-large-scale-data-systems/search-architecture-elasticsearch.md)
+
+</details>

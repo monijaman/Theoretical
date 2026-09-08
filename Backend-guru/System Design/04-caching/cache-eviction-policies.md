@@ -121,6 +121,9 @@ These workloads exhibit **temporal locality**.
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## Weakness
 
 Large sequential scans can destroy cache quality.
@@ -617,7 +620,6 @@ A key can be evicted long before its TTL expires if the cache needs space.
 - **ARC** → Automatically balances recency and frequency.
 - **TTL** → Controls data freshness, not memory management.
 - Redis combines TTL with an eviction policy to manage both staleness and memory efficiently.
-```
 
 ## Related topics
 - [Caching Strategies](caching-strategies.md)
@@ -625,3 +627,5 @@ A key can be evicted long before its TTL expires if the cache needs space.
 - [CDN Architecture](cdn-architecture.md)
 - [Database Indexing](../02-data-storage/database-indexing.md)
 - [Rate Limiting](../01-scaling-traffic/rate-limiting.md)
+
+</details>

@@ -128,6 +128,9 @@ def long_poll(user_id, timeout=30):
     return []
 ```
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## Advantages
 
 - Much lower latency.
@@ -535,3 +538,5 @@ Heartbeats prevent the server from keeping resources allocated for clients that 
 - [Real-Time System Design](../09-large-scale-data-systems/real-time-system-design.md)
 - [Chat System](../10-system-design-practice/chat-system.md)
 - [News Feed](../10-system-design-practice/news-feed.md)
+
+</details>

@@ -124,6 +124,9 @@ Leader
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## Raft Election Flow
 
 Initially:
@@ -767,3 +770,5 @@ etcd/Raft
 - [Quorum](quorum.md) — the majority math that makes split-brain structurally impossible
 - [CAP Theorem](cap-theorem.md) — why leader-based systems are CP (unavailable during leaderless windows) rather than AP
 - [High Availability](../08-reliability-operations/high-availability.md) — failover time from leader election directly determines system-level availability
+
+</details>

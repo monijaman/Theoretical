@@ -129,6 +129,9 @@ Future requests are served directly from the edge cache.
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## CDN Architecture Overview
 
 ```text
@@ -906,3 +909,5 @@ Besides caching static assets, modern CDNs also accelerate dynamic requests usin
 - [Load Balancing](../01-scaling-traffic/load-balancing.md)
 - [Backpressure](../01-scaling-traffic/backpressure.md)
 - [API Gateway](../10-system-design-practice/api-gateway.md)
+
+</details>

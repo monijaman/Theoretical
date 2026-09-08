@@ -134,6 +134,9 @@ Users experience:
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## Additional Problems
 
 ## 1. Replication Lag
@@ -948,3 +951,5 @@ Remember:
 - [Database Indexing](database-indexing.md)
 - [Zero-Downtime Deployment](../08-reliability-operations/zero-downtime-deployment.md)
 - [Distributed Transactions](distributed-transactions.md)
+
+</details>

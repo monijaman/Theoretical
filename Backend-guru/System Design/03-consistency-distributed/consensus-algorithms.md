@@ -130,6 +130,9 @@ Leader = Server 1
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## 2. Validity
 
 The chosen value must come from a proposal.
@@ -903,3 +906,5 @@ A strong answer:
 - [CAP Theorem](cap-theorem.md) — consensus-based systems are the textbook CP choice
 - [Distributed Locks](distributed-locks.md) — lock services (ZooKeeper, etcd) rely on consensus internally
 - [Distributed Transactions](../02-data-storage/distributed-transactions.md) — how consensus combines with 2PC/Saga across shards
+
+</details>

@@ -167,6 +167,9 @@ Instead of hammering the server, clients gradually slow down.
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## Backoff Formula
 
 ```
@@ -724,3 +727,5 @@ The resource doesn't exist, so retrying the same request won't help.
 - [Rate Limiting](rate-limiting.md)
 - [Message Queues](../05-messaging-event-driven/message-queues.md)
 - [Distributed Locks](../03-consistency-distributed/distributed-locks.md)
+
+</details>

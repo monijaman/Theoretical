@@ -136,6 +136,9 @@ The Load Balancer forwards packets without reading URLs or headers.
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## Advantages
 
 ✅ Extremely fast
@@ -794,3 +797,5 @@ Deploy multiple Load Balancers behind a virtual IP, DNS, or use a managed cloud 
 - [High Availability](../08-reliability-operations/high-availability.md)
 - [CDN Architecture](../04-caching/cdn-architecture.md)
 - [Multi-Region Architecture](../09-large-scale-data-systems/multi-region-architecture.md)
+
+</details>

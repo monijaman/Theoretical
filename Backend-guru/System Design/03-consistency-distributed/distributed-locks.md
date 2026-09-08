@@ -123,6 +123,9 @@ This breaks mutual exclusion.
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## Redis Distributed Lock
 
 A common implementation uses:
@@ -704,3 +707,5 @@ Consensus algorithms
 - [CAP Theorem](cap-theorem.md) — why ZooKeeper/etcd choose CP, which is exactly what correctness-critical locking needs
 - [Quorum](quorum.md) — the majority math behind Redlock and ZooKeeper/etcd session safety
 - [Distributed Job Scheduler](../10-system-design-practice/distributed-job-scheduler.md) — a concrete system that needs locks to avoid double-running scheduled jobs
+
+</details>

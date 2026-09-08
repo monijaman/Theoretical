@@ -149,6 +149,9 @@ Both rollback
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## 2. Strong Data Integrity
 
 The database can enforce rules.
@@ -924,3 +927,5 @@ A strong system design answer:
 - [Database Indexing](database-indexing.md)
 - [CAP Theorem](../03-consistency-distributed/cap-theorem.md)
 - [Strong vs Eventual Consistency](../03-consistency-distributed/strong-vs-eventual-consistency.md)
+
+</details>

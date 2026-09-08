@@ -130,6 +130,9 @@ Push route updates to all gateways
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## 4. API Design
 
 ## Create Route
@@ -585,3 +588,5 @@ A plugin system allows new capabilities without modifying or redeploying the gat
 - [Microservices Architecture](../07-architecture-patterns/microservices-architecture.md)
 - [Backpressure](../01-scaling-traffic/backpressure.md)
 - [SQL vs NoSQL](../02-data-storage/sql-vs-nosql.md)
+
+</details>

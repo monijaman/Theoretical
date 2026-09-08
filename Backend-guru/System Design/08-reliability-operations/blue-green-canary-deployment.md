@@ -121,6 +121,9 @@ Because the old environment still exists, recovery is extremely fast.
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## Database Challenge
 
 Both environments often share the same database.
@@ -733,3 +736,5 @@ If the new application crashes during startup or contains a runtime bug before t
 - [Observability: Logs, Metrics & Traces](observability-logs-metrics-traces.md)
 - [Database Migration at Scale](../02-data-storage/database-migration-at-scale.md)
 - [Multi-Region Architecture](../09-large-scale-data-systems/multi-region-architecture.md)
+
+</details>

@@ -126,6 +126,9 @@ Notice:
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## Backup Types
 
 ### Full Backup
@@ -681,3 +684,5 @@ Achieving both requires multi-site active-active architecture with synchronous r
 - [Database Migration at Scale](../02-data-storage/database-migration-at-scale.md)
 - [CAP Theorem](../03-consistency-distributed/cap-theorem.md)
 - [Zero-Downtime Deployment](zero-downtime-deployment.md)
+
+</details>

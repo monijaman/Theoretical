@@ -134,6 +134,9 @@ Return Data
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## Write Flow
 
 ```text
@@ -856,3 +859,5 @@ This provides ultra-fast local reads while maintaining a shared cache across mul
 - [Database Replication](../02-data-storage/database-replication.md)
 - [Strong vs Eventual Consistency](../03-consistency-distributed/strong-vs-eventual-consistency.md)
 - [Backpressure](../01-scaling-traffic/backpressure.md)
+
+</details>

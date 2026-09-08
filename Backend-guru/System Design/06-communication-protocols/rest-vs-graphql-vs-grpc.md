@@ -141,6 +141,9 @@ No under-fetching.
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## Strong schema
 
 Every GraphQL API defines a schema.
@@ -521,3 +524,5 @@ A typical architecture exposes WebSockets to browsers while using gRPC streams b
 - [Event-Driven Architecture](../05-messaging-event-driven/event-driven-architecture.md)
 - [API Gateway](../10-system-design-practice/api-gateway.md)
 - [Caching Strategies](../04-caching/caching-strategies.md)
+
+</details>

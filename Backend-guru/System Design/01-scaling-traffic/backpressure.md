@@ -142,6 +142,9 @@ The producer never sends more than requested.
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## Bounded Queue
 
 Instead of allowing the queue to grow forever,
@@ -371,3 +374,5 @@ Consumer Lag is the difference between the latest produced message and the lates
 | Protects internal services          | Protects against external clients                 |
 | Consumer asks producer to slow down | Server limits how many requests a client can make |
 | Prevents overload inside the system | Prevents abuse or excessive traffic               |
+
+</details>

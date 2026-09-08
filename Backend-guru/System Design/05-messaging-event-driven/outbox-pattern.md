@@ -177,6 +177,9 @@ For smaller systems, polling is usually sufficient. High-throughput platforms of
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## Delivery is still at-least-once
 
 The Outbox Pattern guarantees the event is **never lost**, but it does **not** guarantee it is published only once.
@@ -362,7 +365,6 @@ Those events can then:
 - trigger workflows.
 
 In Event Sourcing, the event log itself is already the source of truth, so a separate outbox is often unnecessary.
-````
 
 ## Related topics
 - [Event Sourcing](event-sourcing.md)
@@ -371,3 +373,5 @@ In Event Sourcing, the event log itself is already the source of truth, so a sep
 - [Event-Driven Architecture](event-driven-architecture.md)
 - [Distributed Transactions](../02-data-storage/distributed-transactions.md)
 - [Kafka-like Message Broker (practice)](../10-system-design-practice/kafka-like-message-broker.md)
+
+</details>

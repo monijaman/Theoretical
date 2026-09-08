@@ -136,6 +136,9 @@ Most production systems apply rate limiting at the **API Gateway** or **Load Bal
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## Rate Limiting Algorithms
 
 There are several algorithms.
@@ -690,3 +693,5 @@ Instead of limiting HTTP requests, limit:
 - [Retry & Exponential Backoff](retry-exponential-backoff.md)
 - [Rate Limiter (design practice)](../10-system-design-practice/rate-limiter.md)
 - [API Gateway (design practice)](../10-system-design-practice/api-gateway.md)
+
+</details>

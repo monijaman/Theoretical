@@ -127,6 +127,9 @@ Choosing the correct TTL is difficult.
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## Best Practice
 
 TTL is usually **not used alone**.
@@ -787,3 +790,5 @@ This prevents stale invalidation messages from overwriting newer data.
 - [Event-Driven Architecture](../05-messaging-event-driven/event-driven-architecture.md)
 - [Message Queues](../05-messaging-event-driven/message-queues.md)
 - [Backpressure](../01-scaling-traffic/backpressure.md)
+
+</details>

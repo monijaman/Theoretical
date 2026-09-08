@@ -131,6 +131,9 @@ This distributes the workload across multiple servers.
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## How Replication Works
 
 Step 1
@@ -838,3 +841,5 @@ Purpose:
 - [Quorum](../03-consistency-distributed/quorum.md)
 - [High Availability](../08-reliability-operations/high-availability.md)
 - [Disaster Recovery](../08-reliability-operations/disaster-recovery.md)
+
+</details>

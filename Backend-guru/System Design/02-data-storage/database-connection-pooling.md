@@ -135,6 +135,9 @@ The application keeps paying the connection setup cost.
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## The Solution: Connection Pooling
 
 A connection pool keeps a group of reusable database connections.
@@ -892,3 +895,5 @@ Remember these points for interviews:
 - [CAP Theorem](../03-consistency-distributed/cap-theorem.md)
 - [Circuit Breaker Pattern](../01-scaling-traffic/circuit-breaker-pattern.md)
 - [Backpressure](../01-scaling-traffic/backpressure.md)
+
+</details>

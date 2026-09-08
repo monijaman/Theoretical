@@ -135,6 +135,9 @@ Services communicate through:
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## Comparing the Three
 
 ```
@@ -541,3 +544,5 @@ rather than simply because the application has become large.
 - [Event-Driven Architecture](../05-messaging-event-driven/event-driven-architecture.md)
 - [Database Sharding](../02-data-storage/database-sharding.md)
 - [Distributed Transactions](../02-data-storage/distributed-transactions.md)
+
+</details>

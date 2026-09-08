@@ -140,6 +140,9 @@ Someone has to migrate all of them.
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## 2. Pool Model (Shared Database)
 
 All tenants share one database.
@@ -764,3 +767,5 @@ Implement Row-Level Security from the beginning, and migrate large or compliance
 - [Database Sharding](../02-data-storage/database-sharding.md)
 - [Multi-Tenant SaaS (practice)](../10-system-design-practice/multi-tenant-saas.md)
 - [Strong vs. Eventual Consistency](../03-consistency-distributed/strong-vs-eventual-consistency.md)
+
+</details>

@@ -118,6 +118,9 @@ Which shard owns this data?
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## Sharding vs Replication
 
 They solve different problems.
@@ -1239,3 +1242,5 @@ Remember:
 - [Load Balancing](../01-scaling-traffic/load-balancing.md)
 - [Multi-Tenant Architecture](../07-architecture-patterns/multi-tenant-architecture.md)
 - [Multi-Tenant SaaS](../10-system-design-practice/multi-tenant-saas.md)
+
+</details>

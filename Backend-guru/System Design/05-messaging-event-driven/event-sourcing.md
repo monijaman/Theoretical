@@ -129,6 +129,9 @@ History never disappears.
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## Core Idea
 
 Instead of storing state:
@@ -901,3 +904,5 @@ Higher complexity:
 - [Event-Driven Architecture](event-driven-architecture.md)
 - [Strong vs. Eventual Consistency](../03-consistency-distributed/strong-vs-eventual-consistency.md)
 - [Kafka-like Message Broker (practice)](../10-system-design-practice/kafka-like-message-broker.md)
+
+</details>

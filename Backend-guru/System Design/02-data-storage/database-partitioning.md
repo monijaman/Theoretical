@@ -126,6 +126,9 @@ Everything is on one machine.
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## Sharding
 
 Multiple databases:
@@ -875,3 +878,5 @@ Remember:
 - [Database Indexing](database-indexing.md)
 - [Database Migration at Scale](database-migration-at-scale.md)
 - [Data Lake vs Data Warehouse](../09-large-scale-data-systems/data-lake-vs-data-warehouse.md)
+
+</details>

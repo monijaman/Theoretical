@@ -120,6 +120,9 @@ Common examples:
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## Consistency Spectrum
 
 ```
@@ -701,3 +704,5 @@ It chooses the **right consistency level for each feature**.
 - [Quorum](quorum.md) — the N/W/R math behind DynamoDB's tunable consistent reads
 - [Consensus Algorithms](consensus-algorithms.md) — how linearizable systems like etcd achieve their guarantee
 - [Database Replication](../02-data-storage/database-replication.md) — sync vs async replication is the mechanism producing this spectrum
+
+</details>

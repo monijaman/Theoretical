@@ -125,6 +125,9 @@ Think of an API Gateway as a **superset** of a Reverse Proxy.
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## Request Flow
 
 ```
@@ -716,3 +719,5 @@ Examples include:
 - [Distributed Tracing](../08-reliability-operations/distributed-tracing.md)
 - [REST vs GraphQL vs gRPC](../06-communication-protocols/rest-vs-graphql-vs-grpc.md)
 - [API Gateway (practice problem)](../10-system-design-practice/api-gateway.md)
+
+</details>
