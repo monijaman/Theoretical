@@ -78,7 +78,7 @@ Entire routing table easily fits in memory.
 
 ---
 
-# 3. High-Level Architecture
+## 3. High-Level Architecture
 
 ```text
                  Clients
@@ -130,7 +130,7 @@ Push route updates to all gateways
 
 ---
 
-# 4. API Design
+## 4. API Design
 
 ## Create Route
 
@@ -197,7 +197,7 @@ Gateway:
 
 ---
 
-# 5. Data Model
+## 5. Data Model
 
 ## Routes
 
@@ -255,7 +255,7 @@ revoked_at
 
 ---
 
-# 6. Deep Dive
+## 6. Deep Dive
 
 ## 6.1 Authentication
 
@@ -461,7 +461,7 @@ Potential issues
 
 ---
 
-# 7. Scaling & Bottlenecks
+## 7. Scaling & Bottlenecks
 
 ### 10× traffic
 
@@ -508,7 +508,7 @@ Set hard latency budgets.
 
 ---
 
-# 8. Trade-offs
+## 8. Trade-offs
 
 | Decision | Benefits | Drawbacks |
 |-----------|----------|-----------|
@@ -521,7 +521,7 @@ Set hard latency budgets.
 
 ---
 
-# Common Interview Questions
+## Common Interview Questions
 
 ### Why authenticate at the gateway?
 

@@ -66,7 +66,7 @@ Without backpressure:
 
 ---
 
-# How Backpressure Works
+## How Backpressure Works
 
 Instead of continuously pushing data,
 
@@ -97,7 +97,7 @@ This keeps the system stable.
 
 ---
 
-# Reactive Streams
+## Reactive Streams
 
 Frameworks like:
 
@@ -142,7 +142,7 @@ The producer never sends more than requested.
 
 ---
 
-# Bounded Queue
+## Bounded Queue
 
 Instead of allowing the queue to grow forever,
 
@@ -164,7 +164,7 @@ This prevents memory crashes.
 
 ---
 
-# Rejection Policies
+## Rejection Policies
 
 When the queue is full, we must decide what to do.
 
@@ -212,7 +212,7 @@ Older data can be discarded.
 
 ---
 
-# TCP Backpressure
+## TCP Backpressure
 
 TCP already has built-in backpressure.
 
@@ -232,7 +232,7 @@ No unlimited buffering occurs.
 
 ---
 
-# Kafka Backpressure
+## Kafka Backpressure
 
 Kafka works differently.
 
@@ -274,7 +274,7 @@ Solutions:
 
 ---
 
-# Backpressure vs Load Shedding
+## Backpressure vs Load Shedding
 
 These are different ideas.
 
@@ -314,7 +314,7 @@ Some work is intentionally dropped to protect the system.
 
 ---
 
-# Real-Life Examples
+## Real-Life Examples
 
 ### Example 1
 
@@ -344,13 +344,13 @@ This is another form of backpressure.
 
 ---
 
-# Interview Answer (30 Seconds)
+## Interview Answer (30 Seconds)
 
 > Backpressure is a mechanism that prevents a fast producer from overwhelming a slow consumer. Instead of continuously sending data, the consumer signals how much data it can handle, allowing the producer to slow down. This prevents unbounded queues, high memory usage, and application crashes. Common implementations include Reactive Streams (`request(n)`), bounded queues with rejection policies, TCP flow control, and Kafka's pull-based consumer model.
 
 ---
 
-# Common Interview Questions
+## Common Interview Questions
 
 ### Why not use an unlimited queue?
 

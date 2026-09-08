@@ -10,7 +10,7 @@
 
 ---
 
-# Why Do We Need Retries?
+## Why Do We Need Retries?
 
 Networks are not perfect.
 
@@ -39,7 +39,7 @@ Retrying a few moments later may succeed.
 
 ---
 
-# The Problem with Immediate Retries
+## The Problem with Immediate Retries
 
 Imagine 1,000 clients call the same service.
 
@@ -79,7 +79,7 @@ This creates a **Retry Storm**.
 
 ---
 
-# Retry Storm (Thundering Herd)
+## Retry Storm (Thundering Herd)
 
 ```
 Time
@@ -117,7 +117,7 @@ The retries themselves become the cause of the outage.
 
 ---
 
-# Exponential Backoff
+## Exponential Backoff
 
 Instead of retrying immediately...
 
@@ -167,7 +167,7 @@ Instead of hammering the server, clients gradually slow down.
 
 ---
 
-# Backoff Formula
+## Backoff Formula
 
 ```
 Delay = Base × 2^Attempt
@@ -202,7 +202,7 @@ The delay never grows beyond that.
 
 ---
 
-# Why Exponential Backoff Helps
+## Why Exponential Backoff Helps
 
 Without Backoff:
 
@@ -246,7 +246,7 @@ The server gets time to recover.
 
 ---
 
-# But Backoff Alone Isn't Enough
+## But Backoff Alone Isn't Enough
 
 Imagine every client uses the same delay.
 
@@ -268,7 +268,7 @@ The traffic spike simply happens later.
 
 ---
 
-# Jitter
+## Jitter
 
 Jitter adds randomness to retry delays.
 
@@ -304,7 +304,7 @@ The server receives a smooth stream of requests instead of one huge spike.
 
 ---
 
-# Types of Jitter
+## Types of Jitter
 
 ## No Jitter
 
@@ -372,7 +372,7 @@ AWS recommends **Full Jitter** for most systems.
 
 ---
 
-# Idempotency
+## Idempotency
 
 Retries are only safe if performing the same operation multiple times produces the same result.
 
@@ -408,7 +408,7 @@ Customer Charged Twice
 
 ---
 
-# Idempotency Key
+## Idempotency Key
 
 Modern payment APIs solve this problem using an **Idempotency Key**.
 
@@ -438,7 +438,7 @@ Stripe uses this approach.
 
 ---
 
-# Retry Budget
+## Retry Budget
 
 Unlimited retries are dangerous.
 
@@ -492,7 +492,7 @@ This protects downstream services.
 
 ---
 
-# When Should You Retry?
+## When Should You Retry?
 
 ✅ Timeouts
 
@@ -510,7 +510,7 @@ This protects downstream services.
 
 ---
 
-# When Should You NOT Retry?
+## When Should You NOT Retry?
 
 ❌ HTTP 400
 
@@ -558,7 +558,7 @@ Do not keep retrying.
 
 ---
 
-# Retry + Circuit Breaker
+## Retry + Circuit Breaker
 
 ```
 Client
@@ -581,7 +581,7 @@ These patterns complement each other.
 
 ---
 
-# Retry + Rate Limiting
+## Retry + Rate Limiting
 
 Suppose a server returns:
 
@@ -605,7 +605,7 @@ Ignoring the header only increases server load.
 
 ---
 
-# Best Practices
+## Best Practices
 
 ✅ Retry only temporary failures
 
@@ -623,7 +623,7 @@ Ignoring the header only increases server load.
 
 ---
 
-# Common Mistakes
+## Common Mistakes
 
 ❌ Infinite retries
 
@@ -639,7 +639,7 @@ Ignoring the header only increases server load.
 
 ---
 
-# Real-World Examples
+## Real-World Examples
 
 ### AWS
 
@@ -665,7 +665,7 @@ Many controllers use exponential backoff when reconciling resources.
 
 ---
 
-# Interview Questions
+## Interview Questions
 
 ## Why not retry immediately?
 
@@ -707,7 +707,7 @@ The resource doesn't exist, so retrying the same request won't help.
 
 ---
 
-# Key Takeaways
+## Key Takeaways
 
 - Retry handles temporary failures.
 - Exponential Backoff increases the delay after each retry.
@@ -717,7 +717,6 @@ The resource doesn't exist, so retrying the same request won't help.
 - Combine retries with Circuit Breakers and Rate Limiting for resilient distributed systems.
 
 ---
-
 
 ## Related topics
 - [Circuit Breaker Pattern](circuit-breaker-pattern.md)

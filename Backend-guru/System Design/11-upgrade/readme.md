@@ -16,13 +16,13 @@ Keep these resources nearby while working through the examples in this guide.
 ### Essential command examples
 
 ```bash
-# Trace file-related system calls made by an application
+## Trace file-related system calls made by an application
 strace -f -e trace=%file -o trace.log ./my-application
 
-# Show listening TCP sockets and their owning processes
+## Show listening TCP sockets and their owning processes
 ss -ltnp
 
-# Show established TCP connections
+## Show established TCP connections
 ss -tn state established
 ```
 
@@ -233,5 +233,4 @@ You understand a topic when you can:
 - justify when **not** to use it.
 
 The goal is not merely to call an AI API. The goal is to design, deploy, evaluate, secure, and operate an AI-enabled system that solves a real business problem.
-
 

@@ -52,7 +52,7 @@ The write still goes to one primary.
 
 ---
 
-# What Is Sharding?
+## What Is Sharding?
 
 Sharding splits data horizontally across multiple database servers.
 
@@ -71,11 +71,9 @@ Shard 1
 
 3 TB
 
-
 Shard 2
 
 4 TB
-
 
 Shard 3
 
@@ -86,7 +84,7 @@ Each shard owns only part of the data.
 
 ---
 
-# Sharding Architecture
+## Sharding Architecture
 
 Typical design:
 
@@ -120,7 +118,7 @@ Which shard owns this data?
 
 ---
 
-# Sharding vs Replication
+## Sharding vs Replication
 
 They solve different problems.
 
@@ -151,7 +149,6 @@ Shard 1
 
 Users 1-1M
 
-
 Shard 2
 
 Users 1M-2M
@@ -159,7 +156,7 @@ Users 1M-2M
 
 ---
 
-# Shard Key
+## Shard Key
 
 The shard key decides where a row is stored.
 
@@ -193,7 +190,7 @@ Shard number
 
 ---
 
-# Choosing a Good Shard Key
+## Choosing a Good Shard Key
 
 Shard key selection is one of the hardest database decisions.
 
@@ -231,7 +228,6 @@ Example:
 US shard
 
 90% data
-
 
 Other countries
 
@@ -352,13 +348,13 @@ Scatter-gather query
 
 ---
 
-# Sharding Strategies
+## Sharding Strategies
 
 There are four common approaches.
 
 ---
 
-# 1. Range-Based Sharding
+## 1. Range-Based Sharding
 
 Data is divided by ranges.
 
@@ -372,7 +368,6 @@ User IDs:
         ↓
 
 Shard 1
-
 
 1,000,001 - 2,000,000
 
@@ -388,11 +383,9 @@ Shard 1
 
 [0 - 1000]
 
-
 Shard 2
 
 [1001 - 2000]
-
 
 Shard 3
 
@@ -441,7 +434,7 @@ Latest shard
 
 ---
 
-# 2. Hash-Based Sharding
+## 2. Hash-Based Sharding
 
 Use a hash function.
 
@@ -519,7 +512,7 @@ This causes massive data movement.
 
 ---
 
-# 3. Consistent Hashing
+## 3. Consistent Hashing
 
 Consistent hashing solves the resizing problem.
 
@@ -536,9 +529,7 @@ we create a ring.
 
         Shard A
 
-
    Shard D       Shard B
-
 
         Shard C
 ```
@@ -561,7 +552,6 @@ User hash:
 
 500
 
-
 Move clockwise:
 
 ↓
@@ -571,7 +561,7 @@ Shard B owns it
 
 ---
 
-# Adding a New Shard
+## Adding a New Shard
 
 Normal hashing:
 
@@ -597,7 +587,7 @@ Much less data movement.
 
 ---
 
-# Virtual Nodes
+## Virtual Nodes
 
 A single point per shard can create imbalance.
 
@@ -607,7 +597,6 @@ Example:
 Shard A
 
 owns huge area
-
 
 Shard B
 
@@ -643,7 +632,7 @@ Used in systems like:
 
 ---
 
-# 4. Directory-Based Sharding
+## 4. Directory-Based Sharding
 
 Instead of calculating:
 
@@ -661,7 +650,6 @@ Customer ID
         ↓
 
 Shard Directory
-
 
 Customer 101 → Shard 1
 
@@ -689,7 +677,6 @@ Normal customers
 
 Shared shards
 
-
 Enterprise customer
 
 ↓
@@ -711,7 +698,7 @@ Need:
 
 ---
 
-# Hot Shards
+## Hot Shards
 
 A hot shard happens when one shard receives too much traffic.
 
@@ -743,7 +730,7 @@ Requests overloaded
 
 ---
 
-# Detecting Hot Shards
+## Detecting Hot Shards
 
 Monitor per shard:
 
@@ -768,11 +755,9 @@ Shard 1:
 
 CPU 40%
 
-
 Shard 2:
 
 CPU 45%
-
 
 Shard 3:
 
@@ -783,7 +768,7 @@ Shard 3 is hot.
 
 ---
 
-# Fixing Hot Shards
+## Fixing Hot Shards
 
 Options:
 
@@ -844,7 +829,6 @@ Shard A
 
 Users 1-5M
 
-
 Shard B
 
 Users 5M-10M
@@ -852,7 +836,7 @@ Users 5M-10M
 
 ---
 
-# Resharding
+## Resharding
 
 Adding shards is difficult.
 
@@ -864,7 +848,6 @@ Before:
 Shard 1
 
 Users A-M
-
 
 Shard 2
 
@@ -884,11 +867,9 @@ Shard 1
 
 A-F
 
-
 Shard 3
 
 G-M
-
 
 Shard 2
 
@@ -897,7 +878,7 @@ N-Z
 
 ---
 
-# How Resharding Works
+## How Resharding Works
 
 Typical process:
 
@@ -978,7 +959,7 @@ Shard 3
 
 ---
 
-# Real-World Examples
+## Real-World Examples
 
 ## Vitess
 
@@ -1087,7 +1068,7 @@ Hot partitions
 
 ---
 
-# Sharding Strategy Comparison
+## Sharding Strategy Comparison
 
 | Strategy | Advantages | Disadvantages | Best For |
 |-|-|-|-|
@@ -1098,7 +1079,7 @@ Hot partitions
 
 ---
 
-# Common Interview Questions
+## Common Interview Questions
 
 ## Q: How do you choose a shard key?
 
@@ -1233,7 +1214,7 @@ Fix with:
 
 ---
 
-# Key Takeaways
+## Key Takeaways
 
 Remember:
 

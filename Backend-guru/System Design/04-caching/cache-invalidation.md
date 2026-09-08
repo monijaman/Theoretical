@@ -3,7 +3,7 @@
 
 ---
 
-# What is Cache Invalidation?
+## What is Cache Invalidation?
 
 Caching speeds up reads by storing a copy of data closer to the application.
 
@@ -15,7 +15,7 @@ This is called **cache invalidation**.
 
 ---
 
-# Why It Matters
+## Why It Matters
 
 Imagine this flow:
 
@@ -39,7 +39,7 @@ Every invalidation strategy answers one question:
 
 ---
 
-# Common Cache Invalidation Strategies
+## Common Cache Invalidation Strategies
 
 1. TTL (Time-To-Live)
 2. Explicit Invalidation
@@ -49,7 +49,7 @@ Every invalidation strategy answers one question:
 
 ---
 
-# 1. TTL (Time-To-Live)
+## 1. TTL (Time-To-Live)
 
 ## Idea
 
@@ -140,7 +140,7 @@ This ensures stale data eventually disappears even if an invalidation event is m
 
 ---
 
-# 2. Explicit Invalidation
+## 2. Explicit Invalidation
 
 ## Idea
 
@@ -264,7 +264,7 @@ the stale value remains until TTL expires.
 
 ---
 
-# 3. Event-Driven Invalidation
+## 3. Event-Driven Invalidation
 
 ## Problem
 
@@ -381,7 +381,7 @@ TTL acts as a backup.
 
 ---
 
-# 4. Cache Stampede (Dogpile Problem)
+## 4. Cache Stampede (Dogpile Problem)
 
 ## Problem
 
@@ -425,7 +425,7 @@ This is called a:
 
 ---
 
-# Solution 1 — Request Coalescing
+## Solution 1 — Request Coalescing
 
 Only one request is allowed to refresh the cache.
 
@@ -493,7 +493,7 @@ def get_with_lock(key):
 
 ---
 
-# Solution 2 — Early Refresh
+## Solution 2 — Early Refresh
 
 Instead of waiting until expiration,
 
@@ -519,7 +519,7 @@ Facebook popularized this idea (often referred to as **XFetch**).
 
 ---
 
-# Solution 3 — Jittered TTL
+## Solution 3 — Jittered TTL
 
 Suppose every key expires at exactly:
 
@@ -546,7 +546,7 @@ This spreads database load across time.
 
 ---
 
-# 5. Versioned Cache Keys
+## 5. Versioned Cache Keys
 
 ## Idea
 
@@ -656,7 +656,7 @@ Extra storage is temporarily consumed.
 
 ---
 
-# Strategy Comparison
+## Strategy Comparison
 
 | Strategy | Freshness | Coordination | Common Failure |
 |-----------|-----------|--------------|----------------|
@@ -668,7 +668,7 @@ Extra storage is temporarily consumed.
 
 ---
 
-# Which Strategy Should You Use?
+## Which Strategy Should You Use?
 
 | Scenario | Recommended Strategy |
 |----------|----------------------|
@@ -683,7 +683,7 @@ Extra storage is temporarily consumed.
 
 ---
 
-# Common Interview Questions
+## Common Interview Questions
 
 ## Why is cache invalidation considered difficult?
 
@@ -771,7 +771,7 @@ This prevents stale invalidation messages from overwriting newer data.
 
 ---
 
-# Key Takeaways
+## Key Takeaways
 
 - **TTL** automatically expires cached data after a fixed duration.
 - **Explicit invalidation** removes cache immediately after writes.

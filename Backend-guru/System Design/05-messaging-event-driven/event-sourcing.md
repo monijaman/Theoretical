@@ -3,7 +3,7 @@
 
 ---
 
-# Event Sourcing
+## Event Sourcing
 
 ## What is Event Sourcing?
 
@@ -62,7 +62,7 @@ It's commonly discussed together with:
 
 ---
 
-# Traditional CRUD vs Event Sourcing
+## Traditional CRUD vs Event Sourcing
 
 ## Traditional CRUD
 
@@ -129,7 +129,7 @@ History never disappears.
 
 ---
 
-# Core Idea
+## Core Idea
 
 Instead of storing state:
 
@@ -159,7 +159,7 @@ They should never change once written.
 
 ---
 
-# Rebuilding State (Replay)
+## Rebuilding State (Replay)
 
 To calculate the current state:
 
@@ -231,7 +231,7 @@ Replay simply applies every event in order.
 
 ---
 
-# Event Store
+## Event Store
 
 Unlike a traditional database,
 
@@ -276,7 +276,7 @@ Then replay them.
 
 ---
 
-# Example Event Store Table
+## Example Event Store Table
 
 ```sql
 CREATE TABLE events (
@@ -318,7 +318,7 @@ Event 2
 
 ---
 
-# Snapshots
+## Snapshots
 
 Replaying thousands of events every time would be slow.
 
@@ -401,7 +401,7 @@ they can always be recreated by replaying events.
 
 ---
 
-# Optimistic Concurrency
+## Optimistic Concurrency
 
 Suppose two users update the same account.
 
@@ -443,7 +443,7 @@ This prevents lost updates.
 
 ---
 
-# Schema Evolution
+## Schema Evolution
 
 Events live forever.
 
@@ -539,7 +539,7 @@ Prevent incompatible event changes.
 
 ---
 
-# Audit Trail
+## Audit Trail
 
 One of Event Sourcing's biggest strengths.
 
@@ -590,7 +590,7 @@ Perfect for:
 
 ---
 
-# Time Travel
+## Time Travel
 
 Since every event exists,
 
@@ -626,7 +626,7 @@ Traditional CRUD systems usually cannot do this.
 
 ---
 
-# Event Sourcing + CQRS
+## Event Sourcing + CQRS
 
 These patterns often work together.
 
@@ -658,7 +658,7 @@ This is CQRS.
 
 ---
 
-# Event Sourcing + Kafka
+## Event Sourcing + Kafka
 
 Kafka is naturally append-only.
 
@@ -684,7 +684,7 @@ Although dedicated Event Stores (EventStoreDB, Axon) provide richer features.
 
 ---
 
-# Benefits
+## Benefits
 
 - Complete audit history
 - Replay capability
@@ -697,7 +697,7 @@ Although dedicated Event Stores (EventStoreDB, Axon) provide richer features.
 
 ---
 
-# Challenges
+## Challenges
 
 - More complex architecture
 - Slower replay without snapshots
@@ -709,7 +709,7 @@ Although dedicated Event Stores (EventStoreDB, Axon) provide richer features.
 
 ---
 
-# Real-World Examples
+## Real-World Examples
 
 ## Banking
 
@@ -781,7 +781,7 @@ Medical history becomes fully traceable.
 
 ---
 
-# Best Practices
+## Best Practices
 
 - Events should be immutable
 - Never update old events
@@ -794,7 +794,7 @@ Medical history becomes fully traceable.
 
 ---
 
-# CRUD vs Event Sourcing
+## CRUD vs Event Sourcing
 
 | CRUD | Event Sourcing |
 |-------|----------------|
@@ -808,7 +808,7 @@ Medical history becomes fully traceable.
 
 ---
 
-# When Should You Use Event Sourcing?
+## When Should You Use Event Sourcing?
 
 Good fit:
 
@@ -831,7 +831,7 @@ Most applications **do not need Event Sourcing**.
 
 ---
 
-# Interview Cheat Sheet
+## Interview Cheat Sheet
 
 ### What is Event Sourcing?
 
@@ -885,7 +885,7 @@ Higher complexity:
 
 ---
 
-# Key Takeaways
+## Key Takeaways
 
 - Event Sourcing stores **facts**, not current state.
 - The **event log** is the source of truth.

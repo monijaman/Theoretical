@@ -43,7 +43,7 @@ Partitioning
 
 ---
 
-# What Is Database Partitioning?
+## What Is Database Partitioning?
 
 Partitioning splits one large table into smaller physical pieces.
 
@@ -77,7 +77,7 @@ Inside the same database instance
 
 ---
 
-# Why Use Partitioning?
+## Why Use Partitioning?
 
 Large tables create problems:
 
@@ -101,7 +101,7 @@ Partitioning helps by dividing the workload.
 
 ---
 
-# Partitioning vs Sharding Example
+## Partitioning vs Sharding Example
 
 ## Partitioning
 
@@ -138,7 +138,6 @@ Application
 
 Router
 
-
       |
       |
  -----------------
@@ -149,7 +148,6 @@ Shard 1          Shard 2
 
 Server A         Server B
 
-
 Users 1-5M       Users 5M-10M
 ```
 
@@ -157,7 +155,7 @@ Data is distributed across machines.
 
 ---
 
-# Types of Partitioning
+## Types of Partitioning
 
 There are three common strategies:
 
@@ -167,7 +165,7 @@ There are three common strategies:
 
 ---
 
-# 1. Range Partitioning
+## 1. Range Partitioning
 
 Rows are divided by value ranges.
 
@@ -195,7 +193,6 @@ orders_2024_q1
 
 Jan - Mar
 
-
 orders_2024_q2
 
 Apr - Jun
@@ -215,7 +212,7 @@ orders_2024_q1
 
 ---
 
-# Why Range Partitioning Is Useful
+## Why Range Partitioning Is Useful
 
 Deleting old data becomes easy.
 
@@ -256,7 +253,7 @@ Almost instant.
 
 ---
 
-# 2. List Partitioning
+## 2. List Partitioning
 
 Partition based on specific values.
 
@@ -289,7 +286,6 @@ users_us
 
 country IN ('US')
 
-
 users_europe
 
 country IN ('DE','FR','UK')
@@ -303,7 +299,7 @@ Useful for:
 
 ---
 
-# 3. Hash Partitioning
+## 3. Hash Partitioning
 
 Hash decides where data goes.
 
@@ -349,7 +345,7 @@ There is no natural range.
 
 ---
 
-# Composite Partitioning
+## Composite Partitioning
 
 You can combine strategies.
 
@@ -395,7 +391,7 @@ Benefits:
 
 ---
 
-# Partition Pruning
+## Partition Pruning
 
 The biggest performance benefit.
 
@@ -425,7 +421,6 @@ Scan:
 
 orders_july
 
-
 Skip:
 
 orders_january
@@ -442,7 +437,7 @@ Partition pruning
 
 ---
 
-# Without Partition Pruning
+## Without Partition Pruning
 
 Example:
 
@@ -484,7 +479,7 @@ No performance benefit.
 
 ---
 
-# Choosing a Partition Key
+## Choosing a Partition Key
 
 A good partition key should:
 
@@ -550,7 +545,7 @@ One partition becomes huge.
 
 ---
 
-# Combining Partitioning and Sharding
+## Combining Partitioning and Sharding
 
 Large systems often use both.
 
@@ -574,7 +569,6 @@ Shard Router
 Shard 1              Shard 2
 
 Tenant A-M           Tenant N-Z
-
 
 Each shard:
 
@@ -622,7 +616,7 @@ monthly partitions
 
 ---
 
-# Real-World Examples
+## Real-World Examples
 
 ## PostgreSQL
 
@@ -716,7 +710,7 @@ Reducing cost.
 
 ---
 
-# Partitioning Trade-offs
+## Partitioning Trade-offs
 
 | Feature | Partitioning | Sharding |
 |-|-|-|
@@ -729,7 +723,7 @@ Reducing cost.
 
 ---
 
-# Common Interview Questions
+## Common Interview Questions
 
 ## Q: If partitioning does not add more servers, why use it?
 
@@ -859,7 +853,7 @@ Efficient time-based queries.
 
 ---
 
-# Key Takeaways
+## Key Takeaways
 
 Remember:
 

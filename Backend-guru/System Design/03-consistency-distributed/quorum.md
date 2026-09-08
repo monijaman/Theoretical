@@ -17,7 +17,6 @@ The core guarantee:
 
 This means at least one node participating in the read has seen the latest successful write.
 
-
 ## Related topics
 - [CAP Theorem](cap-theorem.md) — quorum settings are the literal dial between the CP and AP branches
 - [PACELC Theorem](pacelc-theorem.md) — W/R choice directly trades off latency vs consistency during normal operation

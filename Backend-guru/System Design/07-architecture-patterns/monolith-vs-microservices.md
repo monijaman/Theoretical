@@ -19,7 +19,7 @@ Architecture should evolve with business needs—not hype.
 
 ---
 
-# Monolith
+## Monolith
 
 A monolith is a single application where all features are built, deployed, and run together.
 
@@ -59,7 +59,7 @@ Disadvantages:
 
 ---
 
-# Modular Monolith
+## Modular Monolith
 
 A modular monolith is still one application, but the internal structure is divided into well-defined modules.
 
@@ -96,7 +96,7 @@ For many companies, a modular monolith is the ideal long-term architecture.
 
 ---
 
-# Microservices
+## Microservices
 
 Microservices split the application into independently deployable services.
 
@@ -135,7 +135,7 @@ Services communicate through:
 
 ---
 
-# Comparing the Three
+## Comparing the Three
 
 ```
 Monolith
@@ -179,7 +179,7 @@ Inventory -> Inventory DB
 
 ---
 
-# Why Modular Monoliths Are So Popular
+## Why Modular Monoliths Are So Popular
 
 Many engineers jump directly to microservices.
 
@@ -208,7 +208,7 @@ This is why many companies intentionally stay with a modular monolith for years.
 
 ---
 
-# Conway's Law
+## Conway's Law
 
 Conway's Law states:
 
@@ -242,7 +242,7 @@ Without that organizational structure, microservices often become difficult to m
 
 ---
 
-# The Premature Microservices Problem
+## The Premature Microservices Problem
 
 Many startups split into dozens of services too early.
 
@@ -260,7 +260,7 @@ For early-stage products, a modular monolith is usually the better choice.
 
 ---
 
-# When Should You Move to Microservices?
+## When Should You Move to Microservices?
 
 Move only when there is a clear reason.
 
@@ -278,7 +278,7 @@ Many large monoliths handle millions of users successfully.
 
 ---
 
-# Migration Strategy — Strangler Fig Pattern
+## Migration Strategy — Strangler Fig Pattern
 
 Instead of rewriting the entire application, gradually replace parts of the monolith.
 
@@ -337,7 +337,7 @@ This approach:
 
 ---
 
-# Operational Cost of Microservices
+## Operational Cost of Microservices
 
 Microservices introduce many new responsibilities.
 
@@ -359,7 +359,7 @@ These costs are often greater than expected.
 
 ---
 
-# Advantages of Monolith
+## Advantages of Monolith
 
 - Simple deployment
 - Easy debugging
@@ -370,7 +370,7 @@ These costs are often greater than expected.
 
 ---
 
-# Advantages of Microservices
+## Advantages of Microservices
 
 - Independent deployments
 - Independent scaling
@@ -381,7 +381,7 @@ These costs are often greater than expected.
 
 ---
 
-# Disadvantages of Monolith
+## Disadvantages of Monolith
 
 - Entire application deploys together.
 - Scaling is coarse-grained.
@@ -390,7 +390,7 @@ These costs are often greater than expected.
 
 ---
 
-# Disadvantages of Microservices
+## Disadvantages of Microservices
 
 - Operational complexity
 - Network latency
@@ -402,7 +402,7 @@ These costs are often greater than expected.
 
 ---
 
-# Comparison
+## Comparison
 
 | Feature | Monolith | Modular Monolith | Microservices |
 |----------|-----------|-----------------|---------------|
@@ -418,7 +418,7 @@ These costs are often greater than expected.
 
 ---
 
-# When to Choose a Monolith
+## When to Choose a Monolith
 
 Choose a monolith when:
 
@@ -430,7 +430,7 @@ Choose a monolith when:
 
 ---
 
-# When to Choose a Modular Monolith
+## When to Choose a Modular Monolith
 
 Choose a modular monolith when:
 
@@ -443,7 +443,7 @@ This is the recommendation for most applications.
 
 ---
 
-# When to Choose Microservices
+## When to Choose Microservices
 
 Choose microservices when:
 
@@ -456,7 +456,7 @@ Choose microservices when:
 
 ---
 
-# Rule of Thumb
+## Rule of Thumb
 
 Ask yourself:
 
@@ -468,7 +468,7 @@ If **yes**, microservices may be justified.
 
 ---
 
-# Common Interview Questions
+## Common Interview Questions
 
 ### Q: Are microservices always better?
 

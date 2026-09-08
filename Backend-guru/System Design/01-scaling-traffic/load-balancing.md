@@ -1,6 +1,5 @@
 # Load Balancing
 
-
 > A **Load Balancer** distributes incoming requests across multiple servers so that no single server becomes overloaded.
 >
 > It improves:
@@ -14,7 +13,7 @@
 
 ---
 
-# Why Do We Need Load Balancing?
+## Why Do We Need Load Balancing?
 
 Imagine your application runs on a single server.
 
@@ -52,7 +51,7 @@ The Load Balancer spreads traffic evenly across all servers.
 
 ---
 
-# How Load Balancing Works
+## How Load Balancing Works
 
 Every client request first reaches the Load Balancer.
 
@@ -75,7 +74,7 @@ If one server becomes unhealthy, requests are automatically sent to healthy serv
 
 ---
 
-# Benefits
+## Benefits
 
 ✅ Better Performance
 
@@ -89,7 +88,7 @@ If one server becomes unhealthy, requests are automatically sent to healthy serv
 
 ---
 
-# Layer 4 vs Layer 7 Load Balancing
+## Layer 4 vs Layer 7 Load Balancing
 
 Load Balancers operate at different layers of the OSI model.
 
@@ -104,7 +103,7 @@ Load Balancers operate at different layers of the OSI model.
 
 ---
 
-# Layer 4 (L4) Load Balancer
+## Layer 4 (L4) Load Balancer
 
 Layer 4 works with:
 
@@ -167,7 +166,7 @@ The Load Balancer forwards packets without reading URLs or headers.
 
 ---
 
-# Layer 7 (L7) Load Balancer
+## Layer 7 (L7) Load Balancer
 
 Layer 7 understands HTTP.
 
@@ -254,7 +253,7 @@ The Load Balancer reads the request before forwarding it.
 
 ---
 
-# L4 vs L7 Comparison
+## L4 vs L7 Comparison
 
 | Feature | Layer 4 | Layer 7 |
 |----------|----------|----------|
@@ -268,13 +267,13 @@ The Load Balancer reads the request before forwarding it.
 
 ---
 
-# Load Balancing Algorithms
+## Load Balancing Algorithms
 
 A Load Balancer needs a strategy to choose the next server.
 
 ---
 
-# 1. Round Robin
+## 1. Round Robin
 
 Requests are distributed one after another.
 
@@ -309,7 +308,7 @@ Best for:
 
 ---
 
-# 2. Weighted Round Robin
+## 2. Weighted Round Robin
 
 Some servers receive more traffic.
 
@@ -331,7 +330,7 @@ Server A receives more requests because it has more capacity.
 
 ---
 
-# 3. Least Connections
+## 3. Least Connections
 
 The next request goes to the server with the fewest active connections.
 
@@ -361,7 +360,7 @@ Useful when requests take different amounts of time.
 
 ---
 
-# 4. Consistent Hashing
+## 4. Consistent Hashing
 
 Instead of choosing randomly, requests are assigned using a hash.
 
@@ -413,7 +412,7 @@ The same user always reaches the same server.
 
 ---
 
-# 5. Random / Power of Two Choices
+## 5. Random / Power of Two Choices
 
 Choose two random servers.
 
@@ -437,7 +436,7 @@ Popular in large cloud systems because it provides good balancing with little ov
 
 ---
 
-# Health Checks
+## Health Checks
 
 A Load Balancer continuously checks whether backend servers are healthy.
 
@@ -461,7 +460,7 @@ No → Remove
 
 ---
 
-# Types of Health Checks
+## Types of Health Checks
 
 ## Active Health Check
 
@@ -489,7 +488,7 @@ It is temporarily removed.
 
 ---
 
-# Readiness vs Liveness
+## Readiness vs Liveness
 
 These two health checks serve different purposes.
 
@@ -519,7 +518,7 @@ Only **ready** servers should receive traffic.
 
 ---
 
-# Sticky Sessions (Session Affinity)
+## Sticky Sessions (Session Affinity)
 
 Normally:
 
@@ -599,7 +598,7 @@ This creates a **stateless architecture**, which is easier to scale.
 
 ---
 
-# Types of Load Balancers
+## Types of Load Balancers
 
 ## Hardware Load Balancer
 
@@ -654,7 +653,7 @@ Advantages:
 
 ---
 
-# Real-World Architecture
+## Real-World Architecture
 
 ```
              Internet
@@ -678,7 +677,7 @@ This architecture provides:
 
 ---
 
-# Best Practices
+## Best Practices
 
 ✅ Keep application servers stateless
 
@@ -694,7 +693,7 @@ This architecture provides:
 
 ---
 
-# Common Mistakes
+## Common Mistakes
 
 ❌ Using Sticky Sessions for everything
 
@@ -708,7 +707,7 @@ This architecture provides:
 
 ---
 
-# Real-World Examples
+## Real-World Examples
 
 ### Netflix
 
@@ -731,7 +730,7 @@ Uses Services and Ingress Controllers (such as Nginx or Traefik) to distribute t
 
 ---
 
-# Interview Questions
+## Interview Questions
 
 ## Why do we need a Load Balancer?
 
@@ -775,7 +774,7 @@ Deploy multiple Load Balancers behind a virtual IP, DNS, or use a managed cloud 
 
 ---
 
-# Key Takeaways
+## Key Takeaways
 
 - A Load Balancer distributes requests across multiple servers.
 - Layer 4 works at the transport level and is optimized for speed.

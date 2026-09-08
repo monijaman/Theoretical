@@ -36,7 +36,6 @@ or:
 Node A says:
 balance = $100
 
-
 Node B says:
 balance = $200
 ```
@@ -45,7 +44,7 @@ Consensus algorithms solve this problem.
 
 ---
 
-# Why Consensus Matters
+## Why Consensus Matters
 
 Many distributed systems depend on consensus.
 
@@ -97,13 +96,13 @@ Two clients cannot receive the same lock.
 
 ---
 
-# Requirements of Consensus
+## Requirements of Consensus
 
 A correct consensus algorithm provides three guarantees.
 
 ---
 
-# 1. Agreement
+## 1. Agreement
 
 All correct nodes decide the same value.
 
@@ -115,7 +114,6 @@ Wrong:
 Node A:
 
 Leader = Server 1
-
 
 Node B:
 
@@ -132,7 +130,7 @@ Leader = Server 1
 
 ---
 
-# 2. Validity
+## 2. Validity
 
 The chosen value must come from a proposal.
 
@@ -158,7 +156,7 @@ is invalid.
 
 ---
 
-# 3. Termination
+## 3. Termination
 
 Every healthy node eventually reaches a decision.
 
@@ -166,7 +164,7 @@ The system should not wait forever.
 
 ---
 
-# FLP Impossibility Result
+## FLP Impossibility Result
 
 The FLP theorem says:
 
@@ -213,7 +211,7 @@ But safety is never sacrificed.
 
 ---
 
-# Paxos
+## Paxos
 
 Paxos is the original consensus algorithm.
 
@@ -229,7 +227,7 @@ It solves:
 
 ---
 
-# Paxos Roles
+## Paxos Roles
 
 Paxos has three roles:
 
@@ -285,7 +283,7 @@ Learns the final decision.
 
 ---
 
-# Paxos Flow
+## Paxos Flow
 
 ## Phase 1: Prepare
 
@@ -337,7 +335,7 @@ Value is chosen
 
 ---
 
-# Why Paxos Is Hard
+## Why Paxos Is Hard
 
 Paxos is mathematically correct.
 
@@ -386,7 +384,7 @@ The original Paxos paper leaves many engineering details open.
 
 ---
 
-# Raft
+## Raft
 
 Raft was created to make consensus easier to understand.
 
@@ -406,7 +404,7 @@ Majority agreement
 
 ---
 
-# Raft Components
+## Raft Components
 
 Raft separates consensus into three problems:
 
@@ -420,7 +418,7 @@ Raft separates consensus into three problems:
 
 ---
 
-# 1. Leader Election
+## 1. Leader Election
 
 Nodes vote for a leader.
 
@@ -444,7 +442,7 @@ Only one leader exists per term.
 
 ---
 
-# 2. Log Replication
+## 2. Log Replication
 
 Clients send writes to the leader.
 
@@ -495,7 +493,7 @@ The entry is committed.
 
 ---
 
-# 3. Safety
+## 3. Safety
 
 A new leader must already contain committed data.
 
@@ -505,7 +503,7 @@ Old data becoming the truth again.
 
 ---
 
-# Raft Example
+## Raft Example
 
 Client writes:
 
@@ -551,7 +549,7 @@ Return success
 
 ---
 
-# Quorum Requirement
+## Quorum Requirement
 
 Consensus algorithms require:
 
@@ -589,7 +587,7 @@ The shared node prevents conflicting decisions.
 
 ---
 
-# Cluster Size Examples
+## Cluster Size Examples
 
 | Nodes | Majority | Failures Allowed |
 |-|-|-|
@@ -617,7 +615,7 @@ That is why production clusters usually use:
 
 ---
 
-# Real Systems Using Consensus
+## Real Systems Using Consensus
 
 ## etcd → Raft
 
@@ -700,7 +698,7 @@ Raft group
 
 ---
 
-# Paxos vs Raft vs ZAB
+## Paxos vs Raft vs ZAB
 
 | Algorithm | Main Idea | Difficulty | Used By |
 |-|-|-|-|
@@ -711,7 +709,7 @@ Raft group
 
 ---
 
-# Common Interview Questions
+## Common Interview Questions
 
 ## Q: Is Raft better than Paxos?
 
@@ -811,7 +809,7 @@ Systems like Cassandra choose availability instead.
 
 ---
 
-# Consensus vs Distributed Transactions
+## Consensus vs Distributed Transactions
 
 They solve different problems.
 
@@ -858,7 +856,6 @@ Paxos
 
 for replica consistency
 
-
 +
 
 2PC
@@ -868,7 +865,7 @@ for cross-shard transactions
 
 ---
 
-# Simple Rule To Remember
+## Simple Rule To Remember
 
 ```
 Need nodes to agree?
@@ -876,18 +873,15 @@ Need nodes to agree?
         v
 Consensus
 
-
 Need one leader?
         |
         v
 Leader Election
 
-
 Need ordered replicated data?
         |
         v
 Raft/Paxos
-
 
 Need multiple services commit together?
         |
@@ -897,7 +891,7 @@ Distributed Transaction
 
 ---
 
-# Interview Answer
+## Interview Answer
 
 A strong answer:
 

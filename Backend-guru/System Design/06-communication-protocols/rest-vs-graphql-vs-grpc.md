@@ -21,7 +21,7 @@ Interviewers want to know whether you understand these trade-offs instead of tre
 
 ---
 
-# REST
+## REST
 
 REST models everything as **resources** exposed through URLs and manipulated using standard HTTP methods.
 
@@ -91,7 +91,7 @@ As applications grow, backend teams often create custom endpoints for every UI s
 
 ---
 
-# GraphQL
+## GraphQL
 
 GraphQL exposes a single endpoint, typically:
 
@@ -240,7 +240,7 @@ GraphQL introduces new challenges:
 
 ---
 
-# gRPC
+## gRPC
 
 gRPC is Google's high-performance RPC framework.
 
@@ -385,7 +385,7 @@ gRPC is less suitable for public APIs because:
 
 ---
 
-# Comparison
+## Comparison
 
 | Feature | REST | GraphQL | gRPC |
 |---|---|---|---|
@@ -404,7 +404,7 @@ gRPC is less suitable for public APIs because:
 
 ---
 
-# Which should you choose?
+## Which should you choose?
 
 Choose **REST** when:
 
@@ -431,7 +431,7 @@ Many organizations use all three simultaneously.
 
 ---
 
-# Common interview follow-ups
+## Common interview follow-ups
 
 ### Q: Why not use gRPC everywhere?
 

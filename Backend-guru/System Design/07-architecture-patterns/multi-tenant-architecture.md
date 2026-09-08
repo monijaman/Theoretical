@@ -11,7 +11,7 @@ Interviewers ask this topic because "multi-tenant" isn't one architecture. The r
 
 ---
 
-# Why Multi-Tenancy Exists
+## Why Multi-Tenancy Exists
 
 Without multi-tenancy, every customer gets their own deployment.
 
@@ -67,7 +67,7 @@ That is the entire multi-tenant problem.
 
 ---
 
-# The Three Isolation Models
+## The Three Isolation Models
 
 There are three common approaches.
 
@@ -87,7 +87,7 @@ Lower Cost
 
 ---
 
-# 1. Silo Model (Database Per Tenant)
+## 1. Silo Model (Database Per Tenant)
 
 Every tenant receives its own dedicated database.
 
@@ -98,13 +98,11 @@ App
  |
 DB A
 
-
 Tenant B
 
 App
  |
 DB B
-
 
 Tenant C
 
@@ -142,7 +140,7 @@ Someone has to migrate all of them.
 
 ---
 
-# 2. Pool Model (Shared Database)
+## 2. Pool Model (Shared Database)
 
 All tenants share one database.
 
@@ -201,7 +199,7 @@ This is by far the most common SaaS model.
 
 ---
 
-# 3. Bridge Model (Hybrid)
+## 3. Bridge Model (Hybrid)
 
 Most tenants share infrastructure.
 
@@ -232,7 +230,7 @@ Enterprise usually pays for dedicated infrastructure.
 
 ---
 
-# Isolation Comparison
+## Isolation Comparison
 
 ```text
 Isolation
@@ -266,7 +264,7 @@ Higher isolation almost always means higher operational cost.
 
 ---
 
-# Tenant Identification
+## Tenant Identification
 
 Every request must identify the tenant.
 
@@ -313,7 +311,7 @@ Common for internal APIs.
 
 ---
 
-# Tenant Routing
+## Tenant Routing
 
 Once the tenant is identified, the application decides where the data lives.
 
@@ -387,7 +385,7 @@ This routing decision happens before executing business logic.
 
 ---
 
-# The Noisy Neighbor Problem
+## The Noisy Neighbor Problem
 
 In pooled databases, every tenant shares resources.
 
@@ -429,7 +427,7 @@ Another tenant consumed the shared resources.
 
 ---
 
-# Mitigating Noisy Neighbors
+## Mitigating Noisy Neighbors
 
 Common strategies include:
 
@@ -445,7 +443,7 @@ Many SaaS companies automatically promote very large customers into dedicated in
 
 ---
 
-# Row-Level Security (RLS)
+## Row-Level Security (RLS)
 
 The biggest danger in pooled databases is forgetting the tenant filter.
 
@@ -499,7 +497,7 @@ This is much safer than relying solely on application code.
 
 ---
 
-# Data Residency
+## Data Residency
 
 Some countries require customer data to remain inside specific geographic regions.
 
@@ -537,7 +535,7 @@ A single shared database often cannot satisfy these legal requirements.
 
 ---
 
-# Compliance Requirements
+## Compliance Requirements
 
 Enterprise customers may require:
 
@@ -554,7 +552,7 @@ Dedicated databases make compliance audits significantly easier.
 
 ---
 
-# Tenant Migration
+## Tenant Migration
 
 Eventually a tenant may outgrow the shared pool.
 
@@ -590,7 +588,7 @@ The tenant continues using the same API.
 
 ---
 
-# Typical SaaS Evolution
+## Typical SaaS Evolution
 
 ```text
 Startup
@@ -620,7 +618,7 @@ Most companies evolve naturally through these stages.
 
 ---
 
-# Comparison Table
+## Comparison Table
 
 | Feature | Silo | Pool | Bridge |
 |----------|-------|-------|--------|
@@ -635,7 +633,7 @@ Most companies evolve naturally through these stages.
 
 ---
 
-# When to Choose Each
+## When to Choose Each
 
 ## Choose Silo when
 
@@ -665,7 +663,7 @@ This is the architecture most mature SaaS companies eventually adopt.
 
 ---
 
-# Best Practices
+## Best Practices
 
 - Always identify the tenant early in the request lifecycle.
 - Never trust client-provided tenant IDs without authentication.
@@ -680,7 +678,7 @@ This is the architecture most mature SaaS companies eventually adopt.
 
 ---
 
-# Common Interview Questions
+## Common Interview Questions
 
 ### Q: What's the biggest risk in a pooled database?
 

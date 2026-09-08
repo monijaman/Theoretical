@@ -109,7 +109,7 @@ This is the distributed transaction problem.
 
 ---
 
-# Solution 1: Two-Phase Commit (2PC)
+## Solution 1: Two-Phase Commit (2PC)
 
 Two-Phase Commit tries to make multiple databases behave like one transaction.
 
@@ -132,7 +132,7 @@ Architecture:
 
 ---
 
-# Phase 1: Prepare Phase
+## Phase 1: Prepare Phase
 
 The coordinator asks every service:
 
@@ -206,7 +206,7 @@ Courier unavailable
 
 ---
 
-# Phase 2: Commit or Abort
+## Phase 2: Commit or Abort
 
 Coordinator checks responses.
 
@@ -239,7 +239,7 @@ Nothing
 
 ---
 
-# The Major Problem With 2PC
+## The Major Problem With 2PC
 
 ## Coordinator Failure
 
@@ -270,11 +270,9 @@ Payment:
 
 "I promised to commit"
 
-
 Inventory:
 
 "I promised to commit"
-
 
 Shipping:
 
@@ -315,7 +313,7 @@ This is the fundamental weakness of 2PC.
 
 ---
 
-# Why Microservices Avoid 2PC
+## Why Microservices Avoid 2PC
 
 Microservices usually avoid 2PC because:
 
@@ -375,7 +373,7 @@ Order cannot complete
 
 ---
 
-# Solution 2: Saga Pattern
+## Solution 2: Saga Pattern
 
 Saga breaks one distributed transaction into multiple local transactions.
 
@@ -397,12 +395,10 @@ Payment.charge($50)
 
 SUCCESS
 
-
 Step 2:
 Inventory.reserve()
 
 SUCCESS
-
 
 Step 3:
 Shipping.create()
@@ -462,13 +458,13 @@ Refund Payment
 
 ---
 
-# Types of Saga
+## Types of Saga
 
 There are two common approaches.
 
 ---
 
-# 1. Choreography Saga
+## 1. Choreography Saga
 
 No central controller.
 
@@ -536,7 +532,7 @@ Finding the state of an order becomes difficult.
 
 ---
 
-# 2. Orchestration Saga
+## 2. Orchestration Saga
 
 A central orchestrator controls the workflow.
 
@@ -544,7 +540,6 @@ Architecture:
 
 ```
               Saga Orchestrator
-
 
         /          |          \
 
@@ -610,7 +605,7 @@ for complex workflows.
 
 ---
 
-# TCC: Try-Confirm-Cancel
+## TCC: Try-Confirm-Cancel
 
 TCC is a special type of Saga.
 
@@ -695,7 +690,7 @@ Cancellation is often simpler.
 
 ---
 
-# Comparison Table
+## Comparison Table
 
 | Feature | 2PC | Saga | TCC |
 |---|---|---|---|
@@ -708,7 +703,7 @@ Cancellation is often simpler.
 
 ---
 
-# Common Interview Questions
+## Common Interview Questions
 
 ## Why is Saga eventually consistent?
 
@@ -719,7 +714,6 @@ Example:
 ```
 Payment:
 Completed
-
 
 Order:
 Processing
@@ -803,7 +797,7 @@ Avoid it for:
 
 ---
 
-# Simple Rule to Remember
+## Simple Rule to Remember
 
 ```
 Single Database
@@ -811,18 +805,15 @@ Single Database
         v
 ACID Transaction
 
-
 Multiple Microservices
         |
         v
 Saga Pattern
 
-
 Need Temporary Reservation
         |
         v
 TCC
-
 
 Need Strict Atomicity
         |
@@ -832,7 +823,7 @@ Need Strict Atomicity
 
 ---
 
-# Interview Answer
+## Interview Answer
 
 For modern microservices:
 

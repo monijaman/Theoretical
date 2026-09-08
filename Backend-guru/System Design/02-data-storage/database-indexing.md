@@ -26,7 +26,7 @@ Indexes are a trade-off.
 
 ---
 
-# What Is a Database Index?
+## What Is a Database Index?
 
 An index is a separate data structure that helps the database find rows faster.
 
@@ -98,7 +98,7 @@ O(log n)
 
 ---
 
-# How an Index Works Internally
+## How an Index Works Internally
 
 Most relational databases use:
 
@@ -146,7 +146,7 @@ Found 60
 
 ---
 
-# B-Tree Index
+## B-Tree Index
 
 B-tree is the default index type in:
 
@@ -205,7 +205,7 @@ Can use an index.
 
 ---
 
-# Why B-Tree Is Fast
+## Why B-Tree Is Fast
 
 A B-tree node stores many values.
 
@@ -216,11 +216,9 @@ Example:
 
        1-1000 values
 
-
              Children
 
        1000-2000 values
-
 
              Leaves
 
@@ -237,7 +235,7 @@ to find data.
 
 ---
 
-# Hash Index
+## Hash Index
 
 A hash index uses:
 
@@ -323,7 +321,7 @@ B-tree is preferred most of the time.
 
 ---
 
-# LSM Tree Indexes
+## LSM Tree Indexes
 
 Some databases optimize for very high write volume.
 
@@ -343,7 +341,7 @@ LSM Tree
 
 ---
 
-# How LSM Works
+## How LSM Works
 
 Write flow:
 
@@ -391,7 +389,7 @@ Large optimized SSTable
 
 ---
 
-# Why LSM Is Good for Writes
+## Why LSM Is Good for Writes
 
 B-tree:
 
@@ -444,7 +442,7 @@ Trade-off:
 
 ---
 
-# Composite Indexes
+## Composite Indexes
 
 A composite index contains multiple columns.
 
@@ -473,7 +471,7 @@ It is not three separate indexes.
 
 ---
 
-# Leftmost Prefix Rule
+## Leftmost Prefix Rule
 
 A composite index works from left to right.
 
@@ -534,7 +532,7 @@ The database cannot jump directly to status.
 
 ---
 
-# Choosing Column Order
+## Choosing Column Order
 
 Example query:
 
@@ -598,7 +596,7 @@ ORDER BY created_at
 
 ---
 
-# Covering Index
+## Covering Index
 
 A covering index contains all data needed by a query.
 
@@ -672,7 +670,7 @@ Faster.
 
 ---
 
-# When Indexes Hurt
+## When Indexes Hurt
 
 Indexes are not free.
 
@@ -744,7 +742,7 @@ Too many indexes can remove useful data from cache.
 
 ---
 
-# Query Planner and EXPLAIN
+## Query Planner and EXPLAIN
 
 The database decides:
 
@@ -804,7 +802,7 @@ Index is better.
 
 ---
 
-# EXPLAIN Example
+## EXPLAIN Example
 
 ```sql
 EXPLAIN ANALYZE
@@ -882,7 +880,7 @@ ANALYZE users;
 
 ---
 
-# Full Text Search Indexes
+## Full Text Search Indexes
 
 B-tree is not good for:
 
@@ -919,7 +917,6 @@ database
 
 Doc1, Doc2
 
-
 indexing
 
  ↓
@@ -942,7 +939,7 @@ Common for:
 
 ---
 
-# Index Type Comparison
+## Index Type Comparison
 
 | Index Type | Equality | Range | Write Cost | Use Case |
 |-|-|-|-|-|
@@ -953,7 +950,7 @@ Common for:
 
 ---
 
-# Common Interview Questions
+## Common Interview Questions
 
 ## Q: Why not add indexes everywhere?
 
@@ -1034,7 +1031,6 @@ Index:
 
 original email values
 
-
 Query:
 
 modified email values
@@ -1048,7 +1044,7 @@ Create a functional index.
 
 ---
 
-# Key Takeaways
+## Key Takeaways
 
 Remember these points:
 
@@ -1063,7 +1059,6 @@ Remember these points:
 9. LSM trees trade read complexity for extremely fast writes.
 10. The best index is designed around actual query patterns.
 ````
-
 
 ## Related topics
 - [Database Sharding](database-sharding.md)

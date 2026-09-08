@@ -51,7 +51,7 @@ because network messages can be delayed.
 
 ---
 
-# Example Problem
+## Example Problem
 
 Two workers process the same job.
 
@@ -61,7 +61,6 @@ Without a lock:
 Worker A
 
 Process payment
-
 
 Worker B
 
@@ -83,7 +82,7 @@ at a time
 
 ---
 
-# The Real Challenge
+## The Real Challenge
 
 Getting a lock is easy.
 
@@ -124,7 +123,7 @@ This breaks mutual exclusion.
 
 ---
 
-# Redis Distributed Lock
+## Redis Distributed Lock
 
 A common implementation uses:
 
@@ -145,7 +144,6 @@ NX:
 
 Only create if lock does not exist
 
-
 PX 30000:
 
 Expire after 30 seconds
@@ -153,7 +151,7 @@ Expire after 30 seconds
 
 ---
 
-# Lock Release
+## Lock Release
 
 Never simply do:
 
@@ -170,9 +168,7 @@ Client A gets lock
 
 TTL expires
 
-
 Client B gets lock
-
 
 Client A sends DEL
 ```
@@ -218,7 +214,7 @@ end
 
 ---
 
-# Problem With Redis TTL Locks
+## Problem With Redis TTL Locks
 
 TTL creates a dangerous situation.
 
@@ -231,11 +227,9 @@ Acquire lock
 
 TTL = 10 seconds
 
-
 Client A:
 
 Starts database update
-
 
 Client A:
 
@@ -274,7 +268,7 @@ The lock failed.
 
 ---
 
-# Redlock
+## Redlock
 
 Redlock tries to improve Redis locks.
 
@@ -329,15 +323,11 @@ Client A gets lock
 
 TTL = 10 seconds
 
-
 Client A freezes for 20 seconds
-
 
 Lock expires
 
-
 Client B gets lock
-
 
 Client A wakes up
 ```
@@ -352,7 +342,7 @@ Adding more Redis nodes does not solve this.
 
 ---
 
-# The Real Solution: Fencing Tokens
+## The Real Solution: Fencing Tokens
 
 A fencing token is a number that increases every time a lock is acquired.
 
@@ -412,30 +402,24 @@ The lock service alone cannot guarantee safety.
 
 ---
 
-# Fencing Token Example
+## Fencing Token Example
 
 ```
 Lock Service
 
-
 Client A
 Token: 33
-
 
         |
         |
       Pause
 
-
 Client B
 Token: 34
-
-
 
 Database:
 
 Last accepted token = 34
-
 
 A writes token 33
 
@@ -444,7 +428,7 @@ Rejected
 
 ---
 
-# ZooKeeper Distributed Locks
+## ZooKeeper Distributed Locks
 
 ZooKeeper provides safer locking primitives.
 
@@ -496,7 +480,7 @@ Fencing token
 
 ---
 
-# etcd Distributed Locks
+## etcd Distributed Locks
 
 etcd uses:
 
@@ -540,7 +524,7 @@ which can be used as fencing tokens.
 
 ---
 
-# Redis vs ZooKeeper vs etcd
+## Redis vs ZooKeeper vs etcd
 
 | Approach | Safety | Fencing Token | Complexity | Best For |
 |-|-|-|-|-|
@@ -551,7 +535,7 @@ which can be used as fencing tokens.
 
 ---
 
-# When To Use Redis Locks
+## When To Use Redis Locks
 
 Redis locks are fine when:
 
@@ -570,7 +554,7 @@ Run scheduled job once
 
 ---
 
-# When NOT To Use Redis Locks
+## When NOT To Use Redis Locks
 
 Avoid Redis locks for:
 
@@ -583,7 +567,7 @@ Because a rare lock failure can create data corruption.
 
 ---
 
-# Distributed Lock vs Leader Election
+## Distributed Lock vs Leader Election
 
 They are related.
 
@@ -615,7 +599,7 @@ because they provide stronger guarantees.
 
 ---
 
-# Common Interview Questions
+## Common Interview Questions
 
 ## Q: Why doesn't Redlock completely solve the problem?
 
@@ -684,7 +668,7 @@ when possible.
 
 ---
 
-# Simple Rule To Remember
+## Simple Rule To Remember
 
 ```
 Need a simple best-effort lock
@@ -692,18 +676,15 @@ Need a simple best-effort lock
         v
 Redis
 
-
 Need correctness under failure
         |
         v
 ZooKeeper / etcd
 
-
 Need multiple writers safely
         |
         v
 Fencing Tokens
-
 
 Need choosing a leader
         |
@@ -713,10 +694,9 @@ Consensus algorithms
 
 ---
 
-# Interview Answer
+## Interview Answer
 
 > "A distributed lock is difficult because there is no shared memory and failures are ambiguous. A simple Redis SETNX lock works for best-effort cases but can fail when a client pauses beyond the TTL. For correctness-critical operations, I would use a coordination system like ZooKeeper or etcd with fencing tokens, so the protected resource can reject stale writers even if an old client wakes up later."
-
 
 ## Related topics
 - [Leader Election](leader-election.md) — often implemented as "hold this lock to be leader," with the same failure modes

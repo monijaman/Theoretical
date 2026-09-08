@@ -3,7 +3,7 @@
 
 ---
 
-# Event-Driven Architecture
+## Event-Driven Architecture
 
 ## What is Event-Driven Architecture?
 
@@ -39,7 +39,7 @@ Many modern systems (Uber, Netflix, Amazon, Airbnb) rely heavily on event-driven
 
 ---
 
-# Traditional Request/Response vs Event-Driven
+## Traditional Request/Response vs Event-Driven
 
 ## Traditional Synchronous Flow
 
@@ -97,7 +97,7 @@ Advantages:
 
 ---
 
-# Core Components
+## Core Components
 
 An event-driven system usually contains four parts.
 
@@ -184,7 +184,7 @@ The second is a command.
 
 ---
 
-# Event Notification vs Event-Carried State Transfer
+## Event Notification vs Event-Carried State Transfer
 
 One of the most common interview questions.
 
@@ -275,7 +275,7 @@ Most mature systems use **Event-Carried State Transfer**.
 
 ---
 
-# Choreography vs Orchestration
+## Choreography vs Orchestration
 
 Another favorite interview topic.
 
@@ -370,7 +370,7 @@ Examples:
 
 ---
 
-# Event Broker
+## Event Broker
 
 The broker sits between producers and consumers.
 
@@ -398,7 +398,7 @@ That's the biggest advantage of EDA.
 
 ---
 
-# Eventual Consistency
+## Eventual Consistency
 
 EDA is usually **eventually consistent**.
 
@@ -480,7 +480,7 @@ Events that repeatedly fail are moved to a DLQ for investigation instead of bloc
 
 ---
 
-# Benefits
+## Benefits
 
 - Loose coupling
 - Independent deployments
@@ -494,7 +494,7 @@ Events that repeatedly fail are moved to a DLQ for investigation instead of bloc
 
 ---
 
-# Challenges
+## Challenges
 
 - Eventual consistency
 - More difficult debugging
@@ -507,7 +507,7 @@ Events that repeatedly fail are moved to a DLQ for investigation instead of bloc
 
 ---
 
-# Real-World Examples
+## Real-World Examples
 
 ## E-commerce
 
@@ -595,7 +595,7 @@ One event triggers many independent services.
 
 ---
 
-# Best Practices
+## Best Practices
 
 - Design immutable events
 - Keep event names meaningful
@@ -610,7 +610,7 @@ One event triggers many independent services.
 
 ---
 
-# Advantages vs Disadvantages
+## Advantages vs Disadvantages
 
 | Advantages | Disadvantages |
 |------------|---------------|
@@ -623,7 +623,7 @@ One event triggers many independent services.
 
 ---
 
-# Interview Cheat Sheet
+## Interview Cheat Sheet
 
 ### When should you use Event-Driven Architecture?
 
@@ -658,7 +658,7 @@ But you lose:
 
 ---
 
-# Common Interview Questions
+## Common Interview Questions
 
 ### Why use a message broker instead of HTTP?
 
@@ -698,7 +698,7 @@ Use:
 
 ---
 
-# Key Takeaways
+## Key Takeaways
 
 - Events represent **facts**, not commands.
 - Producers publish events without knowing who consumes them.

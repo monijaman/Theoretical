@@ -279,7 +279,7 @@ It is one of the foundational reliability patterns in microservice architectures
 
 ---
 
-# Common interview follow-ups
+## Common interview follow-ups
 
 ### Q: Why can't I publish after committing the database?
 

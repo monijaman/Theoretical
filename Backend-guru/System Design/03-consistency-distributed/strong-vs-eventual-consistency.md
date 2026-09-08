@@ -23,7 +23,7 @@ Interviewers ask this topic to check whether you understand that consistency is 
 
 ---
 
-# Strong vs Eventual Consistency
+## Strong vs Eventual Consistency
 
 ## Strong Consistency (Linearizability)
 
@@ -65,7 +65,7 @@ Common examples:
 
 ---
 
-# Eventual Consistency
+## Eventual Consistency
 
 Eventual consistency means:
 
@@ -120,7 +120,7 @@ Common examples:
 
 ---
 
-# Consistency Spectrum
+## Consistency Spectrum
 
 ```
 Strongest                                             Weakest
@@ -133,7 +133,7 @@ Different systems choose different points depending on business needs.
 
 ---
 
-# 1. Linearizability
+## 1. Linearizability
 
 The strongest consistency model.
 
@@ -169,7 +169,7 @@ Examples:
 
 ---
 
-# 2. Read-Your-Writes Consistency
+## 2. Read-Your-Writes Consistency
 
 Guarantee:
 
@@ -227,7 +227,7 @@ Wait until:
 
 ---
 
-# 3. Monotonic Reads
+## 3. Monotonic Reads
 
 Guarantee:
 
@@ -252,7 +252,7 @@ Solution:
 
 ---
 
-# 4. Causal Consistency
+## 4. Causal Consistency
 
 Guarantee:
 
@@ -296,7 +296,7 @@ but allows unrelated events to appear in different orders.
 
 ---
 
-# 5. Eventual Consistency
+## 5. Eventual Consistency
 
 The weakest model.
 
@@ -318,7 +318,7 @@ No guarantee about:
 
 ---
 
-# DynamoDB Example
+## DynamoDB Example
 
 DynamoDB provides both consistency models.
 
@@ -362,7 +362,7 @@ Behavior:
 
 ---
 
-# Vector Clocks: Handling Conflicts
+## Vector Clocks: Handling Conflicts
 
 In distributed systems, two replicas may update the same data at the same time.
 
@@ -373,7 +373,6 @@ Replica A:
 
 Shopping Cart:
     Item = Laptop
-
 
 Replica B:
 
@@ -396,7 +395,6 @@ Replica A:
 {
     A:1
 }
-
 
 Replica B:
 
@@ -424,7 +422,7 @@ The application decides how to merge.
 
 ---
 
-# CRDTs (Conflict-Free Replicated Data Types)
+## CRDTs (Conflict-Free Replicated Data Types)
 
 CRDTs solve conflicts automatically.
 
@@ -444,10 +442,8 @@ Three replicas:
 Replica A:
 +5
 
-
 Replica B:
 +3
-
 
 Replica C:
 +2
@@ -489,7 +485,7 @@ Used for:
 
 ---
 
-# When Eventual Consistency Creates Problems
+## When Eventual Consistency Creates Problems
 
 ## Problem 1: "My data disappeared"
 
@@ -520,7 +516,6 @@ First refresh:
 
 Followers = 100
 
-
 Second refresh:
 
 Followers = 99
@@ -542,7 +537,6 @@ Two users edit the same ticket.
 Agent A:
 Status = Resolved
 
-
 Agent B:
 Status = Pending
 ```
@@ -559,7 +553,7 @@ The first update disappears.
 
 ---
 
-# Choosing the Right Consistency Model
+## Choosing the Right Consistency Model
 
 Do not make everything strongly consistent.
 
@@ -581,7 +575,7 @@ Examples:
 
 ---
 
-# Trade-off Summary
+## Trade-off Summary
 
 | Model | Guarantee | Cost | Usage |
 |---|---|---|---|
@@ -593,7 +587,7 @@ Examples:
 
 ---
 
-# Interview Questions
+## Interview Questions
 
 ## Q: If eventual consistency has no time guarantee, why is it useful?
 
@@ -632,7 +626,6 @@ Example:
 ```
 User A:
 Change address → New York
-
 
 User B:
 Change address → London
@@ -692,7 +685,7 @@ It hides replication delay by using:
 
 ---
 
-# Key Takeaway
+## Key Takeaway
 
 Strong consistency gives correctness but costs performance.
 

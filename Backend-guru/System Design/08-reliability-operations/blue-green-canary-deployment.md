@@ -23,7 +23,7 @@ A good deployment strategy isn't just how you release software—it's how safely
 
 ---
 
-# Blue-Green Deployment
+## Blue-Green Deployment
 
 Blue-Green deployment keeps **two identical production environments**.
 
@@ -74,7 +74,7 @@ No redeployment is required.
 
 ---
 
-# Rollback
+## Rollback
 
 If the new version has problems:
 
@@ -102,7 +102,7 @@ Because the old environment still exists, recovery is extremely fast.
 
 ---
 
-# Advantages
+## Advantages
 
 - Near-zero downtime
 - Very fast rollback
@@ -112,7 +112,7 @@ Because the old environment still exists, recovery is extremely fast.
 
 ---
 
-# Disadvantages
+## Disadvantages
 
 - Requires two production environments
 - Higher infrastructure cost
@@ -121,7 +121,7 @@ Because the old environment still exists, recovery is extremely fast.
 
 ---
 
-# Database Challenge
+## Database Challenge
 
 Both environments often share the same database.
 
@@ -171,7 +171,7 @@ This allows both versions to work simultaneously.
 
 ---
 
-# Canary Deployment
+## Canary Deployment
 
 Canary deployment releases the new version to a **small percentage of users first**.
 
@@ -221,7 +221,7 @@ Instead of one large switch, traffic gradually shifts.
 
 ---
 
-# Canary Rollout
+## Canary Rollout
 
 ```text
 Stage 1
@@ -286,7 +286,7 @@ Only a small percentage of users experience the failure.
 
 ---
 
-# What Metrics Are Monitored?
+## What Metrics Are Monitored?
 
 Typical deployment metrics include:
 
@@ -308,7 +308,7 @@ Business metrics are often just as important.
 
 ---
 
-# Automated Canary
+## Automated Canary
 
 Modern platforms automate rollout.
 
@@ -354,7 +354,7 @@ Tools include:
 
 ---
 
-# Advantages
+## Advantages
 
 - Small blast radius
 - Real production traffic
@@ -364,7 +364,7 @@ Tools include:
 
 ---
 
-# Disadvantages
+## Disadvantages
 
 - Slower rollout
 - More complex infrastructure
@@ -373,7 +373,7 @@ Tools include:
 
 ---
 
-# Blue-Green vs Canary
+## Blue-Green vs Canary
 
 Imagine Version 2 has a bug.
 
@@ -407,7 +407,7 @@ Only a small percentage of users are affected.
 
 ---
 
-# Feature Flags
+## Feature Flags
 
 Feature flags solve a different problem.
 
@@ -447,7 +447,7 @@ Only the flag changes.
 
 ---
 
-# Example
+## Example
 
 Infrastructure:
 
@@ -483,7 +483,7 @@ These techniques complement each other.
 
 ---
 
-# Advantages of Feature Flags
+## Advantages of Feature Flags
 
 - Instant rollback
 - No redeployment
@@ -513,7 +513,7 @@ Employees only
 
 ---
 
-# Disadvantages
+## Disadvantages
 
 Every flag adds code complexity.
 
@@ -537,7 +537,7 @@ Unused flags should be removed after rollout.
 
 ---
 
-# Comparison
+## Comparison
 
 | Feature | Blue-Green | Canary | Feature Flags |
 |----------|------------|---------|---------------|
@@ -550,7 +550,7 @@ Unused flags should be removed after rollout.
 
 ---
 
-# When to Choose Blue-Green
+## When to Choose Blue-Green
 
 Choose Blue-Green when:
 
@@ -567,7 +567,7 @@ Examples:
 
 ---
 
-# When to Choose Canary
+## When to Choose Canary
 
 Choose Canary when:
 
@@ -586,7 +586,7 @@ Examples:
 
 ---
 
-# When to Use Feature Flags
+## When to Use Feature Flags
 
 Feature flags are ideal for:
 
@@ -601,7 +601,7 @@ Feature flags control **who sees the feature**, not **which version is deployed*
 
 ---
 
-# Hybrid Strategy
+## Hybrid Strategy
 
 Many companies combine all three techniques.
 
@@ -645,7 +645,7 @@ Each layer reduces deployment risk further.
 
 ---
 
-# Comparison Summary
+## Comparison Summary
 
 ```text
 Blue-Green
@@ -654,13 +654,11 @@ Fast rollback
 High cost
 Large blast radius
 
-
 Canary
 
 Small blast radius
 Slower rollout
 Excellent safety
-
 
 Feature Flags
 
@@ -671,7 +669,7 @@ Code complexity
 
 ---
 
-# Best Practices
+## Best Practices
 
 - Monitor both technical and business metrics.
 - Automate rollback whenever possible.
@@ -684,7 +682,7 @@ Code complexity
 
 ---
 
-# Common Interview Questions
+## Common Interview Questions
 
 ### Q: When should you choose Blue-Green instead of Canary?
 

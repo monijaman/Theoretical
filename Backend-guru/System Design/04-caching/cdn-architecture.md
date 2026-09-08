@@ -4,7 +4,7 @@
 
 ---
 
-# What is a CDN?
+## What is a CDN?
 
 A **Content Delivery Network (CDN)** is a globally distributed network of servers that stores cached copies of your content closer to users.
 
@@ -14,7 +14,7 @@ Instead of every request traveling to your origin server, users are served by th
 
 ---
 
-# Why It Matters
+## Why It Matters
 
 Without a CDN:
 
@@ -67,7 +67,7 @@ Benefits include:
 
 ---
 
-# How a CDN Works
+## How a CDN Works
 
 ## Step 1 — User Requests Content
 
@@ -129,7 +129,7 @@ Future requests are served directly from the edge cache.
 
 ---
 
-# CDN Architecture Overview
+## CDN Architecture Overview
 
 ```text
                 Users Worldwide
@@ -149,7 +149,7 @@ Each edge server stores cached content for nearby users.
 
 ---
 
-# Edge Points of Presence (PoPs)
+## Edge Points of Presence (PoPs)
 
 A **Point of Presence (PoP)** is a CDN data center located close to users.
 
@@ -185,7 +185,7 @@ This significantly reduces network travel time.
 
 ---
 
-# Anycast Routing
+## Anycast Routing
 
 ## Problem
 
@@ -248,7 +248,7 @@ All users connect to the same IP address, but reach different physical servers.
 
 ---
 
-# DNS-Based Routing
+## DNS-Based Routing
 
 Some CDNs use DNS instead.
 
@@ -280,7 +280,7 @@ Modern CDNs primarily rely on Anycast.
 
 ---
 
-# Cache-Control Headers
+## Cache-Control Headers
 
 The origin server tells the CDN how long content can be cached.
 
@@ -301,7 +301,7 @@ stale-if-error=86400
 
 ---
 
-# Common Cache-Control Directives
+## Common Cache-Control Directives
 
 ## max-age
 
@@ -398,7 +398,7 @@ Used for:
 
 ---
 
-# Origin Shield
+## Origin Shield
 
 ## Problem
 
@@ -475,7 +475,7 @@ The origin receives far fewer requests.
 
 ---
 
-# Pull CDN
+## Pull CDN
 
 ## Idea
 
@@ -527,7 +527,7 @@ The very first request always experiences a cache miss.
 
 ---
 
-# Push CDN
+## Push CDN
 
 ## Idea
 
@@ -583,7 +583,7 @@ No cache miss occurs.
 
 ---
 
-# CDN Cache Invalidation
+## CDN Cache Invalidation
 
 Eventually cached content becomes outdated.
 
@@ -655,7 +655,7 @@ Much slower because it affects many edge servers.
 
 ---
 
-# Why Purging Isn't Instant
+## Why Purging Isn't Instant
 
 A CDN may have hundreds of PoPs.
 
@@ -693,7 +693,7 @@ Others may take a few seconds.
 
 ---
 
-# Dynamic Content Acceleration
+## Dynamic Content Acceleration
 
 CDNs help even when content cannot be cached.
 
@@ -749,7 +749,7 @@ Even uncached requests become faster.
 
 ---
 
-# Layered Web Architecture
+## Layered Web Architecture
 
 ```text
 User
@@ -787,7 +787,7 @@ Each layer reduces load on the next.
 
 ---
 
-# CDN Features at a Glance
+## CDN Features at a Glance
 
 | Feature | Purpose |
 |----------|---------|
@@ -802,7 +802,7 @@ Each layer reduces load on the next.
 
 ---
 
-# Common Interview Questions
+## Common Interview Questions
 
 ## Why use a CDN?
 
@@ -887,7 +887,7 @@ Besides caching static assets, modern CDNs also accelerate dynamic requests usin
 
 ---
 
-# Key Takeaways
+## Key Takeaways
 
 - A **CDN** is a globally distributed network of edge servers that caches content closer to users.
 - **Edge PoPs** reduce latency by serving requests from nearby geographic locations.
@@ -898,7 +898,6 @@ Besides caching static assets, modern CDNs also accelerate dynamic requests usin
 - **Cache purging** removes outdated content from edge servers but takes time to propagate globally.
 - Modern CDNs also accelerate **dynamic, uncached traffic**, making them valuable even beyond static content delivery.
 ````
-
 
 ## Related topics
 - [Caching Strategies](caching-strategies.md)

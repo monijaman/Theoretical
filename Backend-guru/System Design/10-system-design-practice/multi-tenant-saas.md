@@ -86,8 +86,8 @@ Response: 201
 GET /api/v1/tenants/{tenant_id}/status
 Response: 200 { "tenant_id": "t_9f2a", "status": "active", "isolation_tier": "pooled_shard_3" }
 
-# All product-facing endpoints are implicitly tenant-scoped via the resolved tenant_id (subdomain/JWT claim),
-# never via a client-supplied tenant_id parameter (which would allow a client to simply request another tenant's data):
+## All product-facing endpoints are implicitly tenant-scoped via the resolved tenant_id (subdomain/JWT claim),
+## never via a client-supplied tenant_id parameter (which would allow a client to simply request another tenant's data):
 GET /api/v1/projects
 Headers: Host: acme.ourapp.com  (or Authorization: Bearer <jwt with tenant_id claim>)
 Response: 200 { "projects": [ { "project_id": "p_44", "name": "Q3 Launch" } ] }   // only Acme's projects, ever

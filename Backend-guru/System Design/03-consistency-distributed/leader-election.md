@@ -26,7 +26,6 @@ Leader A:
 
 Accepts writes
 
-
 Leader B:
 
 Also accepts writes
@@ -36,7 +35,7 @@ Now data can become inconsistent.
 
 ---
 
-# Why Leader Election Is Hard
+## Why Leader Election Is Hard
 
 A simple idea:
 
@@ -85,9 +84,7 @@ Safety
 
 (no two leaders)
 
-
 and
-
 
 Liveness
 
@@ -96,7 +93,7 @@ Liveness
 
 ---
 
-# Raft Leader Election
+## Raft Leader Election
 
 Raft is used by:
 
@@ -113,7 +110,7 @@ Raft uses:
 
 ---
 
-# Raft States
+## Raft States
 
 Every node is one of:
 
@@ -127,7 +124,7 @@ Leader
 
 ---
 
-# Raft Election Flow
+## Raft Election Flow
 
 Initially:
 
@@ -204,7 +201,7 @@ Leader
 
 ---
 
-# Raft Heartbeats
+## Raft Heartbeats
 
 The leader sends regular heartbeats.
 
@@ -230,7 +227,7 @@ Followers reset their election timers.
 
 ---
 
-# Terms: Raft Logical Clock
+## Terms: Raft Logical Clock
 
 A term is a number that increases over time.
 
@@ -286,7 +283,7 @@ Two leaders existing forever
 
 ---
 
-# ZooKeeper Leader Election
+## ZooKeeper Leader Election
 
 ZooKeeper uses:
 
@@ -370,7 +367,7 @@ ZooKeeper avoids this by watching only the previous node.
 
 ---
 
-# etcd Leader Election
+## etcd Leader Election
 
 etcd uses:
 
@@ -432,7 +429,7 @@ New candidate wins
 
 ---
 
-# Split Brain Problem
+## Split Brain Problem
 
 Split brain happens when two groups think they are leaders.
 
@@ -476,7 +473,7 @@ Only one leader can exist
 
 ---
 
-# Why Majority Is Required
+## Why Majority Is Required
 
 For a cluster:
 
@@ -532,7 +529,7 @@ The overlap prevents conflicting decisions.
 
 ---
 
-# Leader Timeout Trade-off
+## Leader Timeout Trade-off
 
 Election timeout affects behavior.
 
@@ -584,7 +581,7 @@ Slow recovery
 
 ---
 
-# Real Systems
+## Real Systems
 
 | System | Algorithm | Usage |
 |-|-|-|
@@ -596,7 +593,7 @@ Slow recovery
 
 ---
 
-# Leader Election vs Distributed Lock
+## Leader Election vs Distributed Lock
 
 They are related.
 
@@ -620,7 +617,7 @@ Both require:
 
 ---
 
-# Why Not Use Redis Lock for Leader Election?
+## Why Not Use Redis Lock for Leader Election?
 
 A Redis lock:
 
@@ -639,9 +636,7 @@ Pause happens
 
 TTL expires
 
-
 Leader B gets lock
-
 
 Leader A wakes up
 ```
@@ -662,7 +657,7 @@ Consensus-based systems avoid this using:
 
 ---
 
-# Common Interview Questions
+## Common Interview Questions
 
 ## Q: How does Raft prevent old leaders?
 
@@ -736,7 +731,7 @@ Consensus algorithms solve this agreement problem.
 
 ---
 
-# Simple Rule To Remember
+## Simple Rule To Remember
 
 ```
 Need one coordinator?
@@ -744,18 +739,15 @@ Need one coordinator?
         v
 Leader Election
 
-
 Need replicas agree?
         |
         v
 Consensus
 
-
 Need prevent two leaders?
         |
         v
 Majority + Terms
-
 
 Need Kubernetes coordination?
         |
@@ -765,7 +757,7 @@ etcd/Raft
 
 ---
 
-# Interview Answer
+## Interview Answer
 
 > "Leader election is the process of choosing one node as the coordinator in a distributed system while preventing split brain. Raft uses randomized timeouts, terms, heartbeats, and majority voting to elect a leader safely. Systems like etcd and CockroachDB use Raft because it provides strong guarantees and predictable failure handling."
 

@@ -1,7 +1,6 @@
 
 # Database Replication
 
-
 > **Database Replication** is the process of maintaining multiple copies of the same database on different servers.
 >
 > It improves:
@@ -15,7 +14,7 @@
 
 ---
 
-# Why Do We Need Database Replication?
+## Why Do We Need Database Replication?
 
 Imagine your application has only one database.
 
@@ -51,7 +50,7 @@ Now if one replica fails, others continue serving traffic.
 
 ---
 
-# What is Database Replication?
+## What is Database Replication?
 
 Database replication means copying data from one database server to one or more other servers.
 
@@ -85,7 +84,7 @@ All replicas eventually contain the same data.
 
 ---
 
-# Why Replication is Important
+## Why Replication is Important
 
 Replication provides several major benefits:
 
@@ -98,7 +97,7 @@ Replication provides several major benefits:
 
 ---
 
-# Primary-Replica Architecture
+## Primary-Replica Architecture
 
 This is the most common replication architecture.
 
@@ -132,7 +131,7 @@ This distributes the workload across multiple servers.
 
 ---
 
-# How Replication Works
+## How Replication Works
 
 Step 1
 
@@ -192,13 +191,13 @@ Eventually every replica contains identical data.
 
 ---
 
-# Replication Modes
+## Replication Modes
 
 There are three common replication modes.
 
 ---
 
-# 1. Asynchronous Replication
+## 1. Asynchronous Replication
 
 The Primary immediately responds to the client.
 
@@ -243,7 +242,7 @@ This is the default in many systems.
 
 ---
 
-# 2. Synchronous Replication
+## 2. Synchronous Replication
 
 Primary waits for the replica before responding.
 
@@ -282,7 +281,7 @@ Used in financial systems and other critical applications.
 
 ---
 
-# 3. Semi-Synchronous Replication
+## 3. Semi-Synchronous Replication
 
 A compromise between Async and Sync.
 
@@ -317,7 +316,7 @@ Advantages:
 
 ---
 
-# Replication Comparison
+## Replication Comparison
 
 | Feature | Async | Semi-Sync | Sync |
 |----------|--------|-----------|------|
@@ -329,7 +328,7 @@ Advantages:
 
 ---
 
-# Replication Lag
+## Replication Lag
 
 One of the biggest interview topics.
 
@@ -351,7 +350,7 @@ The delay is called **Replication Lag**.
 
 ---
 
-# Problems Caused by Replication Lag
+## Problems Caused by Replication Lag
 
 ## Read-Your-Own-Write Problem
 
@@ -399,7 +398,7 @@ The data appears to move backward in time.
 
 ---
 
-# Solutions to Replication Lag
+## Solutions to Replication Lag
 
 ## Option 1: Read from Primary
 
@@ -439,7 +438,7 @@ Advanced systems track replication positions (LSN/WAL position) and only read fr
 
 ---
 
-# Failover
+## Failover
 
 Suppose the Primary crashes.
 
@@ -469,7 +468,7 @@ Applications automatically reconnect.
 
 ---
 
-# Failover Process
+## Failover Process
 
 ```
 Primary Dies
@@ -497,7 +496,7 @@ Normal Operation
 
 ---
 
-# Split Brain
+## Split Brain
 
 One of the biggest distributed systems problems.
 
@@ -531,7 +530,7 @@ prevent this by ensuring only one node can become the leader.
 
 ---
 
-# Single Leader Replication
+## Single Leader Replication
 
 Most relational databases use this model.
 
@@ -553,7 +552,7 @@ Disadvantages:
 
 ---
 
-# Multi-Leader Replication
+## Multi-Leader Replication
 
 Multiple databases accept writes.
 
@@ -579,7 +578,7 @@ Common in globally distributed systems.
 
 ---
 
-# Conflict Resolution
+## Conflict Resolution
 
 If two Primaries update the same record:
 
@@ -607,7 +606,7 @@ Common approaches:
 
 ---
 
-# Real-World Examples
+## Real-World Examples
 
 ## PostgreSQL
 
@@ -660,7 +659,7 @@ Producers usually write only to the Leader.
 
 ---
 
-# Advantages
+## Advantages
 
 ✅ High Availability
 
@@ -674,7 +673,7 @@ Producers usually write only to the Leader.
 
 ---
 
-# Disadvantages
+## Disadvantages
 
 ❌ Increased Infrastructure Cost
 
@@ -688,7 +687,7 @@ Producers usually write only to the Leader.
 
 ---
 
-# Replication vs Backup
+## Replication vs Backup
 
 Many beginners confuse these.
 
@@ -705,7 +704,7 @@ If someone deletes data accidentally, replicas will delete it too.
 
 ---
 
-# Common Interview Questions
+## Common Interview Questions
 
 ## Does replication improve write performance?
 
@@ -800,7 +799,7 @@ Purpose:
 
 ---
 
-# Best Practices
+## Best Practices
 
 ✅ Monitor replication lag
 
@@ -816,7 +815,7 @@ Purpose:
 
 ---
 
-# Key Takeaways
+## Key Takeaways
 
 - **Database Replication** keeps multiple copies of the same data.
 - The **Primary** handles writes, while **Replicas** usually serve reads.
