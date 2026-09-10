@@ -1605,5 +1605,8 @@ Each goroutine calculates one value. The `WaitGroup` knows when all calculations
 
 ## Go Order
 https://medium.com/@fonseka.live/how-to-maintain-the-order-of-go-routines-117a5be86c4f
-# Concurrency in Go: Channels and WaitGroups
+## Concurrency in Go: Channels and WaitGroups
 https://medium.com/goturkiye/concurrency-in-go-channels-and-waitgroups-25dd43064d1
+## Concurrency in Go— Goroutines, Channels & WaitGroup
+https://medium.com/@ravikumarray92/concurrency-in-go-goroutines-channels-waitgroup-db6a50b87a04
+
