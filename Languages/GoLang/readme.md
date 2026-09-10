@@ -1600,3 +1600,8 @@ Each goroutine calculates one value. The `WaitGroup` knows when all calculations
 - Use `select` when waiting for a result, timeout, or cancellation.
 
 > **Golden rule:** prefer channels for communication, use mutexes only when you truly share state.
+
+
+
+## Go Order
+https://medium.com/@fonseka.live/how-to-maintain-the-order-of-go-routines-117a5be86c4f
