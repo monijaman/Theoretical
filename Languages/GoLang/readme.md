@@ -1609,4 +1609,11 @@ https://medium.com/@fonseka.live/how-to-maintain-the-order-of-go-routines-117a5b
 https://medium.com/goturkiye/concurrency-in-go-channels-and-waitgroups-25dd43064d1
 ## Concurrency in Go— Goroutines, Channels & WaitGroup
 https://medium.com/@ravikumarray92/concurrency-in-go-goroutines-channels-waitgroup-db6a50b87a04
-
+## Go example
+https://gobyexample.com/
+## Go Concurrency Patterns: A Deep Dive
+https://medium.com/@gopinathr143/go-concurrency-patterns-a-deep-dive-a2750f98a102
+## Advanced Go Concurrency Patterns
+https://go.dev/talks/2013/advconc.slide#1
+## Understanding the Go Scheduler and discovering how it works
+https://medium.com/@sanilkhurana7/understanding-the-go-scheduler-and-looking-at-how-it-works-e431a6daacf
