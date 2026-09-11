@@ -1492,7 +1492,7 @@ setInterval(processOutbox, 2000);
 
 ## 21. Idempotency in APIs
 
-### What is idempotency and how do you design idempotent APIs?
+### How do you charge a customer exactly once across retries, crashes, and concurrent requests?
 
 An operation is **idempotent** if doing it multiple times produces the same result as doing it once.
 
@@ -1504,13 +1504,142 @@ POST /payments        → NOT idempotent — calling twice charges twice
 
 ---
 
-### Why It Matters
+### Interview Scenario
 
-Networks fail. Clients retry. If your payment API isn't idempotent, a retry after a timeout could charge the user twice.
+The client sends:
+
+```http
+POST /payments
+Idempotency-Key: abc123
+```
+
+The application:
+
+1. Checks whether the key was already processed.
+2. Charges the payment provider.
+3. Marks the key as completed.
+
+Now suppose the provider successfully charges the customer, but the application crashes before step 3. The client retries with the same key.
+
+**What happens? Do you charge again? How do you make this safe?**
 
 ---
 
-### Implementing Idempotency Keys
+### Short Answer
+
+With only the three steps above, the customer **can be charged twice**. The retry sees no completed record and sends another charge.
+
+A local database transaction cannot atomically include an external payment provider. The practical solution is to combine:
+
+1. A durable payment-attempt record with a unique idempotency key.
+2. An atomic insert or state transition to control concurrent requests.
+3. The **same idempotency key sent to the payment provider** on every attempt.
+4. Recovery and reconciliation for attempts whose outcome is temporarily unknown.
+
+The provider-side key closes the dangerous crash window: if the first charge succeeded, retrying the provider request with `abc123` returns the original charge instead of creating another one.
+
+---
+
+### Safe Request Flow
+
+```text
+Client sends abc123
+        │
+        ▼
+Insert payment_attempt(abc123, PROCESSING)
+        │
+        ├── key already COMPLETED → return stored response
+        ├── key already PROCESSING → wait, poll, or return 409/202
+        └── new key → call provider with idempotency key abc123
+                              │
+                              ▼
+                    save provider result as COMPLETED
+                              │
+                              ▼
+                         return response
+```
+
+Use a database uniqueness constraint, not a separate read followed by a write:
+
+```sql
+CREATE TABLE payment_attempts (
+  idempotency_key VARCHAR(255) PRIMARY KEY,
+  request_hash    VARCHAR(64) NOT NULL,
+  status          VARCHAR(20) NOT NULL,
+  provider_id     VARCHAR(255),
+  response_json   JSONB,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+The `PRIMARY KEY` makes two concurrent inserts for `abc123` impossible. Store a hash of the amount, currency, customer, and other important input. If someone reuses the same key with a different request, reject it instead of returning an unrelated result.
+
+```js
+async function createPayment(request, idempotencyKey) {
+  const requestHash = hashPaymentRequest(request);
+
+  const { attempt, created } = await insertOrGetAttempt({
+    idempotencyKey,
+    requestHash,
+    status: 'PROCESSING',
+  }); // backed by a UNIQUE/PRIMARY KEY constraint
+
+  if (attempt.requestHash !== requestHash) {
+    throw new ConflictError('Idempotency key was reused with different input');
+  }
+
+  if (attempt.status === 'COMPLETED') {
+    return attempt.responseJson;
+  }
+
+  if (!created) {
+    // Another request owns this attempt. Return 202, or wait briefly and reread it.
+    throw new PaymentStillProcessingError(idempotencyKey);
+  }
+
+  // Crucial: the provider must receive the stable key too.
+  const charge = await paymentProvider.charge(request, {
+    idempotencyKey,
+  });
+
+  return await markCompletedAndReturn(idempotencyKey, charge);
+}
+```
+
+---
+
+### What Happens in Each Failure Case?
+
+| Failure | Safe behavior |
+|---|---|
+| Two requests arrive together | The database unique constraint elects one owner; the other returns the stored result or observes `PROCESSING`. |
+| App crashes before calling provider | The attempt remains `PROCESSING`; recovery can safely retry with the same provider key. |
+| Provider charges, then app crashes | Retry the provider call with the same key or query the provider; it returns the original charge. Then mark the local row `COMPLETED`. |
+| Provider times out with an unknown result | Do not immediately create a new charge. Retry/query using the same key and reconcile by webhook or a background job. |
+| App saves `COMPLETED`, but response is lost | The client retries and receives the stored original response. |
+
+Use explicit states such as `PROCESSING`, `COMPLETED`, `FAILED`, and `UNKNOWN`. A stale `PROCESSING` row must be recoverable through a worker, provider lookup, or webhook rather than being treated as permission to create a fresh charge.
+
+---
+
+### Can You Truly Guarantee Exactly Once?
+
+You normally cannot guarantee exactly-once execution across your database and an external service because they do not share one atomic transaction. What you can guarantee is an **effectively-once business outcome** when the provider supports idempotent requests or a unique merchant reference.
+
+If the provider offers neither idempotency nor lookup by a unique reference, there is an unavoidable ambiguity: after a timeout or crash, the application cannot know whether the charge happened. In that case, use reconciliation and manual review rather than blindly retrying.
+
+Redis may help with speed or short-lived coordination, but it should not be the only source of truth for payments. Locks can expire and cache data can be evicted. Keep the durable attempt and final response in the database, and let provider idempotency prevent duplicate external side effects.
+
+---
+
+### Interview-Ready Answer
+
+> The naive flow can double-charge because the provider charge and our database update are not atomic. I would first insert a durable payment-attempt row keyed by a unique idempotency key, including a hash of the request. That uniqueness constraint handles concurrent requests. I would pass the same key to the payment provider, so if we crash after a successful charge, retrying returns the original provider result rather than charging again. Completed retries return the stored response; in-progress or unknown attempts are recovered by retrying or querying with the same provider key and reconciled through webhooks or a background worker. This provides an effectively-once payment outcome, assuming the provider supports idempotency or lookup by a unique merchant reference.
+
+---
+
+### General API Idempotency
 
 The client sends a unique `Idempotency-Key` header. The server stores the result of the first request. If it sees the same key again, it returns the cached result without re-executing.
 
@@ -1545,6 +1674,8 @@ async function idempotencyMiddleware(req, res, next) {
   next();
 }
 ```
+
+This response-cache middleware is useful for ordinary APIs, but by itself it is **not sufficient for payments** because it still has a gap between the external side effect and caching the response.
 
 ---
 
@@ -7446,7 +7577,7 @@ Use this table as a reminder after studying the explanations. Each entry is a st
 | CQRS | separate read/write models, eventual consistency on read side |
 | Saga | compensating transactions, choreography vs orchestration |
 | Outbox pattern | commit data and event together; retry publication and deduplicate consumers |
-| Idempotency | idempotency keys in Redis, safe retries |
+| Idempotency | durable unique key + request hash + provider-side idempotency; recover unknown outcomes |
 | Pagination | cursor-based for feeds; offset for admin tables |
 | Real-time | SSE for server→client; WebSocket for bidirectional |
 | Concurrency | Cluster for HTTP servers; Worker Threads for CPU work |
