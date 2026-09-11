@@ -1,5 +1,62 @@
 # System Design Interview Questions
 
+This guide turns system-design ideas into practical, interview-ready explanations. Start with the **real-life picture**, identify the invariant that must never break, and then reason about scale, failure, recovery, and trade-offs.
+
+> **Note on sources:** Some original ideas in this guide were inspired by engineering posts and interview discussions shared on LinkedIn. They have been rewritten, expanded, and organized here as personal study notes. Add a link and author credit beside a section whenever the original source is known.
+
+## Index
+
+### Core Reliability Patterns
+
+1. [Exactly-Once Payment Processing](#exactly-once-payment-processing) — prevent double charges after retries and crashes.
+2. [Distributed Locking with Redis](#distributed-locking-with-redis) — coordinate workers without trusting an expired lock owner.
+3. [Timeout Budgets and Cascading Failures](#timeout-budgets-and-cascading-failures) — stop one slow dependency from freezing the system.
+4. [Making the Second Attempt Harmless](#making-the-second-attempt-harmless) — design safe retries and idempotent effects.
+5. [Backpressure](#backpressure-what-happens-when-consumers-fall-behind) — control overload when consumers cannot keep up.
+6. [Liveness, Readiness, and Startup](#liveness-readiness-and-startup-are-different-signals) — send the correct orchestration signal.
+
+### Architecture and Interview Judgment
+
+7. [Start Simple—But Know the Scaling Pressure Points](#start-simplebut-know-the-scaling-pressure-points)
+8. [Design Twitter in 45 Minutes](#design-twitter-in-45-minutes)
+9. [Top 5 Mistakes in Staff+ Interviews](#top-5-mistakes-in-staff-system-design-interviews)
+10. [10 Production Failure Modes](#10-production-failure-modes-every-backend-engineer-should-understand)
+11. [Failing Before Drawing the First Box](#failing-a-staff-interview-before-you-draw-the-first-box)
+12. [L5 vs. L6: What Happens When Your Cache Is Wrong?](#l5-vs-l6-what-happens-when-your-cache-is-wrong)
+13. [Staff Interviews Are Rarely About the Technology](#staff-interviews-are-rarely-about-the-technology)
+
+### Practical Case Studies
+
+14. [Fast Username Availability with a Bloom Filter](#fast-username-availability-checks-with-a-bloom-filter)
+15. [The Double Booking That Should Have Been Impossible](#production-breakdown-the-double-booking-that-should-have-been-impossible)
+16. [When a Cache “Success” Becomes an Outage](#production-breakdown-when-a-cache-success-becomes-an-outage)
+17. [The Query That Was Fine for Two Years](#production-breakdown-the-query-that-was-fine-for-two-years-until-it-wasnt)
+18. [Flash Sale for 10 Million Buyers](#design-a-flash-sale-for-10-million-simultaneous-buyers)
+19. [Food Delivery Events Arrive Out of Order](#food-delivery-events-arrive-out-of-order)
+20. [A Global Rate Limiter During a Login Attack](#a-global-rate-limiter-during-a-login-attack)
+21. [A Viral Video Overloads the Processing Pipeline](#a-viral-video-overloads-the-processing-pipeline)
+
+### Quick Real-Life Map
+
+| System-design idea | Everyday picture | Engineering lesson |
+| --- | --- | --- |
+| Idempotency | Pressing an elevator button twice does not summon two elevators | A retry should not create another business effect. |
+| Distributed lease | A numbered key borrowed for a limited time | Expiry alone is unsafe; the resource must reject an old holder. |
+| Timeout budget | A 30-minute trip with only 10 minutes available for one stop | Every dependency consumes part of one end-to-end deadline. |
+| Backpressure | A supermarket closes the entrance when every checkout line is full | A bounded system must slow or reject producers. |
+| Readiness | A restaurant is open, but the kitchen is not ready to accept orders | Alive and ready to serve are different states. |
+| Atomic inventory | One cashier owns the final concert ticket | The storage operation—not the API clock—decides the winner. |
+
+### How to Study Each Scenario
+
+Use the same five questions every time:
+
+1. **Invariant:** What must never happen?
+2. **Peak load:** What breaks first when traffic jumps 10x or 100x?
+3. **Failure window:** What if the process crashes between two successful steps?
+4. **Recovery:** How do retries, reconciliation, or compensation restore correctness?
+5. **Blast radius:** Can this failure take down unrelated customers or services?
+
 ## Exactly-Once Payment Processing
 
 ### Question
@@ -37,6 +94,10 @@ The safe design combines:
 2. An atomic database insert or state transition for concurrency control.
 3. The same idempotency key sent to the payment provider on every attempt.
 4. Recovery and reconciliation for requests with an unknown outcome.
+
+### Real-Life Picture
+
+Imagine paying at a restaurant terminal. The terminal says **“connection lost”**, but your bank app shows the money was deducted. Pressing Pay again might charge you twice. The correct next step is to look up the first attempt using the same receipt number—not create a new payment. That receipt number is the idempotency key.
 
 ### Why a Database Transaction Is Not Enough
 
@@ -189,6 +250,10 @@ Design a safer solution.
 6. A fencing token enforced by the protected resource when correctness matters.
 
 Even with these controls, Redis locking alone does not create an absolute guarantee during pauses, partitions, or failover. The job handler should also be idempotent, and the durable system receiving the write should reject stale owners.
+
+### Real-Life Picture
+
+Think of a warehouse worker borrowing the only forklift key for 30 minutes. If the worker disappears, the key lease expires and another worker receives a new key. But the first worker may return with an old duplicate. A numbered permit lets the warehouse accept commands only from the newest key holder; that number is the fencing token.
 
 ### Why Plain `SETNX` Fails
 
@@ -354,6 +419,10 @@ The useful production questions are:
 Without those answers, timeouts may protect the wrong component—or protect nothing at all.
 
 **Discussion question:** Where have you seen a supposedly safe timeout quietly make an outage worse?
+
+### Real-Life Picture
+
+A food delivery promises arrival within 30 minutes. If the restaurant uses 28 minutes preparing the meal, the driver cannot still spend 15 minutes collecting it and meet the promise. The 30 minutes is the end-to-end deadline; preparation, pickup, and travel each need a smaller budget.
 
 ### How a Slow Dependency Becomes a System-Wide Outage
 
@@ -534,6 +603,10 @@ This is why “just add retries” is incomplete. A production design must answe
 
 The hard part is rarely the first attempt. It is making the second attempt harmless.
 
+### Real-Life Picture
+
+Pressing an elevator button repeatedly expresses one intention: **take me upstairs**. A good controller lights the button once and sends one elevator. It does not create a new trip for every press. Network retries should behave the same way.
+
 **Discussion question:** Where have you seen retries cause more damage than the original failure?
 
 ### Classify the Operation Before Retrying
@@ -680,6 +753,10 @@ An average design says, “We will add a queue.” A stronger design asks:
 That question changes the architecture.
 
 **Discussion question:** Where have you seen missing backpressure turn a small slowdown into a full outage?
+
+### Real-Life Picture
+
+A supermarket with ten checkout counters cannot safely admit an unlimited crowd. When every line is full, it must slow entry, open more counters within capacity, or ask customers to return later. Building an infinitely long waiting line only hides the overload.
 
 ### The Capacity Equation
 
@@ -836,6 +913,10 @@ Starting simple is usually good engineering, but the statement is incomplete unl
 
 The best designs are simple on purpose, not simple by avoidance.
 
+### Real-Life Picture
+
+A small coffee shop does not need ten kitchens on day one. It does need enough electrical capacity and floor space to add a second coffee machine later. Start with one machine, measure queue time, and know which building constraint would make expansion expensive.
+
 **Discussion question:** What is one scaling decision that should be made early, even for an MVP?
 
 ### Identify the First Bottleneck
@@ -951,6 +1032,10 @@ An average design says, “We will add a health check.” A stronger design asks
 > What does healthy mean here—process alive, initialization complete, or ready to receive traffic?
 
 **Discussion question:** Where have you seen bad health checks cause more damage than the original issue?
+
+### Real-Life Picture
+
+A restaurant can be **alive** because staff are inside, still **starting** because ovens are heating, and not yet **ready** because the kitchen cannot accept orders. Restarting the restaurant whenever an ingredient supplier is late makes the original problem worse.
 
 ### How the Probes Affect the System
 
@@ -1607,3 +1692,118 @@ Isolate the flash sale with separate compute, pools, queues, and quotas so it ca
 > I would not allow ten million Buy requests to reach the database. I would use an edge waiting room, bot protection, per-user rate limits, and signed admission tokens to shape the burst. The hot path would atomically deduplicate the request and reserve inventory; the request whose reservation commits first wins the last unit. Successful reservations enter a durable queue, and idempotent consumers create orders at a rate the database can sustain. I would distinguish “queued” from “reserved,” expire abandoned reservations, and enforce durable uniqueness for reservations, orders, and payments. Redis can provide a fast atomic gate, but asynchronous failover can lose state, so strict no-oversell semantics require a durable or strongly consistent inventory authority plus reconciliation. Finally, I would bound queue age and retries, monitor inventory conservation, and isolate the sale so overload cannot take down the rest of the platform.
 
 The interview is not testing whether you can draw Redis and Kafka boxes. It is testing whether you can state the invariant, decide who wins under concurrency, control overload, and explain recovery when an acknowledged step fails.
+
+## Food Delivery Events Arrive Out of Order
+
+### Question
+
+A customer watches this order timeline:
+
+```text
+Order placed → Restaurant accepted → Driver picked up → Delivered
+```
+
+Mobile networks are unreliable. The **Delivered** event reaches the server before a delayed **Driver picked up** event. Should the order move backward from delivered to picked up?
+
+### Real-Life Picture
+
+A parcel may be scanned at the front door before an older warehouse scan finishes uploading. The late scan is still a real event, but it must not rewrite the parcel's current state.
+
+### Short Answer
+
+Do not trust message arrival order as business order. Give every order transition a monotonic version or sequence number and define a state machine that permits only valid forward transitions.
+
+```text
+Order 784, version 7: DELIVERED       → apply
+Order 784, version 6: PICKED_UP       → keep for history; do not regress state
+Order 784, version 7: DELIVERED again → duplicate; ignore idempotently
+Order 784, version 9: CANCELLED       → reject if cancellation after delivery is invalid
+```
+
+Partitioning a stream by `order_id` preserves broker order for events produced through that stream, but it cannot repair events created concurrently by different systems or an offline device. The service that owns the order state must enforce the transition and version in one conditional database write:
+
+```sql
+UPDATE orders
+SET status = :new_status,
+    version = :new_version
+WHERE id = :order_id
+  AND version = :expected_version;
+```
+
+Keep the immutable events for audit and replay. Send rejected or impossible transitions to a review queue, measure version gaps and late-event age, and expose a reconciliation path for orders stuck between services.
+
+### Interview-Ready Answer
+
+> I would separate event time from arrival time. Each order has an authoritative state machine and monotonically increasing version. Consumers apply a transition only when its expected version and current state are valid, process duplicates idempotently, and never let a late event regress terminal state. Partitioning by order ID improves ordering, but database conditional updates protect correctness. I would retain the event history, monitor gaps and late arrivals, and reconcile orders whose sequence cannot be completed automatically.
+
+## A Global Rate Limiter During a Login Attack
+
+### Question
+
+A credential-stuffing attack sends millions of login attempts from rotating IP addresses. A simple rule allows five attempts per minute per IP. Why does that rule fail, and how do you protect users without locking out an office, university, or mobile network sharing one public IP?
+
+### Real-Life Picture
+
+A security guard who recognizes only car license plates can be fooled when attackers switch cars—and may block an entire bus because many innocent passengers arrived together. One identity signal is not enough.
+
+### Short Answer
+
+Rate-limit at several layers and use several identities:
+
+| Layer | Example key | Purpose |
+| --- | --- | --- |
+| Edge | IP, subnet, ASN, device signal | Absorb obvious floods before application work. |
+| Account | normalized username or account ID | Protect one victim across rotating IPs. |
+| Device/session | signed device or session ID | Detect rapid automation behind shared networks. |
+| Global | endpoint and region budget | Protect total authentication capacity. |
+
+A token bucket permits normal short bursts while bounding the sustained rate. The limiter can use an atomic script in a regional store, but a globally synchronous counter on every login adds latency and creates a new outage dependency. Allocate regional quotas from a global budget and accept a documented amount of temporary over-admission during partitions.
+
+When risk rises, progressively add delay, CAPTCHA, MFA, or temporary account protection instead of permanently locking the account—otherwise an attacker can weaponize the limiter as denial of service. Never reveal whether a username exists.
+
+Monitor allowed and blocked attempts, challenged users, false-positive appeals, IP/account concentration, Redis latency, quota exhaustion, and login-success changes. Keep emergency limits configurable, audited, and easy to roll back.
+
+### Interview-Ready Answer
+
+> I would not rely on IP alone. I would combine edge, account, device, and global token buckets, then apply progressive challenges based on risk. Regional limiters keep the login path available; centrally allocated quotas bound global damage without requiring a cross-region write for every attempt. Account protection and MFA prevent rotating-IP attacks, while graduated responses reduce collateral damage to users behind NAT. I would explicitly state the allowed partition overshoot and monitor both attack suppression and false positives.
+
+## A Viral Video Overloads the Processing Pipeline
+
+### Question
+
+A creator uploads a video that becomes viral. Millions of views trigger thumbnail generation, transcoding, moderation, analytics, and notification work. A downstream transcoder slows to one-third of its normal capacity. What happens next?
+
+### Real-Life Picture
+
+In a restaurant, taking orders is fast but cooking is slow. If servers keep accepting unlimited orders after the kitchen is full, customers wait for hours and the dining room collapses. A ticket rail helps only when it has a maximum length and the entrance eventually slows down.
+
+### Short Answer
+
+Create work once when the video is uploaded, not once per viewer. Store the original object durably, write a processing record, and publish jobs through a transactional outbox. Separate queues and worker pools by workload and priority so slow transcoding cannot block moderation or user-facing requests.
+
+```text
+Upload → Object Storage → Processing Record + Outbox
+                                │
+              ┌─────────────────┼──────────────────┐
+              ▼                 ▼                  ▼
+        Moderation queue   Transcode queue   Thumbnail queue
+              │                 │                  │
+         own workers        own workers         own workers
+```
+
+Workers use the asset ID and transformation version as an idempotency key. They write output to a versioned object key, then atomically mark the step complete. Retries use exponential backoff and jitter; poison jobs move to a DLQ after a bounded number of attempts.
+
+When the transcoder falls behind:
+
+- cap worker concurrency to protect storage and databases;
+- prioritize short or paid-tier jobs if the product permits it;
+- degrade by offering the original or a lower-quality rendition;
+- stop accepting nonessential reprocessing jobs;
+- scale only when the dependency and account quotas can absorb it;
+- alert on oldest-job age and predicted drain time, not only queue length.
+
+The processing state shown to users should be honest: `UPLOADED`, `PROCESSING`, `READY`, or `FAILED`. A request timeout must not imply that the upload or processing job disappeared.
+
+### Interview-Ready Answer
+
+> I would durably accept the upload, create each transformation once through an outbox, and isolate moderation, transcoding, and thumbnail work in bounded queues and worker pools. Consumers are idempotent by asset and transformation version. If transcoding slows, concurrency limits and admission control protect dependencies, priority queues preserve critical work, and lower-quality output provides graceful degradation. Retries are bounded and delayed, poison jobs go to a DLQ, and operations focus on oldest-job age and drain time. The key is to contain the slow pipeline rather than letting it consume the entire platform.
