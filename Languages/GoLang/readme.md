@@ -1600,3 +1600,20 @@ Each goroutine calculates one value. The `WaitGroup` knows when all calculations
 - Use `select` when waiting for a result, timeout, or cancellation.
 
 > **Golden rule:** prefer channels for communication, use mutexes only when you truly share state.
+
+
+
+## Go Order
+https://medium.com/@fonseka.live/how-to-maintain-the-order-of-go-routines-117a5be86c4f
+## Concurrency in Go: Channels and WaitGroups
+https://medium.com/goturkiye/concurrency-in-go-channels-and-waitgroups-25dd43064d1
+## Concurrency in Go— Goroutines, Channels & WaitGroup
+https://medium.com/@ravikumarray92/concurrency-in-go-goroutines-channels-waitgroup-db6a50b87a04
+## Go example
+https://gobyexample.com/
+## Go Concurrency Patterns: A Deep Dive
+https://medium.com/@gopinathr143/go-concurrency-patterns-a-deep-dive-a2750f98a102
+## Advanced Go Concurrency Patterns
+https://go.dev/talks/2013/advconc.slide#1
+## Understanding the Go Scheduler and discovering how it works
+https://medium.com/@sanilkhurana7/understanding-the-go-scheduler-and-looking-at-how-it-works-e431a6daacf
