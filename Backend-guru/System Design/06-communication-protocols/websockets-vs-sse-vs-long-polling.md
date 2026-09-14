@@ -19,7 +19,7 @@ Interviewers ask this topic to see whether you can **match the communication pro
 
 ---
 
-# Evolution of Real-Time Communication
+## Evolution of Real-Time Communication
 
 ```
 Shortest-lived connection
@@ -37,7 +37,7 @@ Most powerful, but also most operationally expensive
 
 ---
 
-# 1. Short Polling
+## 1. Short Polling
 
 The simplest approach.
 
@@ -87,7 +87,7 @@ Example:
 
 ---
 
-# 2. Long Polling
+## 2. Long Polling
 
 Instead of immediately responding with "nothing," the server waits until either:
 
@@ -128,6 +128,9 @@ def long_poll(user_id, timeout=30):
     return []
 ```
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## Advantages
 
 - Much lower latency.
@@ -145,7 +148,7 @@ Long polling was the standard solution before SSE and WebSockets became widely s
 
 ---
 
-# 3. Server-Sent Events (SSE)
+## 3. Server-Sent Events (SSE)
 
 SSE keeps **one HTTP response permanently open**.
 
@@ -234,7 +237,7 @@ No custom reconnect logic is necessary.
 
 ---
 
-# 4. WebSockets
+## 4. WebSockets
 
 WebSockets begin as HTTP but then upgrade into a completely different protocol.
 
@@ -300,7 +303,7 @@ ws.onopen = () => {
 
 ---
 
-# Scaling WebSockets
+## Scaling WebSockets
 
 Unlike HTTP requests, a WebSocket stays attached to one backend server.
 
@@ -350,7 +353,7 @@ Typical production architecture:
 
 ---
 
-# Comparison Table
+## Comparison Table
 
 | Feature | Short Polling | Long Polling | SSE | WebSockets |
 |----------|--------------|--------------|-----|------------|
@@ -366,7 +369,7 @@ Typical production architecture:
 
 ---
 
-# Which One Should You Choose?
+## Which One Should You Choose?
 
 ## Choose Short Polling
 
@@ -418,7 +421,7 @@ Examples:
 
 ---
 
-# Rule of Thumb
+## Rule of Thumb
 
 Ask yourself one question:
 
@@ -436,7 +439,7 @@ If real-time itself isn't necessary, polling is often the simplest solution.
 
 ---
 
-# Common Interview Questions
+## Common Interview Questions
 
 ## Q: Why do WebSockets often require sticky sessions?
 
@@ -507,7 +510,7 @@ Heartbeats prevent the server from keeping resources allocated for clients that 
 
 ---
 
-# Interview Summary
+## Interview Summary
 
 | Requirement | Best Choice |
 |-------------|-------------|
@@ -535,3 +538,5 @@ Heartbeats prevent the server from keeping resources allocated for clients that 
 - [Real-Time System Design](../09-large-scale-data-systems/real-time-system-design.md)
 - [Chat System](../10-system-design-practice/chat-system.md)
 - [News Feed](../10-system-design-practice/news-feed.md)
+
+</details>

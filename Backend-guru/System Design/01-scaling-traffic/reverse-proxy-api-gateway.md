@@ -11,7 +11,7 @@
 
 ---
 
-# Why Do We Need Them?
+## Why Do We Need Them?
 
 Without a Reverse Proxy or API Gateway:
 
@@ -52,7 +52,7 @@ Internal services remain hidden.
 
 ---
 
-# Reverse Proxy
+## Reverse Proxy
 
 A Reverse Proxy receives client requests and forwards them to backend servers.
 
@@ -87,7 +87,7 @@ Its primary responsibility is moving traffic efficiently.
 
 ---
 
-# API Gateway
+## API Gateway
 
 An API Gateway is a Reverse Proxy with additional API-focused features.
 
@@ -106,7 +106,7 @@ Besides forwarding requests, it understands APIs and applies policies.
 
 ---
 
-# Reverse Proxy vs API Gateway
+## Reverse Proxy vs API Gateway
 
 | Feature | Reverse Proxy | API Gateway |
 |----------|---------------|-------------|
@@ -125,7 +125,10 @@ Think of an API Gateway as a **superset** of a Reverse Proxy.
 
 ---
 
-# Request Flow
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
+## Request Flow
 
 ```
 Client
@@ -151,7 +154,7 @@ The request passes through multiple layers before reaching your application.
 
 ---
 
-# Core Responsibilities
+## Core Responsibilities
 
 ## 1. SSL/TLS Termination
 
@@ -189,7 +192,7 @@ Advantages:
 
 ---
 
-# 2. Request Routing
+## 2. Request Routing
 
 The gateway routes requests to different services.
 
@@ -223,7 +226,7 @@ Clients only need to know one public URL.
 
 ---
 
-# 3. Authentication
+## 3. Authentication
 
 Instead of every service validating tokens:
 
@@ -253,7 +256,7 @@ Backend services receive only authenticated requests.
 
 ---
 
-# 4. Authorization
+## 4. Authorization
 
 Authentication answers:
 
@@ -291,7 +294,7 @@ Denied.
 
 ---
 
-# 5. Rate Limiting
+## 5. Rate Limiting
 
 Suppose one client sends:
 
@@ -317,7 +320,7 @@ This protects backend services from overload.
 
 ---
 
-# 6. Request Transformation
+## 6. Request Transformation
 
 Sometimes internal APIs differ from public APIs.
 
@@ -339,7 +342,7 @@ The client never knows the internal structure.
 
 ---
 
-# 7. Response Transformation
+## 7. Response Transformation
 
 The gateway can also modify responses.
 
@@ -359,7 +362,7 @@ Gateway removes sensitive fields before sending the response.
 
 ---
 
-# 8. API Aggregation
+## 8. API Aggregation
 
 Without a gateway:
 
@@ -413,7 +416,7 @@ This reduces network traffic and improves performance.
 
 ---
 
-# 9. Logging & Monitoring
+## 9. Logging & Monitoring
 
 Every request passes through the gateway.
 
@@ -429,7 +432,7 @@ Instead of configuring every service separately.
 
 ---
 
-# 10. Caching
+## 10. Caching
 
 Frequently requested data can be cached.
 
@@ -461,7 +464,7 @@ This reduces latency and server load.
 
 ---
 
-# Reverse Proxy Examples
+## Reverse Proxy Examples
 
 ## Nginx
 
@@ -495,7 +498,7 @@ Common in:
 
 ---
 
-# API Gateway Examples
+## API Gateway Examples
 
 ## Kong
 
@@ -538,7 +541,7 @@ Provides:
 
 ---
 
-# Reverse Proxy + API Gateway Together
+## Reverse Proxy + API Gateway Together
 
 Many production systems use both.
 
@@ -565,7 +568,7 @@ The API Gateway handles API policies.
 
 ---
 
-# Best Practices
+## Best Practices
 
 ✅ Use HTTPS everywhere
 
@@ -583,7 +586,7 @@ The API Gateway handles API policies.
 
 ---
 
-# Common Mistakes
+## Common Mistakes
 
 ❌ Business logic inside the gateway
 
@@ -597,7 +600,7 @@ The API Gateway handles API policies.
 
 ---
 
-# Real-World Examples
+## Real-World Examples
 
 ### Netflix
 
@@ -622,7 +625,7 @@ Common setup:
 
 ---
 
-# Reverse Proxy vs API Gateway vs Load Balancer
+## Reverse Proxy vs API Gateway vs Load Balancer
 
 | Feature | Reverse Proxy | API Gateway | Load Balancer |
 |----------|---------------|-------------|---------------|
@@ -637,7 +640,7 @@ Common setup:
 
 ---
 
-# Interview Questions
+## Interview Questions
 
 ## What's the difference between a Reverse Proxy and an API Gateway?
 
@@ -696,7 +699,7 @@ Examples include:
 
 ---
 
-# Key Takeaways
+## Key Takeaways
 
 - A **Reverse Proxy** sits between clients and backend servers to manage traffic.
 - An **API Gateway** is a specialized Reverse Proxy for APIs with additional capabilities.
@@ -716,3 +719,5 @@ Examples include:
 - [Distributed Tracing](../08-reliability-operations/distributed-tracing.md)
 - [REST vs GraphQL vs gRPC](../06-communication-protocols/rest-vs-graphql-vs-grpc.md)
 - [API Gateway (practice problem)](../10-system-design-practice/api-gateway.md)
+
+</details>

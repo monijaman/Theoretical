@@ -127,6 +127,9 @@ A shared database often turns a microservice architecture into a distributed mon
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## Data Sharing
 
 If services cannot share databases, how do they share data?
@@ -571,3 +574,5 @@ Microservices add significant operational complexity. Unless independent deploym
 - [Distributed Transactions](../02-data-storage/distributed-transactions.md)
 - [Distributed Tracing](../08-reliability-operations/distributed-tracing.md)
 - [Observability: Logs, Metrics, Traces](../08-reliability-operations/observability-logs-metrics-traces.md)
+
+</details>

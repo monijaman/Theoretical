@@ -13,7 +13,7 @@
 
 ---
 
-# Why Do We Need Rate Limiting?
+## Why Do We Need Rate Limiting?
 
 Imagine your API receives requests from thousands of users.
 
@@ -47,7 +47,7 @@ Without Rate Limiting:
 
 ---
 
-# How Rate Limiting Solves This
+## How Rate Limiting Solves This
 
 The API allows only a fixed number of requests.
 
@@ -71,7 +71,7 @@ The server rejects additional requests until the limit resets.
 
 ---
 
-# Common Use Cases
+## Common Use Cases
 
 - Public APIs
 - Login endpoints
@@ -84,7 +84,7 @@ The server rejects additional requests until the limit resets.
 
 ---
 
-# Rate Limiting vs Quota
+## Rate Limiting vs Quota
 
 These are often confused.
 
@@ -113,7 +113,7 @@ A user can stay within their monthly quota but still exceed the per-minute rate 
 
 ---
 
-# Where Is Rate Limiting Applied?
+## Where Is Rate Limiting Applied?
 
 ```
           Client
@@ -136,7 +136,10 @@ Most production systems apply rate limiting at the **API Gateway** or **Load Bal
 
 ---
 
-# Rate Limiting Algorithms
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
+## Rate Limiting Algorithms
 
 There are several algorithms.
 
@@ -144,7 +147,7 @@ Each has different advantages.
 
 ---
 
-# 1. Token Bucket ⭐ (Most Popular)
+## 1. Token Bucket ⭐ (Most Popular)
 
 Imagine a bucket filled with tokens.
 
@@ -225,7 +228,7 @@ Examples:
 
 ---
 
-# 2. Leaky Bucket
+## 2. Leaky Bucket
 
 Imagine a bucket with a small hole.
 
@@ -269,7 +272,7 @@ Large bursts are **not** allowed.
 
 ---
 
-# 3. Fixed Window Counter
+## 3. Fixed Window Counter
 
 Example:
 
@@ -341,7 +344,7 @@ This is called the **Fixed Window Boundary Problem**.
 
 ---
 
-# 4. Sliding Window
+## 4. Sliding Window
 
 Instead of fixed windows, the server always looks at the **last 60 seconds**.
 
@@ -374,7 +377,7 @@ It produces much smoother rate limiting.
 
 ---
 
-# Comparison
+## Comparison
 
 | Algorithm | Bursts | Accuracy | Complexity |
 |-----------|---------|-----------|------------|
@@ -385,7 +388,7 @@ It produces much smoother rate limiting.
 
 ---
 
-# Distributed Rate Limiting
+## Distributed Rate Limiting
 
 One API server is easy.
 
@@ -441,7 +444,7 @@ This keeps limits consistent across the cluster.
 
 ---
 
-# Redis + Lua Script
+## Redis + Lua Script
 
 Production systems usually use Redis with Lua scripts.
 
@@ -487,7 +490,7 @@ No other request can interrupt the process.
 
 ---
 
-# HTTP Response
+## HTTP Response
 
 When a limit is exceeded, the server should return:
 
@@ -513,7 +516,7 @@ These help clients know when they can safely retry.
 
 ---
 
-# Per-IP vs Per-User vs Per-API Key
+## Per-IP vs Per-User vs Per-API Key
 
 ## Per IP
 
@@ -569,7 +572,7 @@ Useful for:
 
 ---
 
-# Best Practices
+## Best Practices
 
 ✅ Use Token Bucket for most APIs
 
@@ -585,7 +588,7 @@ Useful for:
 
 ---
 
-# Common Mistakes
+## Common Mistakes
 
 ❌ Using only in-memory counters
 
@@ -599,7 +602,7 @@ Useful for:
 
 ---
 
-# Real-World Examples
+## Real-World Examples
 
 ### GitHub
 
@@ -623,7 +626,7 @@ Useful for:
 
 ---
 
-# Interview Questions
+## Interview Questions
 
 ## Why is Token Bucket more popular than Fixed Window?
 
@@ -672,7 +675,7 @@ Instead of limiting HTTP requests, limit:
 
 ---
 
-# Key Takeaways
+## Key Takeaways
 
 - Rate Limiting protects your system from abuse and overload.
 - Token Bucket is the most widely used algorithm.
@@ -683,7 +686,6 @@ Instead of limiting HTTP requests, limit:
 
 ---
 
-
 ## Related topics
 - [Load Balancing](load-balancing.md)
 - [Reverse Proxy & API Gateway](reverse-proxy-api-gateway.md)
@@ -691,3 +693,5 @@ Instead of limiting HTTP requests, limit:
 - [Retry & Exponential Backoff](retry-exponential-backoff.md)
 - [Rate Limiter (design practice)](../10-system-design-practice/rate-limiter.md)
 - [API Gateway (design practice)](../10-system-design-practice/api-gateway.md)
+
+</details>

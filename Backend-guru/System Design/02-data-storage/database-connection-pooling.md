@@ -21,7 +21,7 @@ A database can only handle a limited number of active connections. More connecti
 
 ---
 
-# What Is a Database Connection?
+## What Is a Database Connection?
 
 A database connection is a communication channel between your application and the database.
 
@@ -58,7 +58,7 @@ Opening a connection is expensive.
 
 ---
 
-# Why Opening a Connection Is Expensive
+## Why Opening a Connection Is Expensive
 
 A database connection is not just opening a network socket.
 
@@ -107,7 +107,7 @@ Eventually performance goes down.
 
 ---
 
-# The Problem Without Connection Pooling
+## The Problem Without Connection Pooling
 
 Imagine every API request creates a new connection.
 
@@ -118,13 +118,11 @@ Request 1
    ├── Run query
    └── Close connection
 
-
 Request 2
    |
    ├── Open DB connection
    ├── Run query
    └── Close connection
-
 
 Request 3
    |
@@ -137,7 +135,10 @@ The application keeps paying the connection setup cost.
 
 ---
 
-# The Solution: Connection Pooling
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
+## The Solution: Connection Pooling
 
 A connection pool keeps a group of reusable database connections.
 
@@ -155,7 +156,6 @@ Create 20 database connections
         ↓
 
 Keep them alive
-
 
 Request comes:
 
@@ -211,7 +211,6 @@ Connection Pool
     |
 Database
 
-
 Request:
 
 Borrow connection
@@ -227,7 +226,7 @@ The expensive connection creation happens only once.
 
 ---
 
-# Connection Pool Size
+## Connection Pool Size
 
 A common mistake:
 
@@ -262,7 +261,7 @@ The database becomes slower.
 
 ---
 
-# How To Think About Pool Size
+## How To Think About Pool Size
 
 A good starting formula:
 
@@ -297,7 +296,7 @@ Then measure.
 
 ---
 
-# The Real Formula: Little's Law
+## The Real Formula: Little's Law
 
 A more practical approach:
 
@@ -347,7 +346,7 @@ plus some extra capacity.
 
 ---
 
-# PgBouncer
+## PgBouncer
 
 ## What Is PgBouncer?
 
@@ -397,7 +396,7 @@ PgBouncer
 
 ---
 
-# PgBouncer Pooling Modes
+## PgBouncer Pooling Modes
 
 ## 1. Session Pooling
 
@@ -426,7 +425,6 @@ Works with:
 - LISTEN/NOTIFY
 - Advisory locks
 
-
 Disadvantages:
 
 ❌ Less connection reduction
@@ -451,7 +449,6 @@ Query
 COMMIT
 
 Connection returned
-
 
 Client B
 
@@ -493,7 +490,6 @@ Connection #1
 
 SET search_path='company_a'
 
-
 Transaction 2
 
 Connection #2
@@ -512,7 +508,7 @@ Avoid relying on:
 
 ---
 
-# Connection Problems in Microservices
+## Connection Problems in Microservices
 
 Microservices make this problem worse.
 
@@ -525,9 +521,7 @@ Service A
 
 Each has 20 connections
 
-
 = 400 connections
-
 
 Service B
 
@@ -535,16 +529,13 @@ Service B
 
 Each has 20 connections
 
-
 = 300 connections
-
 
 Service C
 
 10 containers
 
 Each has 20 connections
-
 
 = 200 connections
 ```
@@ -583,7 +574,7 @@ System outage
 
 ---
 
-# Solutions for Microservices
+## Solutions for Microservices
 
 ## Option 1: Shared Connection Pooler
 
@@ -637,7 +628,7 @@ Use:
 
 ---
 
-# Serverless Connection Problems
+## Serverless Connection Problems
 
 Serverless systems like AWS Lambda are especially risky.
 
@@ -673,7 +664,7 @@ Connection failures
 
 ---
 
-# Solutions for Serverless
+## Solutions for Serverless
 
 ## 1. RDS Proxy
 
@@ -743,7 +734,6 @@ Better:
 const connection =
    createConnection()
 
-
 handler() {
 
    query(connection)
@@ -759,7 +749,7 @@ It does not completely solve the problem because new Lambda instances can still 
 
 ---
 
-# Connection Pool Comparison
+## Connection Pool Comparison
 
 | Approach | Reduces Connections | Supports Session Features | Best For |
 |---|---|---|---|
@@ -770,7 +760,7 @@ It does not completely solve the problem because new Lambda instances can still 
 
 ---
 
-# Common Interview Questions
+## Common Interview Questions
 
 ## Q: Why not increase database max_connections?
 
@@ -886,7 +876,7 @@ A growing pool wait time is usually the first warning sign.
 
 ---
 
-# Key Takeaways
+## Key Takeaways
 
 Remember these points for interviews:
 
@@ -905,3 +895,5 @@ Remember these points for interviews:
 - [CAP Theorem](../03-consistency-distributed/cap-theorem.md)
 - [Circuit Breaker Pattern](../01-scaling-traffic/circuit-breaker-pattern.md)
 - [Backpressure](../01-scaling-traffic/backpressure.md)
+
+</details>

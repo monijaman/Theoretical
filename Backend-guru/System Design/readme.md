@@ -2,12 +2,16 @@
 
 This folder is a practical study guide for system design, not just a collection of notes. The goal is to help you understand the core ideas, the trade-offs, and the interview-style thinking behind them.
 
+## Reading format
+
+Each topic starts with the main idea and a simple example. Longer pages place extra material inside **Optional deep dive** sections. You can skip those sections during your first read.
+
 ## How to use this guide
 
-1. Start with the core foundations: scaling, storage, caching, messaging, and reliability.
-2. Read one topic at a time and focus on the plain-English idea first.
-3. Use the linked notes to drill into the details when you need them.
-4. Practice the full design problems at the end to turn knowledge into interview readiness.
+1. Read the simple explanation at the top of a topic.
+2. Learn the benefits and trade-offs.
+3. Skip the optional deep dive on your first read.
+4. Use the practice section after learning the basics.
 
 ## Best study path
 

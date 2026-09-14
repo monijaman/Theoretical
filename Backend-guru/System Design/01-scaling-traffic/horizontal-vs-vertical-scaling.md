@@ -1,4 +1,3 @@
-````markdown
 # Horizontal vs Vertical Scaling
 
 > Scaling means increasing your application's capacity to handle more users or more traffic.
@@ -12,7 +11,7 @@
 
 ---
 
-# Why Do We Need Scaling?
+## Why Do We Need Scaling?
 
 Imagine your application is running on a single server.
 
@@ -38,7 +37,7 @@ To solve this problem, we need to **scale**.
 
 ---
 
-# Two Types of Scaling
+## Two Types of Scaling
 
 ```
                  Scaling
@@ -52,7 +51,7 @@ To solve this problem, we need to **scale**.
 
 ---
 
-# Vertical Scaling (Scale Up)
+## Vertical Scaling (Scale Up)
 
 Vertical scaling means upgrading a single server with better hardware.
 
@@ -116,7 +115,7 @@ Only the machine becomes more powerful.
 
 ---
 
-# Horizontal Scaling (Scale Out)
+## Horizontal Scaling (Scale Out)
 
 Instead of buying a larger server, you add more servers.
 
@@ -133,6 +132,9 @@ Instead of buying a larger server, you add more servers.
 Traffic is distributed across multiple servers.
 
 ---
+
+<details>
+<summary><strong>Optional deep dive</strong></summary>
 
 ## Advantages
 
@@ -160,7 +162,7 @@ Traffic is distributed across multiple servers.
 
 ---
 
-# Vertical vs Horizontal
+## Vertical vs Horizontal
 
 | Feature | Vertical Scaling | Horizontal Scaling |
 |----------|------------------|--------------------|
@@ -173,7 +175,7 @@ Traffic is distributed across multiple servers.
 
 ---
 
-# Why Stateless Applications Matter
+## Why Stateless Applications Matter
 
 Horizontal scaling only works well when **any server can handle any request**.
 
@@ -229,7 +231,7 @@ This is called a **stateless architecture**.
 
 ---
 
-# Cost Comparison
+## Cost Comparison
 
 Vertical scaling becomes increasingly expensive.
 
@@ -256,7 +258,7 @@ Large enterprise servers cost significantly more than several smaller servers wi
 
 ---
 
-# Scaling Limits
+## Scaling Limits
 
 ## Vertical Scaling
 
@@ -302,7 +304,7 @@ The practical limit is your application's architecture, not the hardware.
 
 ---
 
-# When Should You Use Vertical Scaling?
+## When Should You Use Vertical Scaling?
 
 Choose Vertical Scaling when:
 
@@ -318,7 +320,7 @@ A small company running a single PostgreSQL server.
 
 ---
 
-# When Should You Use Horizontal Scaling?
+## When Should You Use Horizontal Scaling?
 
 Choose Horizontal Scaling when:
 
@@ -337,7 +339,7 @@ Examples:
 
 ---
 
-# Real-World Architecture
+## Real-World Architecture
 
 Most production systems use **both** approaches.
 
@@ -362,7 +364,7 @@ Typically:
 
 ---
 
-# Common Examples
+## Common Examples
 
 ## Vertical Scaling
 
@@ -379,7 +381,7 @@ Typically:
 
 ---
 
-# Best Practices
+## Best Practices
 
 ✅ Design stateless applications
 
@@ -395,7 +397,7 @@ Typically:
 
 ---
 
-# Common Mistakes
+## Common Mistakes
 
 ❌ Keeping session data in server memory
 
@@ -409,7 +411,7 @@ Typically:
 
 ---
 
-# Interview Questions
+## Interview Questions
 
 ## Which scaling approach is easier?
 
@@ -456,7 +458,7 @@ Common techniques include:
 
 ---
 
-# Key Takeaways
+## Key Takeaways
 
 - **Vertical Scaling** = Make one server bigger.
 - **Horizontal Scaling** = Add more servers.
@@ -474,3 +476,5 @@ Common techniques include:
 - [Database Sharding](../02-data-storage/database-sharding.md)
 - [High Availability](../08-reliability-operations/high-availability.md)
 - [Multi-Region Architecture](../09-large-scale-data-systems/multi-region-architecture.md)
+
+</details>

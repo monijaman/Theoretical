@@ -35,7 +35,7 @@ Interviewers ask this topic because senior engineers need to understand:
 
 ---
 
-# The Problem With Large ALTER TABLE
+## The Problem With Large ALTER TABLE
 
 A schema change can require the database to:
 
@@ -62,7 +62,6 @@ Add column
     ↓
 Done
 
-
 Large table:
 
 Lock table
@@ -76,7 +75,7 @@ Wait hours
 
 ---
 
-# Why Table Locks Are Dangerous
+## Why Table Locks Are Dangerous
 
 Imagine:
 
@@ -120,7 +119,6 @@ INSERT user
        |
     Blocked
 
-
 UPDATE user
        |
        X
@@ -136,7 +134,10 @@ Users experience:
 
 ---
 
-# Additional Problems
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
+## Additional Problems
 
 ## 1. Replication Lag
 
@@ -159,7 +160,6 @@ Example:
 Primary:
 
 Rewrite 500M rows
-
 
 Replica:
 
@@ -198,7 +198,7 @@ A 1TB table may require several TB of free space.
 
 ---
 
-# The Safe Solution: Expand-Contract Pattern
+## The Safe Solution: Expand-Contract Pattern
 
 The main idea:
 
@@ -224,7 +224,7 @@ Remove old schema
 
 ---
 
-# Example: Rename email Column
+## Example: Rename email Column
 
 Goal:
 
@@ -331,7 +331,6 @@ id | email | email_address
 
 1  | a@test.com | NULL
 
-
 After:
 
 id | email | email_address
@@ -351,7 +350,6 @@ Example:
 Total users:
 
 500 million
-
 
 email matches email_address:
 
@@ -402,7 +400,7 @@ DROP COLUMN email;
 
 ---
 
-# Complete Migration Flow
+## Complete Migration Flow
 
 ```
                 EXPAND
@@ -447,7 +445,7 @@ DROP COLUMN email;
 
 ---
 
-# Why Expand-Contract Is Safe
+## Why Expand-Contract Is Safe
 
 At every point:
 
@@ -471,7 +469,6 @@ Old servers
 
 email column
 
-
 New servers
 
        |
@@ -486,7 +483,7 @@ This is important because deployments happen gradually.
 
 ---
 
-# Online Schema Migration Tools
+## Online Schema Migration Tools
 
 For very large databases, companies use specialized tools.
 
@@ -498,7 +495,7 @@ Common tools:
 
 ---
 
-# gh-ost (GitHub Online Schema Migration)
+## gh-ost (GitHub Online Schema Migration)
 
 Used for MySQL.
 
@@ -510,7 +507,6 @@ Create a new table:
 users
 
 (old)
-
 
 users_ghost
 
@@ -563,7 +559,6 @@ users
    ↓
 users_old
 
-
 users_ghost
    ↓
 users
@@ -573,7 +568,7 @@ The swap is atomic.
 
 ---
 
-# pt-online-schema-change
+## pt-online-schema-change
 
 Percona tool.
 
@@ -645,7 +640,7 @@ For very busy tables, this extra overhead matters.
 
 ---
 
-# pg_repack (PostgreSQL)
+## pg_repack (PostgreSQL)
 
 PostgreSQL has MVCC.
 
@@ -673,7 +668,7 @@ Common uses:
 
 ---
 
-# Designing a Backfill Job
+## Designing a Backfill Job
 
 Backfilling millions of rows is usually the riskiest step.
 
@@ -702,7 +697,7 @@ Replication lag
 
 ---
 
-# Better: Batch Processing
+## Better: Batch Processing
 
 Process small chunks.
 
@@ -723,11 +718,9 @@ Batch 1
 
 10000 rows
 
-
 Batch 2
 
 10000 rows
-
 
 Batch 3
 
@@ -736,7 +729,7 @@ Batch 3
 
 ---
 
-# Backfill Best Practices
+## Backfill Best Practices
 
 ## 1. Small Batches
 
@@ -804,7 +797,7 @@ Restart from 5000001
 
 ---
 
-# Zero Downtime Migration Checklist
+## Zero Downtime Migration Checklist
 
 ```
 ✓ New schema works with old application code
@@ -830,7 +823,7 @@ Restart from 5000001
 
 ---
 
-# Migration Strategy Comparison
+## Migration Strategy Comparison
 
 | Approach | Locking Risk | Write Impact | Best Use |
 |-|-|-|-|
@@ -842,7 +835,7 @@ Restart from 5000001
 
 ---
 
-# Common Interview Questions
+## Common Interview Questions
 
 ## Q: Why not run migration during maintenance hours?
 
@@ -939,7 +932,7 @@ Rollback is simple.
 
 ---
 
-# Key Takeaways
+## Key Takeaways
 
 Remember:
 
@@ -958,3 +951,5 @@ Remember:
 - [Database Indexing](database-indexing.md)
 - [Zero-Downtime Deployment](../08-reliability-operations/zero-downtime-deployment.md)
 - [Distributed Transactions](distributed-transactions.md)
+
+</details>

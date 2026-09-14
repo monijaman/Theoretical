@@ -47,7 +47,7 @@ What consistency do we need?
 
 ---
 
-# SQL (Relational Database)
+## SQL (Relational Database)
 
 Examples:
 
@@ -110,7 +110,7 @@ Order Items
 
 ---
 
-# SQL Strengths
+## SQL Strengths
 
 ## 1. ACID Transactions
 
@@ -130,7 +130,6 @@ Account A:
 
 - $100 removed
 
-
 Account B:
 
 + $100 added
@@ -149,6 +148,9 @@ Both rollback
 ```
 
 ---
+
+<details>
+<summary><strong>Optional deep dive</strong></summary>
 
 ## 2. Strong Data Integrity
 
@@ -211,7 +213,7 @@ ON users.id = orders.user_id;
 
 ---
 
-# SQL Weaknesses
+## SQL Weaknesses
 
 ## 1. Horizontal Scaling Is Harder
 
@@ -263,7 +265,7 @@ requires careful migration.
 
 ---
 
-# NoSQL
+## NoSQL
 
 NoSQL is not one database type.
 
@@ -285,7 +287,7 @@ Each solves different problems.
 
 ---
 
-# 1. Key-Value Database
+## 1. Key-Value Database
 
 Examples:
 
@@ -300,7 +302,6 @@ Example:
 Key:
 
 user:123:session
-
 
 Value:
 
@@ -357,7 +358,7 @@ because there is no relational query engine.
 
 ---
 
-# 2. Document Database
+## 2. Document Database
 
 Examples:
 
@@ -452,7 +453,7 @@ You update many documents.
 
 ---
 
-# 3. Column-Family Database
+## 3. Column-Family Database
 
 Examples:
 
@@ -469,16 +470,13 @@ IoT sensor data:
 ```
 Sensor: 1001
 
-
 10:00
 
 temperature: 22
 
-
 10:01
 
 temperature: 23
-
 
 10:02
 
@@ -523,7 +521,7 @@ Find all sensors with temperature > 50
 
 ---
 
-# 4. Graph Database
+## 4. Graph Database
 
 Examples:
 
@@ -591,7 +589,7 @@ becomes expensive.
 
 ---
 
-# NewSQL
+## NewSQL
 
 Examples:
 
@@ -649,7 +647,7 @@ Cross-region writes are slower because data must reach consensus.
 
 ---
 
-# SQL vs NoSQL Comparison
+## SQL vs NoSQL Comparison
 
 | Feature | SQL | Key-Value | Document | Column Family | Graph | NewSQL |
 |-|-|-|-|-|-|-|
@@ -662,7 +660,7 @@ Cross-region writes are slower because data must reach consensus.
 
 ---
 
-# Practical Decision Guide
+## Practical Decision Guide
 
 ## Choose SQL When:
 
@@ -751,7 +749,7 @@ Examples:
 
 ---
 
-# Common Interview Questions
+## Common Interview Questions
 
 ## Q: Should I always choose NoSQL for large systems?
 
@@ -772,7 +770,7 @@ Choose NoSQL only when a specific requirement demands it.
 
 ---
 
-# Q: MongoDB vs PostgreSQL JSONB?
+## Q: MongoDB vs PostgreSQL JSONB?
 
 PostgreSQL JSONB gives:
 
@@ -800,7 +798,7 @@ Use PostgreSQL when relationships and transactions dominate.
 
 ---
 
-# Q: Does NoSQL mean no schema?
+## Q: Does NoSQL mean no schema?
 
 No.
 
@@ -832,7 +830,7 @@ Application
 
 ---
 
-# Q: Is eventual consistency only a NoSQL feature?
+## Q: Is eventual consistency only a NoSQL feature?
 
 No.
 
@@ -856,7 +854,7 @@ May use replication delays
 
 ---
 
-# Q: When choose Graph over SQL?
+## Q: When choose Graph over SQL?
 
 Choose Graph when queries involve variable-depth relationships.
 
@@ -880,7 +878,7 @@ Many recursive joins
 
 ---
 
-# Simple Rule To Remember
+## Simple Rule To Remember
 
 ```
 Business Transactions
@@ -888,30 +886,25 @@ Business Transactions
         v
 SQL
 
-
 Exact Key Lookup
         |
         v
 Key-Value
-
 
 JSON/Object Data
         |
         v
 Document
 
-
 Massive Writes
         |
         v
 Column Family
 
-
 Relationship Queries
         |
         v
 Graph
-
 
 SQL + Global Scale
         |
@@ -921,7 +914,7 @@ NewSQL
 
 ---
 
-# Interview Answer
+## Interview Answer
 
 A strong system design answer:
 
@@ -934,3 +927,5 @@ A strong system design answer:
 - [Database Indexing](database-indexing.md)
 - [CAP Theorem](../03-consistency-distributed/cap-theorem.md)
 - [Strong vs Eventual Consistency](../03-consistency-distributed/strong-vs-eventual-consistency.md)
+
+</details>

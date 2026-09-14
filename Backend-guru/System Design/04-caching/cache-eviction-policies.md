@@ -3,7 +3,7 @@
 
 ---
 
-# What Are Cache Eviction Policies?
+## What Are Cache Eviction Policies?
 
 A cache has **limited memory**, while the underlying database or storage is effectively unlimited.
 
@@ -15,7 +15,7 @@ Choosing the wrong policy can dramatically reduce cache efficiency, causing freq
 
 ---
 
-# Why It Matters
+## Why It Matters
 
 A good eviction policy helps you:
 
@@ -29,7 +29,7 @@ Poor eviction can actually make performance worse than having no cache at all be
 
 ---
 
-# 1. LRU (Least Recently Used)
+## 1. LRU (Least Recently Used)
 
 ## Idea
 
@@ -121,6 +121,9 @@ These workloads exhibit **temporal locality**.
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## Weakness
 
 Large sequential scans can destroy cache quality.
@@ -137,7 +140,7 @@ This is called:
 
 ---
 
-# 2. LFU (Least Frequently Used)
+## 2. LFU (Least Frequently Used)
 
 ## Idea
 
@@ -221,7 +224,7 @@ Old popularity slowly fades, allowing newer hot items to replace them.
 
 ---
 
-# 3. FIFO (First In, First Out)
+## 3. FIFO (First In, First Out)
 
 ## Idea
 
@@ -282,7 +285,7 @@ Therefore, it's rarely used as the primary cache policy.
 
 ---
 
-# 4. ARC (Adaptive Replacement Cache)
+## 4. ARC (Adaptive Replacement Cache)
 
 ## Idea
 
@@ -359,7 +362,7 @@ Because of patent restrictions (now expired), many open-source systems used LRU/
 
 ---
 
-# 5. TTL (Time-To-Live)
+## 5. TTL (Time-To-Live)
 
 ## Idea
 
@@ -428,7 +431,7 @@ TTL guarantees bounded staleness.
 
 ---
 
-# Redis Eviction Policies
+## Redis Eviction Policies
 
 When Redis reaches:
 
@@ -489,7 +492,7 @@ Useful when permanent configuration and temporary cache share the same Redis ins
 
 ---
 
-# Approximate LRU in Redis
+## Approximate LRU in Redis
 
 Redis does **not** maintain a perfect LRU linked list.
 
@@ -511,7 +514,7 @@ Higher values improve eviction quality but use more CPU.
 
 ---
 
-# Comparison
+## Comparison
 
 | Policy | Tracks | Best For | Weakness |
 |---------|--------|----------|----------|
@@ -523,7 +526,7 @@ Higher values improve eviction quality but use more CPU.
 
 ---
 
-# Which One Should You Choose?
+## Which One Should You Choose?
 
 | Scenario | Recommended Policy |
 |----------|--------------------|
@@ -539,7 +542,7 @@ Higher values improve eviction quality but use more CPU.
 
 ---
 
-# Common Interview Questions
+## Common Interview Questions
 
 ## Why can LRU perform worse than random eviction?
 
@@ -609,7 +612,7 @@ A key can be evicted long before its TTL expires if the cache needs space.
 
 ---
 
-# Key Takeaways
+## Key Takeaways
 
 - **LRU** → Keeps recently used items.
 - **LFU** → Keeps frequently used items.
@@ -617,7 +620,6 @@ A key can be evicted long before its TTL expires if the cache needs space.
 - **ARC** → Automatically balances recency and frequency.
 - **TTL** → Controls data freshness, not memory management.
 - Redis combines TTL with an eviction policy to manage both staleness and memory efficiently.
-```
 
 ## Related topics
 - [Caching Strategies](caching-strategies.md)
@@ -625,3 +627,5 @@ A key can be evicted long before its TTL expires if the cache needs space.
 - [CDN Architecture](cdn-architecture.md)
 - [Database Indexing](../02-data-storage/database-indexing.md)
 - [Rate Limiting](../01-scaling-traffic/rate-limiting.md)
+
+</details>

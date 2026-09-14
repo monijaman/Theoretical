@@ -106,6 +106,66 @@ Good context handling improves reliability, reduces hallucinations, and helps AI
 
 ---
 
+## Senior Backend Interview Question: Exactly-Once Payments
+
+### Question
+
+A client sends:
+
+```http
+POST /payments
+Idempotency-Key: abc123
+```
+
+The application follows this flow:
+
+1. Check whether the key was already processed.
+2. Charge the payment provider.
+3. Mark the key as completed.
+
+The provider successfully charges the customer, but the application crashes before saving that the key was completed. The client retries with the same `Idempotency-Key`.
+
+What happens? Do you charge the customer again? How do you make this safe across retries, crashes, and concurrent requests?
+
+### Answer
+
+With the naive flow, the customer **can be charged twice**. The retry cannot find a completed record, so the application may call the provider again.
+
+A database transaction alone cannot solve this because your database and the external payment provider do not share one atomic transaction. Use all of the following:
+
+- Create a durable `payment_attempts` record before charging. Give `idempotency_key` a database `UNIQUE` or `PRIMARY KEY` constraint so concurrent requests cannot create separate attempts.
+- Store a hash of the important request fields, such as customer, amount, and currency. Reject the request if the same key is reused with different input.
+- Send the **same idempotency key to the payment provider** on every attempt. If the first charge succeeded, the provider returns the original result instead of charging again.
+- Store states such as `PROCESSING`, `COMPLETED`, `FAILED`, and `UNKNOWN`, together with the provider transaction ID and original response.
+- Return the stored response when a completed request is retried. If an attempt is still processing, wait briefly or return `202 Accepted`/`409 Conflict` instead of starting another independent charge.
+- Recover stale or unknown attempts by retrying or querying the provider with the same key. Use provider webhooks and a reconciliation worker to repair local state after crashes or timeouts.
+
+```text
+Request with abc123
+        │
+        ▼
+Atomically insert PROCESSING record
+        │
+        ├── COMPLETED → return the stored response
+        ├── PROCESSING → wait or report that it is in progress
+        └── New record → charge provider using abc123
+                                  │
+                                  ▼
+                     save result as COMPLETED
+```
+
+Redis can help with caching or coordination, but it should not be the payment source of truth because keys can expire or be evicted and locks can expire. The durable record belongs in the database.
+
+Strict exactly-once execution is generally impossible across two independent systems. This design provides an **effectively-once payment outcome**, provided the payment provider supports idempotency or lookup through a unique merchant reference. If it supports neither, a crash or timeout can leave an ambiguous result; reconcile it instead of blindly retrying.
+
+**Interview-ready answer:**
+
+> The naive implementation can double-charge because the provider charge and our database update are not atomic. I would create a durable payment-attempt row with a unique idempotency key and request hash, then pass the same key to the provider. The database constraint controls concurrent requests, while provider-side idempotency closes the crash window. Completed retries return the stored response, and unknown attempts are recovered through provider lookup, webhooks, and reconciliation. That gives us an effectively-once business outcome rather than a literal distributed exactly-once transaction.
+
+For the extended explanation and implementation example, see [Idempotency in APIs](./Backend-guru/Interview/readme.md#21-idempotency-in-apis).
+
+---
+
 ## 📚 PDF Interview Resources
 
 A curated collection of interview PDFs and markdowns is available in the [PDFS folder](./PDFS/). Resources are grouped by topic for easy access:

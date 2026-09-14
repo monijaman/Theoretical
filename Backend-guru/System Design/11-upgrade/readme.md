@@ -251,5 +251,4 @@ You understand a topic when you can:
 The goal is not merely to call an AI API. The goal is to design, deploy, evaluate, secure, and operate an AI-enabled system that solves a real business problem.
 
 
-
 [System Design guide](../readme.md) · [Backend learning guide](../../readme.md)

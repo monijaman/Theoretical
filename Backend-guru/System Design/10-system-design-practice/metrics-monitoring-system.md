@@ -86,8 +86,8 @@
 
 ```
 GET /metrics                          // exposition format, scraped by the collector, not called by users
-# HELP http_requests_total Total HTTP requests
-# TYPE http_requests_total counter
+## HELP http_requests_total Total HTTP requests
+## TYPE http_requests_total counter
 http_requests_total{service="checkout-api",status="500",region="us-east"} 4821
 
 POST /api/v1/query

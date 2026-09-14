@@ -22,7 +22,7 @@ P - Partition Tolerance
 
 ---
 
-# The Three Properties
+## The Three Properties
 
 ## 1. Consistency (C)
 
@@ -110,7 +110,7 @@ Continue serving?
 
 ---
 
-# Why Partition Tolerance Is Not Optional
+## Why Partition Tolerance Is Not Optional
 
 A common interview mistake:
 
@@ -162,7 +162,10 @@ during a partition.
 
 ---
 
-# CAP Decision Tree
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
+## CAP Decision Tree
 
 ```
              Network Partition Happens
@@ -175,7 +178,6 @@ during a partition.
  Reject requests                 Continue serving
  until recovery                  with possible stale data
 
-
         |                               |
 
         CP                              AP
@@ -183,7 +185,7 @@ during a partition.
 
 ---
 
-# CP Systems
+## CP Systems
 
 ## Consistency + Partition Tolerance
 
@@ -243,7 +245,7 @@ Rejects requests
 
 ---
 
-# CP Examples
+## CP Examples
 
 ## ZooKeeper
 
@@ -306,7 +308,7 @@ Inventory = -1
 
 ---
 
-# AP Systems
+## AP Systems
 
 ## Availability + Partition Tolerance
 
@@ -350,7 +352,7 @@ The system resolves conflicts.
 
 ---
 
-# AP Conflict Resolution
+## AP Conflict Resolution
 
 Common strategies:
 
@@ -363,7 +365,6 @@ Write 1:
 
 value = A
 time = 10
-
 
 Write 2:
 
@@ -403,7 +404,7 @@ Designed so distributed updates can merge automatically.
 
 ---
 
-# AP Examples
+## AP Examples
 
 ## Cassandra
 
@@ -437,7 +438,7 @@ Allows conflicting versions and resolves later.
 
 ---
 
-# CP vs AP Comparison
+## CP vs AP Comparison
 
 | Feature | CP | AP |
 |-|-|-|
@@ -450,7 +451,7 @@ Allows conflicting versions and resolves later.
 
 ---
 
-# Common CAP Mistakes
+## Common CAP Mistakes
 
 ## Mistake 1: "NoSQL means AP"
 
@@ -542,7 +543,7 @@ You choose per operation.
 
 ---
 
-# Real Examples
+## Real Examples
 
 ## Payment System
 
@@ -596,7 +597,7 @@ AP
 
 ---
 
-# CAP and Quorum
+## CAP and Quorum
 
 Many distributed databases use:
 
@@ -638,7 +639,7 @@ Strong consistency is possible.
 
 ---
 
-# CAP vs PACELC
+## CAP vs PACELC
 
 CAP only talks about:
 
@@ -680,7 +681,7 @@ Possible stale data
 
 ---
 
-# Interview Answer
+## Interview Answer
 
 A strong interview answer:
 
@@ -693,3 +694,5 @@ A strong interview answer:
 - [Consensus Algorithms](consensus-algorithms.md) — how CP systems like etcd/ZooKeeper actually achieve their consistency guarantee
 - [Database Replication](../02-data-storage/database-replication.md) — sync vs async replication is the mechanism behind the CP/AP choice
 - [Distributed Transactions](../02-data-storage/distributed-transactions.md) — 2PC/Saga trade-offs are a CAP-adjacent concern across services
+
+</details>

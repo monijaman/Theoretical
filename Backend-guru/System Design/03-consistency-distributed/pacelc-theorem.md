@@ -33,8 +33,6 @@ or
 
 Consistency (C)
 
-
-
 Else (normal operation):
 
 Choose between:
@@ -48,7 +46,7 @@ Consistency (C)
 
 ---
 
-# CAP vs PACELC
+## CAP vs PACELC
 
 CAP:
 
@@ -84,8 +82,6 @@ Partition happens?
 
 Availability vs Consistency
 
-
-
 No partition?
 
         |
@@ -96,7 +92,7 @@ Latency vs Consistency
 
 ---
 
-# Why PACELC Matters
+## Why PACELC Matters
 
 Many people think:
 
@@ -128,6 +124,9 @@ Server C
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## Strong Consistency
 
 Wait until replicas confirm.
@@ -146,9 +145,7 @@ Server A
  |
  +----> Server C
 
-
 Wait for replies
-
 
 Return success
 ```
@@ -180,7 +177,6 @@ Server A
 
 Success
 
-
 Later:
 
 Server B updated
@@ -198,7 +194,7 @@ Temporary stale data
 
 ---
 
-# PACELC Naming
+## PACELC Naming
 
 Every system gets two labels:
 
@@ -216,7 +212,6 @@ Meaning:
 Partition:
 
 Availability
-
 
 Else:
 
@@ -240,7 +235,6 @@ Partition:
 
 Consistency
 
-
 Else:
 
 Consistency
@@ -248,23 +242,20 @@ Consistency
 
 ---
 
-# Four Possible Choices
+## Four Possible Choices
 
 ```
 PC / EC
 
 Strong consistency always
 
-
 PA / EL
 
 Fast and available always
 
-
 PC / EL
 
 Rare
-
 
 PA / EC
 
@@ -283,7 +274,7 @@ PC/EC
 
 ---
 
-# PA/EL Systems
+## PA/EL Systems
 
 PA/EL means:
 
@@ -309,7 +300,7 @@ Examples:
 
 ---
 
-# DynamoDB
+## DynamoDB
 
 DynamoDB chooses:
 
@@ -329,7 +320,6 @@ Region A
 User update:
 
 name = John
-
 
 Region B
 
@@ -374,7 +364,7 @@ but with higher latency.
 
 ---
 
-# Cassandra
+## Cassandra
 
 Default behavior:
 
@@ -422,7 +412,7 @@ Less availability
 
 ---
 
-# PC/EC Systems
+## PC/EC Systems
 
 PC/EC means:
 
@@ -449,7 +439,7 @@ Examples:
 
 ---
 
-# etcd / Raft
+## etcd / Raft
 
 Writes:
 
@@ -483,11 +473,9 @@ Example:
 ```
 5 nodes
 
-
 3 nodes
 
 Majority
-
 
 2 nodes
 
@@ -510,7 +498,7 @@ Possible downtime
 
 ---
 
-# ZooKeeper
+## ZooKeeper
 
 ZooKeeper uses:
 
@@ -532,7 +520,7 @@ This protects consistency.
 
 ---
 
-# MongoDB
+## MongoDB
 
 MongoDB uses:
 
@@ -562,7 +550,7 @@ over availability
 
 ---
 
-# Spanner
+## Spanner
 
 Google Spanner chooses:
 
@@ -592,7 +580,7 @@ Strong global consistency
 
 ---
 
-# PACELC Comparison
+## PACELC Comparison
 
 | System | Partition Choice | Normal Choice | Category |
 |-|-|-|-|
@@ -605,7 +593,7 @@ Strong global consistency
 
 ---
 
-# Trade-off Summary
+## Trade-off Summary
 
 | Choice | Advantages | Disadvantages | Examples |
 |-|-|-|-|
@@ -615,7 +603,7 @@ Strong global consistency
 
 ---
 
-# Choosing Based on Business Requirements
+## Choosing Based on Business Requirements
 
 ## Payment System
 
@@ -689,7 +677,7 @@ temporary unavailability
 
 ---
 
-# Common Interview Questions
+## Common Interview Questions
 
 ## Q: Why is CAP not enough?
 
@@ -783,7 +771,7 @@ PA/EL
 
 ---
 
-# Simple Rule To Remember
+## Simple Rule To Remember
 
 ```
 Money / Inventory / Locks
@@ -791,17 +779,14 @@ Money / Inventory / Locks
         v
 Consistency
 
-
 Feeds / Likes / Analytics
         |
         v
 Availability
 
-
 Partition:
 
 A vs C
-
 
 Normal:
 
@@ -810,7 +795,7 @@ Latency vs C
 
 ---
 
-# Interview Answer
+## Interview Answer
 
 > "CAP explains the consistency versus availability trade-off during network partitions, but PACELC extends this by adding the normal-operation trade-off between latency and consistency. Strongly consistent systems like etcd and Spanner choose PC/EC, accepting latency and occasional unavailability. Systems like DynamoDB and Cassandra choose PA/EL, prioritizing availability and low latency while accepting eventual consistency."
 
@@ -821,3 +806,5 @@ Latency vs C
 - [Database Replication](../02-data-storage/database-replication.md) — sync vs async replication is the literal mechanism behind EC vs EL
 - [Consensus Algorithms](consensus-algorithms.md) — why PC/EC systems pay a latency cost on every write
 - [Multi-Region Architecture](../09-large-scale-data-systems/multi-region-architecture.md) — PACELC trade-offs become dominant once replicas cross regions
+
+</details>

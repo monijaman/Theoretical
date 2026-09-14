@@ -129,7 +129,6 @@ S3
 
 Application server transfers every byte.
 
-
 With presigned URL
 
 Client

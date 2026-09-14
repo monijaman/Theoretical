@@ -1,122 +1,113 @@
+# Message Queues
+
+A message queue lets one service send work to another service without waiting for it to finish.
+
+```text
+Producer → Queue → Consumer
+```
+
+- **Producer:** sends a message
+- **Queue:** stores the message
+- **Consumer:** receives and processes the message
+
+Example: An order service puts a `send confirmation email` message in a queue. An email service processes it later.
+
+---
+
 ## Visibility timeout
 
-A broker delivering a message doesn't immediately remove it from the queue. Instead, it temporarily **hides** (makes invisible) the message from other consumers for a configurable **visibility timeout**. During this window, the consumer is expected to process the message and acknowledge success.
+When a consumer receives a message, the queue temporarily hides it from other consumers.
 
-```
-Queue
-  |
-  +--> Consumer receives message
-           |
-           +--> message becomes invisible for N seconds
-                   |
-         +---------+---------+
-         |                   |
-      ack()              timeout expires
-         |                   |
-     message deleted     message becomes visible again
-                          for another consumer
+```text
+Consumer receives message
+          │
+          ▼
+Message is hidden
+     ┌────┴────┐
+     ▼         ▼
+ Success     Timeout
+     │         │
+  Delete     Show again
 ```
 
-This mechanism is how systems like **Amazon SQS** implement **at-least-once delivery** without locking a message forever. If a consumer crashes, hangs, or loses network connectivity before acknowledging, the visibility timeout eventually expires and another consumer can retry the work.
+- If processing succeeds, the consumer confirms it and the message is deleted.
+- If the consumer fails, the timeout ends and the message becomes available again.
 
-The timeout should be longer than the expected processing time. If it's too short, healthy consumers may still be working when the message becomes visible again, causing duplicate processing. If it's too long, failed messages take longer to be retried.
+Choose a timeout longer than the normal processing time:
+
+- Too short → another consumer may process the same message.
+- Too long → failed work takes longer to retry.
+
+This is common in systems such as Amazon SQS.
 
 ---
 
-## Retry strategies
+## Retries
 
-Not every failure should immediately send a message to the dead-letter queue. Many failures are temporary (database failover, network hiccup, downstream service restart), so brokers typically retry a message several times before giving up.
+Temporary failures should usually be retried.
 
-A common retry flow is:
-
-```
-Message fails
-      │
-      ▼
-Immediate retry
-      │
-      ▼
-Exponential backoff
-(wait 1s → 2s → 4s → 8s ...)
-      │
-      ▼
-Still failing after N attempts
-      │
-      ▼
-Dead-Letter Queue (DLQ)
+```text
+Failure → Wait → Retry → Still failing → Dead-Letter Queue
 ```
 
-Exponential backoff is preferred over immediate retries because it gives downstream systems time to recover. If thousands of consumers instantly retry failed requests, they can overwhelm an already unhealthy dependency—a phenomenon known as a **retry storm**.
+Increase the delay after every failure. This is called **exponential backoff**.
 
-Many systems also add **random jitter** to the delay so consumers don't all retry simultaneously.
+```text
+1 second → 2 seconds → 4 seconds → 8 seconds
+```
+
+This prevents consumers from repeatedly hitting a service that is already having problems. A small random delay, called **jitter**, also stops all consumers from retrying at the same time.
+
+After the retry limit is reached, move the message to a **Dead-Letter Queue (DLQ)** for investigation.
 
 ---
 
-## Kafka partitions and consumer scaling
+## Kafka partitions
 
-Kafka's unit of parallelism is the **partition**. Each partition can be processed by at most one consumer within a consumer group at any given time.
+Kafka divides a topic into **partitions**. Partitions allow consumers to process messages in parallel.
 
-```
-Topic (6 partitions)
-
-P0 ─────────► Consumer A
-P1 ─────────► Consumer B
-P2 ─────────► Consumer C
-P3 ─────────► Consumer D
-P4 ─────────► Consumer E
-P5 ─────────► Consumer F
+```text
+Partition 0 → Consumer A
+Partition 1 → Consumer B
+Partition 2 → Consumer C
 ```
 
-If a topic has six partitions, the maximum useful parallelism for a single consumer group is six consumers.
+Inside one consumer group, only one consumer can process a partition at a time.
 
-```
-6 partitions
-8 consumers
+For example, if a topic has 3 partitions:
 
-P0 -> C1
-P1 -> C2
-P2 -> C3
-P3 -> C4
-P4 -> C5
-P5 -> C6
+- Up to 3 consumers can work in parallel.
+- Any extra consumers stay idle.
 
-C7 (idle)
-C8 (idle)
-```
+Kafka keeps message order only inside the same partition. Use a key such as `user_id` or `account_id` when related messages must stay in order.
 
-Adding more consumers than partitions does **not** increase throughput because some consumers will have no partitions assigned to them.
+Simple rule:
 
-Conversely, increasing the partition count allows greater parallelism, but it also weakens ordering guarantees: Kafka guarantees ordering **only within a partition**, never across partitions.
-
-Rule of thumb:
-
-- More partitions → higher throughput and parallelism.
-- Fewer partitions → stronger ordering for related events.
-- Choose a partition key (such as `user_id` or `account_id`) so events requiring ordering always land in the same partition.
+- More partitions → more parallel processing
+- Same partition key → related messages stay ordered
 
 ---
 
-## Choosing the right message broker
+## Choosing a message broker
 
-Different brokers optimize for different workloads.
+| Broker | Use it for |
+|---|---|
+| **RabbitMQ** | Background jobs and flexible message routing |
+| **Amazon SQS** | Simple, managed queues on AWS |
+| **Apache Kafka** | High-volume event streams and message replay |
+| **Amazon SNS** | Sending one message to many subscribers |
+| **Amazon EventBridge** | Routing events between AWS services and applications |
+| **Apache Pulsar** | Large-scale streaming and multi-tenant systems |
+| **Amazon Kinesis** | Managed, real-time data streams on AWS |
 
-| Broker | Best for | Strengths | Trade-offs |
-|---|---|---|---|
-| **RabbitMQ** | Task queues, RPC workflows, flexible routing | Rich routing (direct, topic, fanout), priorities, TTLs, DLQs | Limited replay, lower throughput than log-based systems |
-| **Apache Kafka** | Event streaming, analytics, event sourcing, CQRS | Extremely high throughput, replay, consumer groups, durable log | Operational complexity, partition-based ordering only |
-| **Amazon SQS** | Managed cloud task queues | Fully managed, highly durable, integrates with AWS | Limited routing, replay capabilities compared to Kafka |
-| **Amazon SNS** | Broadcast notifications | Simple fan-out to multiple subscribers | No message replay or long-term retention |
-| **Amazon EventBridge** | Application and AWS service events | Event routing, filtering, SaaS/AWS integrations | Not designed for very high-throughput stream processing |
-| **Apache Pulsar** | Large multi-tenant event streaming | Separate compute/storage, geo-replication, queue + stream model | Smaller ecosystem than Kafka |
-| **Amazon Kinesis** | AWS-native streaming pipelines | Fully managed streaming, tight AWS integration | More AWS-specific and less flexible than Kafka |
+Quick guide:
 
-Rule of thumb:
-
-- **RabbitMQ / SQS** → Task distribution and background jobs.
-- **Kafka / Pulsar / Kinesis** → Event streaming, replay, analytics, and event sourcing.
-- **SNS / EventBridge** → Event fan-out and service integration rather than long-lived event storage.
+- Choose **RabbitMQ or SQS** for background jobs.
+- Choose **Kafka, Pulsar, or Kinesis** for event streaming.
+- Choose **SNS or EventBridge** for sending events to multiple services.
 
 ## Related topics
+
 - [Backpressure](../01-scaling-traffic/backpressure.md)
 - [Event-Driven Architecture](event-driven-architecture.md)
 - [Event Sourcing](event-sourcing.md)

@@ -3,7 +3,7 @@
 
 ---
 
-# What are Caching Strategies?
+## What are Caching Strategies?
 
 Caching strategies define **how data gets into the cache and how it stays synchronized with the database**.
 
@@ -25,7 +25,7 @@ A caching strategy determines:
 
 ---
 
-# Why It Matters
+## Why It Matters
 
 Without caching:
 
@@ -66,7 +66,7 @@ Benefits include:
 
 ---
 
-# The Five Main Caching Strategies
+## The Five Main Caching Strategies
 
 1. Cache-Aside (Lazy Loading)
 2. Read-Through
@@ -78,7 +78,7 @@ Each strategy differs mainly in **who manages the cache and when data is loaded 
 
 ---
 
-# 1. Cache-Aside (Lazy Loading)
+## 1. Cache-Aside (Lazy Loading)
 
 ## Idea
 
@@ -134,6 +134,9 @@ Return Data
 
 ---
 
+<details>
+<summary><strong>Optional deep dive</strong></summary>
+
 ## Write Flow
 
 ```text
@@ -178,7 +181,6 @@ def get_user(user_id):
 
     return value
 
-
 def update_user(user_id, fields):
     db.execute(
         "UPDATE users SET ... WHERE id=%s",
@@ -220,7 +222,7 @@ This is the **most commonly used caching strategy**.
 
 ---
 
-# 2. Read-Through
+## 2. Read-Through
 
 ## Idea
 
@@ -332,7 +334,7 @@ The application code becomes much cleaner.
 
 ---
 
-# 3. Write-Through
+## 3. Write-Through
 
 ## Idea
 
@@ -394,7 +396,7 @@ Also, data that is never read still occupies cache memory.
 
 ---
 
-# 4. Write-Behind (Write-Back)
+## 4. Write-Behind (Write-Back)
 
 ## Idea
 
@@ -492,7 +494,7 @@ Where losing a few seconds of data is acceptable.
 
 ---
 
-# 5. Refresh-Ahead
+## 5. Refresh-Ahead
 
 ## Idea
 
@@ -574,7 +576,7 @@ It also requires tracking access patterns.
 
 ---
 
-# Where Can You Cache?
+## Where Can You Cache?
 
 Caching usually exists at multiple layers.
 
@@ -614,7 +616,7 @@ Most large systems use several cache layers simultaneously.
 
 ---
 
-# 1. Browser Cache
+## 1. Browser Cache
 
 Examples:
 
@@ -635,7 +637,7 @@ Disadvantages:
 
 ---
 
-# 2. CDN Cache
+## 2. CDN Cache
 
 Stores content near users.
 
@@ -654,7 +656,7 @@ Benefits:
 
 ---
 
-# 3. Application Cache (In-Memory)
+## 3. Application Cache (In-Memory)
 
 Examples:
 
@@ -674,7 +676,7 @@ Disadvantages:
 
 ---
 
-# 4. Shared Cache
+## 4. Shared Cache
 
 Examples:
 
@@ -693,7 +695,7 @@ Disadvantages:
 
 ---
 
-# 5. Database Cache
+## 5. Database Cache
 
 Examples include:
 
@@ -706,7 +708,7 @@ These reduce expensive disk operations.
 
 ---
 
-# Strategy Comparison
+## Strategy Comparison
 
 | Strategy | Read Speed | Write Speed | Data Freshness | Complexity |
 |-----------|------------|-------------|----------------|------------|
@@ -718,7 +720,7 @@ These reduce expensive disk operations.
 
 ---
 
-# Which Strategy Should You Use?
+## Which Strategy Should You Use?
 
 | Scenario | Recommended Strategy |
 |----------|----------------------|
@@ -734,7 +736,7 @@ These reduce expensive disk operations.
 
 ---
 
-# Common Interview Questions
+## Common Interview Questions
 
 ## Why delete the cache instead of updating it?
 
@@ -841,7 +843,7 @@ This provides ultra-fast local reads while maintaining a shared cache across mul
 
 ---
 
-# Key Takeaways
+## Key Takeaways
 
 - **Cache-Aside** is the most widely used strategy and gives applications full control over cache population.
 - **Read-Through** moves cache-loading logic into the cache layer, simplifying application code.
@@ -857,3 +859,5 @@ This provides ultra-fast local reads while maintaining a shared cache across mul
 - [Database Replication](../02-data-storage/database-replication.md)
 - [Strong vs Eventual Consistency](../03-consistency-distributed/strong-vs-eventual-consistency.md)
 - [Backpressure](../01-scaling-traffic/backpressure.md)
+
+</details>
