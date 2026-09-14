@@ -1366,6 +1366,14 @@ func fanIn(channels ...<-chan int) <-chan int {
 
 ## 14. Context — Cancellation and Deadlines
 
+Pick the Right Context, Every Time
+The context package throws a few options at you—here’s how to choose wisely:
+
+context.Background(): Your starting point for standalone stuff (like main). Don’t slap it into business logic—it can’t cancel or timeout.
+context.TODO(): A “I’ll fix this later” flag. Cool for prototyping, but swap it out before shipping—prod deserves better.
+context.WithCancel(): Need to stop on a dime? This is your manual kill switch.
+WithTimeout / WithDeadline(): For anything time-bound—APIs, DB calls, you name it.
+
 `context.Context` carries cancellation signals and deadlines through a call chain. Pass it to I/O or long-running functions and stop when `ctx.Done()` is closed.
 
 `context.Context` is how you cancel goroutines gracefully.
@@ -1617,3 +1625,84 @@ https://medium.com/@gopinathr143/go-concurrency-patterns-a-deep-dive-a2750f98a10
 https://go.dev/talks/2013/advconc.slide#1
 ## Understanding the Go Scheduler and discovering how it works
 https://medium.com/@sanilkhurana7/understanding-the-go-scheduler-and-looking-at-how-it-works-e431a6daacf
+## Context
+https://dev.to/jones_charles_ad50858dbc0/mastering-gos-context-package-a-practical-guide-for-everyday-devs-1ll5
+
+---
+
+## Docker for Go Applications
+
+Docker packages an application and its dependencies into a portable container. For Go services, this makes development and deployment predictable: the same image can run locally, in CI, or in production. An image is the read-only template; a container is a running instance.
+
+### Essential commands
+
+```bash
+docker build -t go-api:local .
+docker run --rm -p 8080:8080 --name go-api go-api:local
+docker ps
+docker logs -f go-api
+docker stop go-api
+docker images
+```
+
+### Production-friendly multi-stage Dockerfile
+
+Multi-stage builds compile the Go program in a builder image and copy only the binary into a small runtime image, keeping build tools and source code out of production.
+
+```dockerfile
+FROM golang:1.24-alpine AS builder
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/app .
+
+FROM alpine:3.21
+RUN addgroup -S app && adduser -S app -G app
+WORKDIR /app
+COPY --from=builder /out/app ./app
+USER app
+EXPOSE 8080
+ENTRYPOINT ["./app"]
+```
+
+### Docker Compose for local development
+
+Use Compose when the Go API depends on PostgreSQL or Redis. Inside the Compose network, the service name is the hostname, so the API can connect to `postgres:5432` instead of `localhost`.
+
+```yaml
+services:
+  api:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: postgres://app:secret@postgres:5432/app?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: app
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d app"]
+volumes:
+  postgres-data:
+```
+
+Start with `docker compose up --build` and stop with `docker compose down`. Named volumes preserve database data; use `docker compose down -v` only when you intentionally want a clean database.
+
+### Practical guidelines
+
+- Read configuration from environment variables and never bake secrets into an image.
+- Make the application listen on `0.0.0.0`, not only `localhost`.
+- Handle `SIGTERM` and use Go's `context` package for graceful shutdown.
+- Add a health endpoint such as `/healthz` when appropriate.
+- Run as a non-root user, pin base-image versions, scan images, and rebuild regularly.
+- Keep containers stateless; store persistent data in managed databases or volumes.
+
