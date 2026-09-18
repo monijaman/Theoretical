@@ -1807,3 +1807,163 @@ The processing state shown to users should be honest: `UPLOADED`, `PROCESSING`, 
 ### Interview-Ready Answer
 
 > I would durably accept the upload, create each transformation once through an outbox, and isolate moderation, transcoding, and thumbnail work in bounded queues and worker pools. Consumers are idempotent by asset and transformation version. If transcoding slows, concurrency limits and admission control protect dependencies, priority queues preserve critical work, and lower-quality output provides graceful degradation. Retries are bounded and delayed, poison jobs go to a DLQ, and operations focus on oldest-job age and drain time. The key is to contain the slow pipeline rather than letting it consume the entire platform.
+
+## How Would You Upload a 50 GB File Reliably?
+
+### Question
+
+Why is a single `POST /uploads` request a poor design for a 50 GB file, and which upload pattern should a production system use instead?
+
+### Real-Life Picture
+
+Asking a courier to carry a 50 GB shipment through one doorway, in one uninterrupted trip, means a closed door or a dropped package restarts everything. A better system records each delivered box and lets the courier continue from the last confirmed one.
+
+### Short Answer
+
+Do not send a 50 GB file through the application server in one long request. A browser might stream the file rather than load all 50 GB into memory, but a single request is still fragile: reverse-proxy body limits, load-balancer and idle timeouts, connection loss, deploys, and retries can all waste hours of transferred data.
+
+Use **direct-to-object-storage, resumable multipart upload** as the default. The backend authorizes and coordinates the upload; the browser sends file parts directly to object storage and can retry only the failed parts.
+
+```text
+Browser ── create upload ──► API
+   │                         │ authenticate, authorize, create upload record
+   │ ◄── upload ID + signed part URLs ──┘
+   │
+   ├── part 1 ──────────────► Object storage
+   ├── part 2 ──────────────► Object storage
+   ├── retry only failed parts
+   │
+   └── complete upload ────► API / Object storage
+                                │
+                                ▼
+                       verify, finalize, enqueue processing
+```
+
+### 1. Direct-to-Cloud Presigned Multipart Upload — Recommended
+
+The browser asks the backend for a secure, short-lived upload session and presigned URLs. It splits the file into parts and uploads those parts directly to object storage such as Amazon S3 or Google Cloud Storage. After every part succeeds, the client saves its part number and storage receipt; completion tells storage to assemble the final object.
+
+This is the preferred design because the application backend carries **no file bytes**. It avoids application-server bandwidth and disk pressure, does not hold a long-lived request open, and scales with the object-storage service rather than with API instances.
+
+Important details:
+
+- Persist an upload record with owner, expected size, content type, checksum policy, storage key, expiry, and state such as `INITIATED`, `UPLOADING`, `COMPLETING`, `COMPLETED`, or `ABORTED`.
+- Give each logical upload an idempotency key. Retrying `create upload` must return the same safe session, not create duplicate objects or processing jobs.
+- The client resumes by listing already accepted parts and uploading only missing or failed ones. It should use bounded parallelism so it does not saturate the user's connection.
+- Validate authorization, maximum size, allowed content type, and object key *before* issuing URLs. Restrict the signed URL to the intended operation, part, key, and expiry.
+- On completion, verify part receipts and expected size; use a checksum when integrity requirements demand it. Treat a client-side “complete” response as untrusted until storage confirms the object exists and is valid.
+- Expire and abort abandoned multipart sessions with a lifecycle rule. Upload completion must trigger downstream processing exactly once, typically through an outbox or storage event plus an idempotent worker.
+
+For S3 specifically, multipart upload uses parts of at least 5 MiB except the final part, supports at most 10,000 parts, and allows up to 5 GiB per part. Choose a part size that stays within those limits while keeping retry cost reasonable; for a 50 GB file, 64–128 MiB parts are a practical starting range.
+
+### 2. Chunked and Resumable Upload Through a Gateway — TUS
+
+When the product cannot upload directly to cloud storage, use a resumable protocol such as **TUS**. The browser slices the file into manageable chunks—often 50–100 MiB—and sends each chunk with its byte offset. The gateway persists the current offset and responds with the last safely stored position. After a network loss at 32 GB, the client asks for that position and continues from there instead of starting over.
+
+This approach provides a standardized recovery contract and can enforce application-specific inspection or routing. Its cost is that the gateway must still absorb the full 50 GB: it needs durable temporary storage, quota controls, checksum handling, cleanup, and horizontal capacity. Do not keep chunks only in a process-local disk or memory buffer; a restart or load-balancer change would destroy resume reliability.
+
+### 3. WebSocket or Custom Binary Stream — Usually the Wrong Choice
+
+A persistent WebSocket can carry binary chunks to an application server, but it does not automatically provide durable offsets, range recovery, upload persistence, or CDN/object-storage integration. A disconnect usually leaves the application to invent all of those features itself.
+
+Use WebSockets for real-time control messages—such as progress updates, cancellation, or collaborative interaction—not as the primary transport for a 50 GB file. Standard HTTP multipart or TUS is easier to retry, observe, secure, and operate at scale.
+
+### Failure and Recovery
+
+| Failure | Required behavior |
+| --- | --- |
+| User loses connectivity at 32 GB | Query accepted parts or the durable TUS offset; upload only the missing range. |
+| A part times out | Retry that part with backoff and a bounded retry budget; do not restart the whole file. |
+| API server deploys or restarts | Direct upload continues independently; gateway uploads resume from durable storage/state. |
+| Client calls complete twice | Idempotently return the final asset state and publish processing once. |
+| Upload is abandoned | Expire the session and clean up incomplete parts automatically. |
+| Object is corrupted or truncated | Reject completion after size/checksum validation; keep it unavailable to consumers. |
+
+### Interview-Ready Answer
+
+> I would use a resumable multipart upload directly to object storage. The API would authenticate the user, create a durable upload session, and issue narrowly scoped, short-lived presigned URLs. The browser would upload bounded-size parts directly to storage, persist the successful part receipts, and resume by sending only missing parts after a failure. Completion would be idempotent, validate the final object, and enqueue downstream processing once. If direct storage access is not possible, I would use TUS with durable offsets and temporary storage, accepting the additional gateway bandwidth and operational cost. I would avoid WebSockets for the data path because they do not give me durable range recovery by default.
+
+## The Service Was Fast Yesterday. Why Is It Slow Today?
+
+### Question
+
+There was no deployment, traffic spike, or code change. Today the service is slow. Where do you investigate first?
+
+### Short Answer
+
+Do not restart pods, increase memory, or blame the network before you have evidence. First determine **who is slow, where time is spent, and when the pattern occurs**. A higher p99 with stable median latency is a tail problem; a higher median for every request is a broad capacity, dependency, or execution-path problem. They require different investigations.
+
+Start with a narrow before/after comparison for the same endpoint, region, tenant, and request shape. Use traces to split end-to-end latency into gateway, application, database, cache, queue, and downstream-call time. Then follow the largest measured component—one hypothesis at a time.
+
+```text
+Slow request
+    │
+    ├── Is p50 slow, p99 slow, or both?
+    │       │
+    │       ├── p99 only → contention, retries, tail dependency, GC, noisy neighbor
+    │       └── p50 + p99 → broad regression, saturation, plan/data/cache change
+    │
+    ├── Which span grew in a trace?
+    │       │
+    │       ├── database → slow-query log, waits/locks, EXPLAIN ANALYZE, pool metrics
+    │       ├── external call → DNS/TLS/connect/read timing, retry rate, dependency SLO
+    │       ├── application → CPU, run queue, thread pools, GC, lock contention
+    │       └── gateway/network → queueing, upstream-connect time, packet/DNS errors
+    │
+    └── Does it correlate with a time, tenant, host, query, or data shape?
+            └── prove the cause, mitigate safely, then verify the latency improves
+```
+
+### A Systematic Investigation
+
+| Question | Evidence to inspect | What it can reveal |
+| --- | --- | --- |
+| Is everyone slow, or only p99? | p50/p95/p99 by endpoint, region, tenant, instance, and status code | A tail-only issue is often contention, retries, pauses, or an uneven shard rather than a universal regression. |
+| Did the request path change? | Distributed traces before and after the slowdown | Identifies whether time is in the database, application, cache, queue, gateway, or a dependency. |
+| Is the database actually slow? | Slow-query log, query count, wait events, lock waits, `EXPLAIN ANALYZE`, rows scanned/returned | Separates a bad query/plan from a healthy database blamed by a slow caller. |
+| Why is an indexed query slow? | Actual execution plan, statistics freshness, parameter values, table/index growth, cache-hit rate | An index can be skipped when its selectivity is poor, a cast/function prevents its use, statistics are stale, or a different plan is cheaper at the new data size. |
+| Database time is normal; where is the rest? | Trace spans plus application CPU, thread-pool queue time, lock contention, GC pauses, cache misses, downstream timings | Finds work hidden outside SQL: serialization, synchronous logging, retries, connection establishment, blocking I/O, or a slow dependency. |
+| Is the connection pool the cause? | Active/idle/pending connections, acquisition wait time, DB concurrency, long-running transactions | Pool exhaustion is frequently a symptom of slow queries, leaked connections, or too much concurrent work—not proof that the pool is too small. |
+| Are GC pauses the cause? | Pause duration/frequency, allocation rate, heap occupancy, CPU, request latency correlation | A pause may be causal, but it can also be a downstream effect of request queues, retries, object churn, or a memory leak. |
+| Is there a hot row or hot key? | Per-key request rate, lock waits, update conflicts, cache-shard load, database row-level contention | A shared counter, config row, or inventory record can serialize traffic; lock wait and queueing usually fail before CPU looks alarming. |
+| Is it only slow from 9–10 AM? | Correlation with cron jobs, reports, backups, ETL, cache expiry, certificate rotation, batch consumers, tenant behavior | A repeatable time window points to scheduled work or a diurnal resource contention pattern, not random network luck. |
+
+### Database Checks Without Guessing
+
+An index is not a guarantee. Compare the slow request's **actual** plan with a known-good plan, using representative parameters and production-like data. Check estimated versus actual rows, join order, scan type, sort/hash spill, lock waits, and whether the query is waiting on I/O rather than consuming CPU.
+
+Typical causes of a sudden no-code-change regression include:
+
+- table or index growth changed the cheapest plan;
+- stale or skewed optimizer statistics caused bad row estimates;
+- a parameter-sensitive plan was cached for an unrepresentative request;
+- a new data distribution made an existing index non-selective;
+- a query expression, implicit cast, leading wildcard, or collation mismatch made the index unusable;
+- a long transaction, report, migration, or batch task introduced lock or I/O contention.
+
+Do not add an index merely because the request is slow. First identify the query, predicates, sort order, rows read, rows returned, and plan. Then test the smallest change that matches the observed access pattern and verify its write/storage cost.
+
+### Cause Versus Symptom
+
+| Observation | Do not assume | Investigate next |
+| --- | --- | --- |
+| Connection pool is full | “Increase the pool.” | Which borrowers hold connections longest; acquisition wait time; query and transaction duration; leaks; database concurrency limit. |
+| GC pauses increased | “Tune the heap.” | Allocation growth, retained objects, request backlog, retry amplification, heap pressure, and latency correlation. |
+| CPU is low but latency is high | “The machine is healthy.” | Queues, locks, I/O waits, connection acquisition, downstream calls, and throttling. |
+| One database row is touched by every request | “The database needs more CPU.” | Row locks and serialization; replace the hot path with sharded counters, batching, an atomic store, or an append-only event flow as correctness permits. |
+| Restart makes it briefly better | “The restart fixed it.” | Cache warmness, leaked resources, stuck connections, periodic workload, and the exact metric that changed after restart. |
+
+### Safe Response Sequence
+
+1. Record the incident window, affected endpoints/users, baseline, and p50/p95/p99 before changing anything.
+2. Check error rate, saturation, and a sample of traces; identify the span or queue with the extra time.
+3. Correlate the change with a dependency, query fingerprint, host, tenant, scheduled job, data growth, or configuration/secret/certificate change.
+4. Capture evidence: query plan and waits, pool acquisition time, runtime pause data, and dependency timing as applicable.
+5. Apply the smallest reversible mitigation—such as pausing a competing batch job, rolling back a configuration, shedding nonessential work, or adding a proven index—and observe the same metrics.
+6. Fix the root cause, add an alert or dashboard for the leading indicator, and document the timeline so the next incident starts with evidence.
+
+A restart can be a justified emergency mitigation when the service is unhealthy, but it is not a diagnosis. Restarting every pod may also erase the evidence, cause a thundering reconnect, and make the next comparison harder.
+
+### Interview-Ready Answer
+
+> I would begin by defining the latency shape: p50 versus p99, affected endpoints, tenants, regions, and the exact time window. I would compare a trace from before and during the incident to locate the added time instead of assuming it is the database or network. If the database span grew, I would inspect query fingerprints, actual plans, row estimates, waits, locks, statistics, and data growth; an index alone does not prove a good plan. If SQL is normal, I would follow the remaining application, pool, GC, cache, queue, and downstream spans. I would treat a saturated pool or GC pause as a hypothesis, not automatically as the root cause. A recurring 9–10 AM slowdown would make scheduled jobs, cache expiry, reporting, backups, and batch contention my first suspects. I would capture a baseline, make the smallest reversible mitigation, verify the same latency metrics improve, and add monitoring for the leading signal rather than relying on restarts.
