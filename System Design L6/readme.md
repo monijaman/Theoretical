@@ -35,6 +35,7 @@ This guide turns system-design ideas into practical, interview-ready explanation
 19. [Food Delivery Events Arrive Out of Order](#food-delivery-events-arrive-out-of-order)
 20. [A Global Rate Limiter During a Login Attack](#a-global-rate-limiter-during-a-login-attack)
 21. [A Viral Video Overloads the Processing Pipeline](#a-viral-video-overloads-the-processing-pipeline)
+22. [Video Streaming for a Premiere Night](#design-a-video-streaming-platform-for-a-premiere-night) — survive 200 million viewers pressing Play at 8:00 PM.
 
 ### Quick Real-Life Map
 
@@ -1967,3 +1968,125 @@ A restart can be a justified emergency mitigation when the service is unhealthy,
 ### Interview-Ready Answer
 
 > I would begin by defining the latency shape: p50 versus p99, affected endpoints, tenants, regions, and the exact time window. I would compare a trace from before and during the incident to locate the added time instead of assuming it is the database or network. If the database span grew, I would inspect query fingerprints, actual plans, row estimates, waits, locks, statistics, and data growth; an index alone does not prove a good plan. If SQL is normal, I would follow the remaining application, pool, GC, cache, queue, and downstream spans. I would treat a saturated pool or GC pause as a hypothesis, not automatically as the root cause. A recurring 9–10 AM slowdown would make scheduled jobs, cache expiry, reporting, backups, and batch contention my first suspects. I would capture a baseline, make the smallest reversible mitigation, verify the same latency metrics improve, and add monitoring for the leading signal rather than relying on restarts.
+
+## The Site Is Down but CPU and Health Checks Are Green
+
+### Question
+
+The site is down. Application CPU is 12%, the primary CPU is fine, and health checks are green. Someone says, “We'll add more app servers.”
+
+What should you ask before approving that change?
+
+### Answer
+
+Adding application servers creates more potential borrowers; it does not create more database connections or make a shared pool fair. First inspect pool acquisition latency, active/idle/pending connections, connection ownership by tenant and endpoint, transaction/query duration, retry rate, and database waits. The likely failure is queueing or starvation at a shared dependency, which CPU and a shallow liveness check can miss.
+
+| Question | Answer |
+| --- | --- |
+| If one tenant holds 70% of the connection pool, what do the extra servers wait on? | The same scarce connections. More servers add pending borrowers and may increase connection churn; they do not reclaim the tenant's long-held connections. Apply per-tenant concurrency/connection budgets, investigate the long transactions, and protect the shared pool. |
+| If checkout and a 3-year export share that pool, who loses? | Checkout loses unless it has a reserved or prioritized budget. The export can occupy connections with long scans or transactions, making customer-facing requests wait or time out. Isolate exports with a replica, queue, worker pool, separate pool, or a rate-limited asynchronous job; keep checkout's critical path bounded. |
+| If their retry loop has no jitter, how many extra holds hit the same 100 connections? | Potentially every timed-out request retries in the same window, so the next wave can be roughly the original demand again—plus retries already in flight—against those same 100 connections. The exact number comes from the retry budget and concurrent failures; measure it. Use capped exponential backoff with full jitter, deadlines, and a retry budget. |
+| If `/health` is a different path than checkout, why is the box still green? | The health route may only prove that the process can answer a cheap request. It can bypass authentication, the checkout database query, the payment/dependency call, and pool acquisition. Split liveness from readiness, and make readiness exercise the critical dependencies safely; add synthetic checkout-path monitoring and alerts on pool wait/queue depth. |
+
+### Decision
+
+Do not scale first. Stabilize the critical path: stop or throttle the export, cap retries, preserve a checkout budget, and verify checkout latency/error rate and pool-acquisition time recover. Then fix the fairness and workload-isolation design. Add app servers only if evidence shows application capacity—not the shared pool or downstream dependency—is the limiting resource.
+
+## Design a Video Streaming Platform for a Premiere Night
+
+### Question
+
+A video streaming platform has 200 million users. A new season drops tonight, and a large share of them press **Play** at 8:00 PM. The naive design—one large server in California that stores every file and streams it on request—crashes.
+
+- What happens when that single video server receives millions of requests within 60 seconds?
+- A user in Mumbai and a user in New York both press Play on the same episode. Both are buffering. Why?
+
+### Real-Life Picture
+
+A new bestselling book is released at midnight. If every reader in the world must collect a copy from one warehouse in California, the queue stretches around the block and overseas readers wait days for shipping. Publishers instead ship boxes to local bookstores *before* release day. Readers walk to a nearby shop, and the warehouse only restocks the shops.
+
+### Why the Naive Design Fails
+
+| Problem | What actually breaks | Fix |
+| --- | --- | --- |
+| Millions of requests hit one server | Network bandwidth, connection limits, and disk I/O are exhausted in seconds. Every user buffers, then the server falls over. | A **CDN**: thousands of edge servers close to users serve the video bytes. |
+| Mumbai and New York both buffer | Distance adds round-trip latency; TCP throughput falls as RTT rises, and long-haul paths lose more packets. One origin cannot be close to everyone. | Serve each user from a **nearby edge** chosen by DNS/anycast routing. |
+| A 4 GB file on a slow connection | Downloading one large file at a fixed quality stalls whenever bandwidth dips. | **Adaptive bitrate streaming (HLS/DASH)**: small segments at multiple qualities. |
+| Everyone wants the same episode at once | Every edge misses the cache at the same moment and stampedes the origin. | **Pre-warm** the CDN and collapse concurrent misses into one origin fetch. |
+| The service crashes 40 minutes in | After recovery, the player restarts from 0:00. | **Persist playback position** per user and title, and resume from it. |
+
+### Short Answer
+
+Separate the **control plane** (small API requests: authentication, entitlement, which manifest to play, playback position) from the **data plane** (the video bytes). The control plane runs behind an API gateway and load balancer as horizontally scaled, stateless services. The data plane is almost entirely the CDN, so the origin rarely sees viewer traffic.
+
+```text
+                        Control plane (small requests)
+User device ──► API Gateway ──► Load Balancer ──► Playback Service ──► Redis (position cache)
+    │                                                   │                    │
+    │                                                   │ signed manifest URL ▼
+    │                                                   │             Durable store (position)
+    │                         Data plane (video bytes)  ▼
+    └──────────────► Nearby CDN edge ──(miss)──► Regional mid-tier cache ──(miss)──► Origin storage
+```
+
+### 1. The CDN Carries the Video Traffic
+
+- Encoded segments live in durable object storage (the origin).
+- Edge servers cache segments near users. The Mumbai viewer is served from an edge in or near India; the New York viewer from one in the US Northeast.
+- A **tiered cache** (edge → regional mid-tier → origin) means a miss at one edge usually hits a regional cache instead of the origin.
+- **Request collapsing** ensures that when 10,000 viewers miss the same segment at one edge simultaneously, only one request travels upstream.
+- Playback URLs are **signed and short-lived**, so the CDN can enforce access without calling the entitlement service for every segment.
+
+Netflix goes further with Open Connect: its own cache appliances installed inside ISP networks, so most bytes never cross the public internet backbone.
+
+### 2. Adaptive Bitrate Streaming Keeps Playback Smooth
+
+A video is never sent as one 4 GB file.
+
+1. During ingest, the transcoding pipeline encodes each title into an **encoding ladder**—for example 360p, 480p, 720p, 1080p, and 4K—and splits each rendition into segments of roughly 2–6 seconds.
+2. A **manifest** (HLS `.m3u8` or DASH `.mpd`) lists every rendition and segment.
+3. The player downloads the manifest, starts with a conservative quality for fast startup, and measures throughput and buffer level.
+4. Before each next segment, it chooses the highest rendition it can sustain. When speed drops, quality drops instead of the video stalling. When speed recovers, quality climbs back.
+
+Because segments are ordinary HTTP objects, they cache perfectly on the CDN.
+
+### 3. Pre-Warm Before the Surge
+
+A premiere is a *known* spike, so prepare for it instead of reacting to it:
+
+- Push the first episodes' popular renditions and early segments to edges in regions where demand is predicted, hours before release.
+- Pre-scale the control plane (playback, entitlement, and auth services) and warm their caches and connection pools.
+- Stagger or pre-fetch what you can: for example, clients download the manifest and artwork before 8:00 PM.
+- Keep origin shielding and request collapsing on, so any remaining misses do not become a thundering herd.
+- Rehearse with load tests at the expected peak, and define a degradation plan: cap the maximum bitrate, disable nonessential features such as previews or recommendations, and queue new sessions at the gateway before the core playback path fails.
+
+### 4. Playback Position Survives Failures
+
+The player sends a heartbeat with the current position every few seconds and when the user pauses or exits.
+
+- Write the position to **Redis**, keyed by `user_id:profile_id:title_id`, for fast reads when a session resumes.
+- Also persist it asynchronously to a **durable store** (for example Cassandra or DynamoDB) through a queue or write-behind process. Redis alone is a cache: a failover or eviction must not lose everyone's progress.
+- On Play, read from Redis first, fall back to the durable store, and resume from that position.
+- Use **last-write-wins with a timestamp or sequence number**, so a delayed heartbeat from an old device cannot move the position backwards.
+- Losing a few seconds is acceptable. Heartbeats are high-volume and cheap, so batch them and never block playback on the write.
+
+The player itself also helps: it already holds several seconds of buffer, and if an API call fails it can retry on another instance while the video keeps playing from the CDN.
+
+### 5. Test the Failure Before It Happens
+
+Netflix runs **Chaos Monkey**, which terminates production instances at random so teams must build services that tolerate instance loss. The broader practice, chaos engineering, also injects latency, dependency failures, and even region evacuations. The goal is to prove that failover works on an ordinary Tuesday, not to discover it at 8:00 PM on premiere night.
+
+### Failure Summary
+
+| Failure | Result with a naive design | Result with this design |
+| --- | --- | --- |
+| Millions of simultaneous Play requests | The origin saturates and crashes | Edges absorb the bytes; the control plane is pre-scaled |
+| Far-away viewers | High RTT and constant buffering | A nearby edge serves each viewer |
+| Slow or fluctuating bandwidth | Stalls at a fixed quality | ABR lowers quality instead of stalling |
+| Same popular episode everywhere | Origin stampede | Pre-warmed caches, tiered caching, request collapsing |
+| Playback service instance crashes | Session lost, restart at 0:00 | Stateless retry to another instance; position restored |
+| Redis node fails | Progress lost | Durable store remains the source of truth |
+
+### Interview-Ready Answer
+
+> I would separate the control plane from the data plane. Small API calls—auth, entitlement, manifest selection, and playback position—go through an API gateway and load balancer to stateless, horizontally scaled services. Video bytes never touch those services: titles are transcoded into an adaptive bitrate ladder of short HLS/DASH segments and served from a CDN with tiered caching and request collapsing, so each viewer is served by a nearby edge and the origin sees little traffic. Because a premiere is a predictable spike, I would pre-warm the edges with the first episodes, pre-scale the control plane, rehearse with load tests, and define degradation steps such as capping bitrate and disabling nonessential features. Playback position is sent as periodic heartbeats, cached in Redis for fast resume, and persisted asynchronously to a durable store with last-write-wins ordering. Finally, I would validate these failure paths continuously with chaos engineering, rather than trusting them for the first time on launch night.
