@@ -36,6 +36,10 @@ This guide turns system-design ideas into practical, interview-ready explanation
 20. [A Global Rate Limiter During a Login Attack](#a-global-rate-limiter-during-a-login-attack)
 21. [A Viral Video Overloads the Processing Pipeline](#a-viral-video-overloads-the-processing-pipeline)
 22. [Video Streaming for a Premiere Night](#design-a-video-streaming-platform-for-a-premiere-night) — survive 200 million viewers pressing Play at 8:00 PM.
+23. [Ride Offers During a Stadium Surge](#ride-offers-during-a-stadium-surge) — one active offer per driver and bounded fan-out per rider.
+24. [Payment Timeout, Then a Second Charge](#payment-timeout-then-a-second-charge) — handle in-flight retries, late webhooks, and new client keys.
+25. [When One Expired Cache Key Hits Postgres 5,000 Times](#when-one-expired-cache-key-hits-postgres-5000-times) — prevent a cache stampede without serving stale or out-of-order data forever.
+26. [Pod Running, but Users Get 503](#pod-running-but-users-get-503) — trace the real request path from DNS through dependencies.
 
 ### Quick Real-Life Map
 
@@ -2090,3 +2094,540 @@ Netflix runs **Chaos Monkey**, which terminates production instances at random s
 ### Interview-Ready Answer
 
 > I would separate the control plane from the data plane. Small API calls—auth, entitlement, manifest selection, and playback position—go through an API gateway and load balancer to stateless, horizontally scaled services. Video bytes never touch those services: titles are transcoded into an adaptive bitrate ladder of short HLS/DASH segments and served from a CDN with tiered caching and request collapsing, so each viewer is served by a nearby edge and the origin sees little traffic. Because a premiere is a predictable spike, I would pre-warm the edges with the first episodes, pre-scale the control plane, rehearse with load tests, and define degradation steps such as capping bitrate and disabling nonessential features. Playback position is sent as periodic heartbeats, cached in Redis for fast resume, and persisted asynchronously to a durable store with last-write-wins ordering. Finally, I would validate these failure paths continuously with chaos engineering, rather than trusting them for the first time on launch night.
+
+## Ride Offers During a Stadium Surge
+
+### Question
+
+The World Cup final has just ended. `20,000` people open the ride app near the stadium and `1,000` drivers are nearby.
+
+- A driver may see **at most one active ride offer** at a time.
+- The driver is still considering an offer when another request arrives.
+- The driver's phone may be offline in a tunnel.
+- A rider must not be offered to an unbounded number of drivers.
+
+A candidate says: “Put a Redis lock on the driver with a TTL.” What is missing?
+
+### Real-Life Picture
+
+Think of a dispatcher holding a physical card for each driver and a card for each rider. The dispatcher may hand a driver only one card, and may put a rider's card on only a small number of desks. A timer on a desk is useful when the dispatcher disappears—but the timer alone does not decide whether an old dispatcher is still allowed to act after the card has moved to someone else.
+
+### Short Answer
+
+A Redis TTL lock can be a useful **lease**, but it is not the matching protocol or the source of truth. Model both sides durably:
+
+1. A ride request has an explicit state and an `offer_round` (or version).
+2. A driver has an explicit availability/offer state and version.
+3. A single atomic conditional transition creates an offer only if the driver is free **and** the request has capacity for another offer.
+4. Every accept, decline, timeout, reconnect, and retry carries the `offer_id` and version; stale messages are rejected.
+5. A background sweeper recovers expired offers, but only after checking durable state.
+
+The key invariant is not “a Redis key exists.” It is: **a driver has no more than one live offer, and an offer belongs to one specific driver, request, and version.** A second business rule bounds fan-out, for example at most three simultaneous offers for one rider.
+
+### State Model and Atomic Claim
+
+```text
+Ride request: SEARCHING ──► OFFERING ──► ASSIGNED
+                    │           │
+                    │           └── no accept before deadline ──► SEARCHING (next round)
+                    └── cancelled ─────────────────────────────► CANCELLED
+
+Driver: AVAILABLE ──► OFFERED ──► ASSIGNED
+                    │      │
+                    │      └── decline / timeout / invalidated ─► AVAILABLE
+                    └── offline ───────────────────────────────► UNAVAILABLE
+```
+
+The match service chooses a small ranked set of candidates from a location index, then asks a transactional match owner to claim one pair. Redis geospatial search, Kafka, and a cache may help find and distribute candidates, but they do not define the winner.
+
+At the durable owner, the equivalent of one transaction is:
+
+```sql
+-- Illustrative logic: all checks and updates must commit atomically.
+UPDATE drivers
+SET state = 'OFFERED', version = version + 1
+WHERE driver_id = :driver_id
+  AND state = 'AVAILABLE'
+  AND version = :expected_driver_version;
+
+-- Only if exactly one driver row changed:
+UPDATE ride_requests
+SET active_offer_count = active_offer_count + 1,
+    state = 'OFFERING', version = version + 1
+WHERE request_id = :request_id
+  AND state IN ('SEARCHING', 'OFFERING')
+  AND active_offer_count < :max_parallel_offers
+  AND version = :expected_request_version;
+
+-- Insert offer(offer_id, request_id, driver_id, request_version,
+--              driver_version, expires_at, status='PENDING').
+```
+
+In practice this might be a transaction in a strongly consistent database, a single-shard command processor keyed by a coordination key, or another durable compare-and-set mechanism. If the second condition fails, undo/release the first claim in the same transaction—or structure both records under one ownership partition so partial claims cannot commit. A separate “check driver, then set Redis lock” flow is a race.
+
+### Why a TTL Alone Fails
+
+| Situation | Failure with only `SET driver:{id} NX PX ...` | Required behavior |
+| --- | --- | --- |
+| Driver is still deciding when TTL expires | Another matcher considers the driver free and sends a second offer. | The offer has a business deadline. Renew only while the owner is healthy, and reject/invalidates the old offer by `offer_id` and version before re-offering. |
+| Two matchers see a free driver | Both can send an offer if the read/lock/accompanying state is not one atomic decision. | A conditional durable claim picks one winner. The loser rereads state and tries another candidate. |
+| Old matcher wakes after lease expiry | It can write or notify based on an obsolete lease. | Use monotonically increasing versions/fencing tokens. Downstream writes and notifications accept only the current token. |
+| Phone is in a tunnel | The push delivery is delayed or never received; lock expiry does not reveal whether the driver saw it. | Expire according to the server's `expires_at`, mark the offer terminal, release capacity, and retry the rider with another bounded round. A late accept is rejected as expired. |
+| One rider is sent to 1,000 drivers | A per-driver lock says nothing about the rider. | Store a request-level active-offer counter/set and enforce `max_parallel_offers` atomically; normally send a small batch or sequential offers. |
+| Driver accepts at the deadline | Timeout worker and accept handler race, possibly producing two assignments. | The first valid conditional transition from `PENDING` wins. The other returns the terminal offer/ride state without side effects. |
+
+### Delivery Is an Asynchronous Side Effect
+
+Creating an offer and delivering a push notification are separate operations. Do not hold a database transaction open while calling APNs, FCM, SMS, or WebSocket infrastructure.
+
+```text
+atomic offer claim + outbox record
+             │
+             ▼
+        outbox publisher ──► push / WebSocket
+             │                    │
+             │                    └── delivery can be late, duplicated, or absent
+             ▼
+       idempotent retry and status tracking
+```
+
+The client receives `offer_id`, `expires_at`, and a version. It should hide an offer at expiry, but the server remains authoritative. On accept it calls an idempotent endpoint such as `POST /offers/{offer_id}/accept`; the server conditionally transitions that offer to `ACCEPTED` only if it is still pending, unexpired, and the request is still unassigned. A duplicate push, app reconnect, or retry returns the same result instead of creating another trip.
+
+### Sequential Versus Parallel Offers
+
+There is a product trade-off, not one universal answer:
+
+| Strategy | Benefit | Cost | Good default |
+| --- | --- | --- | --- |
+| One driver at a time | Simplest fairness and no driver contention. | Slow matching when drivers decline or are offline. | Low-demand areas or high-value trips. |
+| Small bounded batch (for example 2–3) | Faster time to assignment and resilience to offline devices. | More declines/cancellations; requires request-level fan-out control. | A surge such as the stadium exit. |
+| Large broadcast | Fastest apparent reach. | Wastes driver attention, creates many races, and can starve nearby riders. | Avoid unless the product explicitly supports a broadcast/auction model. |
+
+If a small batch is used, one accepted offer atomically assigns the ride and invalidates every sibling offer. Those drivers immediately receive an “already matched” event and return to `AVAILABLE`; they must not be left showing a stale trip.
+
+### Failure, Recovery, and Observability
+
+| Failure | Recovery rule |
+| --- | --- |
+| Matcher crashes after claim, before push | Outbox publisher retries the durable offer; no new offer is created. |
+| Push is duplicated | Client deduplicates by `offer_id`; server accept is idempotent. |
+| Push is missing or phone is offline | Server deadline expires; offer becomes terminal and capacity is released for the next attempt. |
+| Timeout worker runs twice | Conditional state update makes expiry idempotent. |
+| Redis/location index is stale | Candidate selection may be wrong, but durable driver/request claims preserve the invariant. Refresh location and retry a different candidate. |
+| Database/shard outage | Stop claiming in that ownership domain, preserve existing offers until their deadline, and degrade honestly rather than guessing availability. |
+
+Monitor offer creation latency, time-to-accept, offer expiry/decline rate, stale/late accept rejections, active offers per driver, active offers per request, push delivery latency, outbox age, candidate exhaustion, and assignment success by neighborhood. During a stadium surge, partition or shard by geographic cell, cap attempts per rider, and isolate matching capacity from trip lifecycle, payments, and the rest of the app.
+
+### Interview-Ready Answer
+
+> I would not describe this as a Redis-lock problem. Redis can provide a short lease to reduce duplicate work, but the correctness boundary is a durable offer state machine. I would atomically claim a driver only when the driver is `AVAILABLE`, atomically reserve bounded offer capacity on the ride request, and create one versioned `offer_id` with a server-side deadline. Two matchers race through the same conditional transition, so exactly one wins; an old lease holder is fenced off by version checks. The push is sent through an outbox and may be delayed or duplicated, so the client treats it as a notification while the accept endpoint is idempotent and validates offer state, version, and expiry. If the driver is offline, the server expires the offer, releases both sides, and tries the next bounded batch. Once any driver accepts, the assignment transition invalidates sibling offers. I would monitor late accepts, expiry rate, fan-out, outbox age, and assignment latency, and shard the candidate search by geographic cell so a stadium exit cannot starve the rest of the city.
+
+## Payment Timeout, Then a Second Charge
+
+### Question
+
+The user clicks **Pay** once. The card is charged twice.
+
+The first request reaches the payment provider and the provider creates a charge. The application times out before returning `200 OK`, so the client retries. The second call creates another charge.
+
+Someone says: “Make the endpoint idempotent.” Answer these before accepting that answer:
+
+- Who generates the idempotency key—the client or the server?
+- What does the API return if the second call arrives while the first is still pending?
+- A provider request times out. If the application marks the attempt `FAILED`, what happens when a webhook later says it succeeded?
+- If the client retries with a *new* key, what stops another charge?
+
+### Real-Life Picture
+
+A cashier gives each checkout attempt a receipt number *before* sending it to the card terminal. If the terminal screen goes blank, the cashier does not ring up the basket again under a new receipt. They look up that receipt, wait for the terminal's eventual record, or reconcile it later. A second receipt number is a new business instruction unless the store also recognizes that the same unpaid order is already in progress.
+
+### Short Answer
+
+The browser or mobile client should normally create one high-entropy idempotency key for **one logical Pay action** and persist it across retries, reloads, and reconnects. The server binds that key to the authenticated customer and an immutable request fingerprint: order/invoice, amount, currency, and payment-method intent.
+
+The server creates one durable payment attempt before calling the provider, and uses a stable provider idempotency key or merchant reference derived from that attempt. A timeout is `UNKNOWN`, not `FAILED`. The same key must be retried or queried at the provider, and late webhooks must be able to advance the attempt from `UNKNOWN` to `SUCCEEDED`.
+
+Client-supplied idempotency alone only deduplicates the same logical request. To stop a new client key from charging the same obligation twice, add a **business invariant**: for example, one successful (or active) payment attempt per `order_id`/`invoice_id`, enforced by a durable conditional transition or unique constraint.
+
+### Key Ownership Is Two Different Questions
+
+| Key | Who creates it | Why |
+| --- | --- | --- |
+| API idempotency key | Client, once per deliberate Pay action | Lets the client safely repeat the *same* action after a timeout without the server guessing whether a request is a retry. The server validates its format and binds it to the request. |
+| Internal payment attempt ID | Server | Stable primary identifier for auditing, state transitions, provider references, and webhooks. |
+| Provider idempotency key / merchant reference | Server, deterministically from the payment attempt | Ensures every provider retry represents the same charge even if application workers restart. |
+
+For clients that cannot reliably persist a key, the server may issue a payment-intent/checkout ID first and require later confirmations to reference it. Generating a new random server key for every incoming `POST /pay` does **not** make network retries safe; the server has no way to recognize that two arrivals are the same intent.
+
+### Durable State Machine
+
+```text
+NEW ──► PROCESSING ──► SUCCEEDED
+              │  │
+              │  ├── definite provider decline ──► FAILED
+              │  │
+              │  └── timeout / connection loss ──► UNKNOWN
+              │                                      │
+              └──────────────────── provider lookup, idempotent retry,
+                                      or verified webhook ──► SUCCEEDED / FAILED
+```
+
+`FAILED` means the provider has given a definitive, terminal rejection for that payment attempt. It must not mean “our HTTP call timed out.” A network timeout only says the caller lacks an answer; the provider may already have charged the card.
+
+### Request Flow
+
+```text
+Client: POST /payments  Idempotency-Key: K1
+        order=O7, amount=50 USD
+                  │
+                  ▼
+Durably insert-or-get attempt(K1, O7, request_hash, PROCESSING)
+                  │
+                  ├── existing SUCCEEDED → return stored success response
+                  ├── existing FAILED    → return terminal failure response
+                  ├── existing PROCESSING/UNKNOWN → return 202 + payment_attempt_id
+                  │                                  (or wait briefly, then return status)
+                  └── newly created → call provider with stable key P42
+                                                 │
+                         ┌───────────────────────┴───────────────────────┐
+                         ▼                                               ▼
+                    known result                                    timeout/connection loss
+                         │                                               │
+                         ▼                                               ▼
+                 persist terminal state                            persist UNKNOWN
+                         │                                               │
+                         ▼                                               ▼
+                    return result                         lookup/retry P42, webhook, reconciliation
+```
+
+The initial insert must be an atomic insert-or-read protected by a unique constraint such as `(customer_id, idempotency_key)`. Do not implement it as “read key, call provider, then write key”: concurrent requests can both pass the read.
+
+The `202 Accepted` response should include a status URL or payment attempt ID. It tells the client that the request was accepted but is not yet known to be successful—not that it should create another payment request. Returning `409 Conflict` can also work when paired with a documented poll/retry contract, but returning a fresh charge attempt is wrong.
+
+### The Late Webhook Is a State Transition, Not a Contradiction
+
+```text
+T0  application sends P42 to provider
+T1  provider charges card
+T2  application times out → records UNKNOWN
+T3  client retries K1 → receives 202 / current status, not a new charge
+T4  provider webhook says P42 succeeded
+T5  webhook handler conditionally records SUCCEEDED and publishes receipt once
+```
+
+Webhook handlers are also at-least-once consumers. Verify the provider signature, deduplicate by provider event ID, and conditionally update the matching payment attempt. An old or duplicate failure event must not move a newer successful attempt backwards. Use provider event timestamps/sequences where available, and query the provider when events conflict.
+
+If the application prematurely wrote `FAILED` after a timeout, the webhook should still be able to correct it—provided `FAILED` was not treated as irreversible without proof. Better: reserve `FAILED` for a definitive provider result and use `UNKNOWN` for ambiguity. Do not issue a refund automatically just because the API timed out; first reconcile the provider charge, order state, and any fulfillment action.
+
+### A New Client Key Does Not Mean a New Bill
+
+The idempotency key protects a request; it does not automatically encode the business rule. Consider this unsafe policy:
+
+```text
+K1 + order O7 → charge $50
+K2 + order O7 → charge $50 again because K2 is new
+```
+
+For a one-time invoice or order, enforce ownership of the underlying obligation:
+
+```sql
+-- Illustrative rules; choose the exact schema for the payment product.
+CREATE UNIQUE INDEX one_successful_payment_per_order
+ON payment_attempts (order_id)
+WHERE status = 'SUCCEEDED';
+
+-- Also prevent concurrent active attempts unless multiple methods are an explicit product feature.
+CREATE UNIQUE INDEX one_active_payment_per_order
+ON payment_attempts (order_id)
+WHERE status IN ('PROCESSING', 'UNKNOWN');
+```
+
+The transaction that creates an attempt checks that the order is payable, locks or conditionally transitions the order to `PAYMENT_IN_PROGRESS`, and records which attempt owns it. Then `K2` for the same order returns the existing active/successful attempt, or is rejected with a clear conflict. If the product intentionally allows multiple partial payments, subscriptions, or a saved-card retry after a real decline, model that policy explicitly rather than assuming one index fits every payment type.
+
+### Failure and Recovery
+
+| Failure | Safe behavior |
+| --- | --- |
+| Same key arrives concurrently | Unique key returns one payment attempt; the second caller sees its current state. |
+| Second call arrives while first is processing | Return `202` plus the existing attempt/status endpoint, or wait for a short bounded period and return its final stored response. Never call the provider again under a new attempt. |
+| Provider call times out | Record `UNKNOWN`; query or retry with the same provider key and await webhook/reconciliation. |
+| Provider later says it succeeded | Conditionally transition the matching attempt to `SUCCEEDED`, complete the order once, and return the stored result on future retries. |
+| Client uses a new API key for same order | Order-level active/successful-payment invariant returns/rejects against the existing attempt. |
+| Worker crashes after provider success | Provider lookup/webhook/reconciliation repairs the durable row; provider-side idempotency prevents a duplicate external effect. |
+| Webhook is duplicated or reordered | Verify, deduplicate, and use state/version rules so terminal success is not overwritten by stale data. |
+
+### Interview-Ready Answer
+
+> “Make the endpoint idempotent” is incomplete because API retries, provider effects, and the underlying order are three different boundaries. I would have the client create one idempotency key per Pay action and reuse it across retries; the service would atomically store a durable attempt bound to that key, customer, order, and request hash. That attempt has a stable server-generated provider idempotency key. If a duplicate call arrives while it is processing or unknown, I return the same attempt—typically `202` with a status URL—not another provider call. A provider timeout is `UNKNOWN`, never automatically `FAILED`; the recovery path is provider lookup, idempotent retry with the same provider key, verified webhook processing, and reconciliation. Finally, a fresh client key cannot be allowed to make a fresh charge for a one-time order: an order-level conditional transition or uniqueness rule permits only one active or successful payment obligation. That gives us an effectively-once business outcome even across timeouts, retries, crashes, and late webhooks.
+
+## When One Expired Cache Key Hits Postgres 5,000 Times
+
+### Question
+
+A product page is cached in Redis for `60` seconds.
+
+At second `60`, the key expires. Then `5,000` people open the same popular product page at once.
+
+The simple answer is: “They all read Postgres and write the cache back.” That turns one expired cache entry into 5,000 nearly identical database queries.
+
+Ask the follow-up questions:
+
+- Who lets only one request rebuild the cache?
+- If rebuilding takes eight seconds, what do requests arriving at second two receive?
+- If two rebuilds complete in a different order, which value is allowed to stay in cache?
+- If the rebuilder crashes, who wakes the waiting requests?
+
+### Real-Life Picture
+
+Imagine a restaurant menu board falls off the wall during the lunch rush. It would be silly for 5,000 diners to run into the kitchen and ask the chef for the exact same menu. One staff member should fetch a fresh board. Everyone else should either read yesterday's still-valid-enough copy, wait a very short time, or be told to try again—not flood the kitchen.
+
+### Short Answer
+
+Use **request coalescing** (often called *single-flight*): one request becomes the rebuilder for a cache key; the other requests join that one piece of work instead of independently querying Postgres.
+
+For product pages, the best user experience is often **stale-while-revalidate**:
+
+1. Keep an older cached value for a short stale window.
+2. Return that older value immediately with a “refresh in progress” marker.
+3. Let only one background request rebuild from Postgres.
+4. Replace the cache only if the new result is not older than the value already stored.
+
+The database remains the source of truth. Redis is there to protect it and speed reads; it must not become another point that can endlessly block users.
+
+### The Safe Flow
+
+```text
+Request for product:42
+        │
+        ▼
+Redis has fresh value? ── yes ──► return fresh value
+        │ no
+        ▼
+Redis has stale-but-allowed value? ── yes ──► return stale value immediately
+        │                                      │
+        │                                      └── one request starts refresh in background
+        ▼
+No usable value
+        │
+        ▼
+Try to become the single rebuilder for product:42
+        │
+        ├── won ──► query Postgres once ──► conditionally write cache ──► notify/wake joiners
+        │
+        └── lost ──► wait only a small bounded time, then reread cache
+                         │
+                         ├── value now exists ──► return it
+                         └── still missing ─────► return controlled fallback / 503 / retry response
+```
+
+The important word is **bounded**. Do not make 4,999 web requests wait eight seconds while holding application threads and connections. For a normal product page, it is usually better to serve slightly old information than to make the entire page unavailable. For price, inventory, or checkout eligibility, decide separately whether stale data is safe; those fields may need a short TTL, a direct authoritative read, or a validation at checkout.
+
+### Fresh, Stale, and Too Old Are Different
+
+Do not delete the only copy at the exact TTL boundary. Store a soft and hard expiry:
+
+| State | Example age | What to return | What happens in background |
+| --- | --- | --- | --- |
+| Fresh | 0–60 seconds | Cached product data | Nothing. |
+| Stale but usable | 60–180 seconds | The last known product data, immediately | One coalesced refresh starts. |
+| Too old or absent | Over 180 seconds, or no value | Wait briefly for the single refresh; otherwise controlled fallback | A single rebuild may proceed; callers do not all hit Postgres. |
+
+The actual windows depend on the product. A marketing description can safely be stale for minutes; a live stock count should not promise availability based only on a stale cache value.
+
+### One Rebuilder, Not 5,000
+
+On one application instance, an in-memory `singleflight(productId)` map may be enough. Across many instances, use a Redis lease only as a coordination hint:
+
+```text
+SET rebuild:product:42 {random-owner-token} NX PX 10000
+```
+
+Only the request that receives `OK` queries Postgres. The others do **not** query the database just because the lock exists. They serve the stale value, join a local promise, subscribe/poll briefly, or return a controlled response.
+
+The lease needs a deadline because the owner can crash. But a TTL is not a correctness guarantee:
+
+- The owner must release the key only if it still owns the same random token; never run a plain `DEL` that could remove a newer owner's lease.
+- If rebuilding can outlive the lease, renew only while the owner is alive—or stop writing when it can no longer prove ownership.
+- A waiter always has a fallback timer. After the lease expires, one request may safely try to become the next rebuilder; the other 4,999 still do not stampede Postgres.
+
+### What Do the Requests at Second Two See?
+
+They should not all sit in an eight-second line. Pick a clear product policy:
+
+| Page/data type | Good answer while refresh runs |
+| --- | --- |
+| Product name, image, description, reviews | Return the stale cache value immediately. |
+| Price shown on a browse page | Usually return stale with a visible/implicit refresh; revalidate the price when adding to cart or checking out. |
+| Inventory or purchase eligibility | Read a current source or enforce the real check during reservation/checkout; do not sell based solely on stale page data. |
+| Cache was empty and database is overloaded | Wait a small budget, then return a graceful “please retry” response, a minimal page, or shed traffic. |
+
+This is an explicit availability-versus-freshness decision. “Wait for the lock” is not a user experience strategy.
+
+### Do Not Let an Older Rebuild Win
+
+Even with a lease, two rebuilds can overlap: the first request stalls, its lease expires, a second request rebuilds, then the first wakes up and writes an old snapshot last.
+
+Give every cached value a source version, such as a product `updated_at` timestamp, database row version, or monotonic revision:
+
+```json
+{
+  "product": { "id": 42, "name": "Boot", "price": 75 },
+  "sourceVersion": 1842,
+  "softExpiresAt": "...",
+  "hardExpiresAt": "..."
+}
+```
+
+Write only when the incoming version is at least as new as the stored version. A Redis Lua script can compare-and-set the version and value atomically. If the source cannot provide a reliable version, the rebuilder needs a fencing token/lease generation and a design that prevents an older owner from overwriting a newer result. “Last writer wins” is unsafe when the last writer started first.
+
+### Failure and Recovery
+
+| Failure | What the system should do |
+| --- | --- |
+| Key expires during a traffic spike | Serve stale data where permitted; one request acquires the rebuild lease; others coalesce or fall back. |
+| Rebuild takes eight seconds | Do not occupy every request/thread for eight seconds. Return stale immediately, or wait only a small per-request budget. |
+| Rebuilder crashes | Its lease expires. A waiter retries lease acquisition after bounded backoff; stale data remains available until hard expiry. |
+| Rebuilder loses its lease then wakes up | It must not overwrite a newer result. Token/version/fencing checks reject its stale write. |
+| Redis is unavailable | Use a bounded direct-read fallback with strict concurrency/rate limits, serve a local/stale copy if safe, or shed traffic; do not send every caller to Postgres. |
+| Postgres is slow | Limit concurrent rebuilds, enforce query deadlines, and extend stale serving/degrade noncritical fields rather than amplify load with retries. |
+
+### Preventing the Next Herd
+
+One hot key may be predictable, but many keys can expire together after a deploy or a fixed 60-second TTL. Add randomized TTL jitter so they do not all become stale in the same millisecond. Pre-warm known hot products before a promotion, use a small cache TTL only where freshness is actually needed, and put bulk cache invalidations behind a rate-limited refresh queue.
+
+Monitor cache hit rate **and** refresh activity: rebuilds in progress, lease-acquisition failures, coalesced waiters, stale-served rate, hard-expiry misses, Redis latency/errors, Postgres query concurrency, and source-query p95/p99. A high cache hit rate can hide a dangerous stampede until one popular key expires.
+
+### Interview-Ready Answer
+
+> I would not allow 5,000 cache misses to become 5,000 Postgres queries. For each key, I would coalesce cache fills so only one request owns the rebuild and the rest either join it briefly or, for product-page data, receive a stale-but-bounded cached value immediately. I would keep soft and hard expiries rather than deleting the only value at 60 seconds. The rebuilder uses a short Redis lease with a random owner token, but waiters have their own timeout and fallback; if the owner crashes, the lease expires and one waiter—not everyone—takes over. Because leases can expire while work is still running, every cache write includes a source version or fencing token, so an older rebuild cannot overwrite a newer one. I would add TTL jitter, pre-warm hot keys, bound direct database fallbacks, and monitor stale serves, coalesced waiters, rebuild latency, Redis health, and database concurrency. That protects Postgres while making the freshness trade-off explicit for each field.
+
+## Pod Running, but Users Get 503
+
+### Question
+
+Kubernetes says the pod is `Running`. The node is healthy. CPU and memory look normal.
+
+But users receive `503 Service Unavailable`.
+
+What does that prove? Very little. `Running` only means the container process started. It does **not** prove that the pod is ready to receive traffic, that the Service has endpoints, that the Ingress points to the right Service, or that the application can complete its real request path.
+
+### Real-Life Picture
+
+Think of a restaurant. The lights are on and staff are inside—that is a running pod. But customers still cannot eat if the front door is locked, the host has no table list, the kitchen has no ingredients, or the delivery address points to the wrong building.
+
+The goal is not to stare at the kitchen. Follow one customer's journey from the street to the meal.
+
+### The Request Path
+
+```text
+User
+  │
+  ▼
+DNS ──► CDN / Load Balancer ──► Ingress / Gateway ──► Kubernetes Service
+                                                              │
+                                                              ▼
+                                                       Ready EndpointSlice
+                                                              │
+                                                              ▼
+                                                        Pod / application
+                                                              │
+                                                              ▼
+                                                Database / Kafka / external APIs
+```
+
+A `503` can be produced by several hops. The fastest investigation is to find the **first hop that cannot reach the next one**.
+
+### Easy Rule: Running, Ready, and Reachable Are Different
+
+| Signal | What it means | What it does not mean |
+| --- | --- | --- |
+| Pod is `Running` | The container process has started. | The app is accepting traffic or its dependencies work. |
+| Pod is `Ready` | Kubernetes is willing to put it behind the Service. | Ingress/DNS/load balancer routing is correct. |
+| Service has endpoints | Ready pod IPs are attached to the Service. | The app answers the requested URL correctly. |
+| `/health` returns `200` | That health route answered. | Login, checkout, database query, or external dependency works. |
+| CPU/memory are normal | The machine is not obviously saturated. | There is no bad route, TLS issue, blocked pool, bad secret, or dependency outage. |
+
+### Troubleshoot in Order
+
+Start outside and move inward. Each step should answer one question before you change anything.
+
+| Step | Ask | Useful check | Typical finding |
+| --- | --- | --- | --- |
+| 1. Confirm the symptom | Is it every route, one route, one region, or one tenant? | Browser/curl response, status code, request ID, synthetic check | A `/health` route works but `/api/orders` returns 503. |
+| 2. Inspect pod state | Is it restarting, pending, or never ready? | `kubectl get pods -n <ns>` and `kubectl describe pod <pod> -n <ns>` | `Running 0/1` means running but not ready. |
+| 3. Read logs and events | Did the app crash earlier, fail a probe, or reject config? | `kubectl logs <pod> -n <ns> --previous`; `kubectl get events -n <ns> --sort-by=.lastTimestamp` | Startup exception, probe failure, image/config issue. |
+| 4. Check Service endpoints | Does the Service have ready pod IPs? | `kubectl get svc,endpoints,endpointslice -n <ns>` | Empty endpoints: selector mismatch or no Ready pods. |
+| 5. Check routing | Does Ingress/Gateway send the host/path to that Service and port? | `kubectl describe ingress <name> -n <ns>` plus controller/LB logs | Wrong host/path, service name, target port, TLS/backend rule. |
+| 6. Call the app directly | Is the application actually listening and answering? | `kubectl port-forward`, or a temporary in-cluster curl | Port mismatch, wrong bind address, app-level 503. |
+| 7. Verify config and dependencies | Can the real path authenticate and reach what it needs? | Inspect referenced ConfigMaps/Secrets; dependency metrics/logs/traces | Bad database URL, expired secret, Kafka/DNS/external API failure. |
+| 8. Compare recent change | What changed just before errors began? | `kubectl rollout history`, Deployment diff, Git/CI history | New image, probe, Service selector, Ingress, secret, or config. |
+
+### A Practical Command Sequence
+
+Replace placeholders with the real namespace, deployment, service, and pod names:
+
+```bash
+# 1. Is the pod actually ready, and what do events say?
+kubectl get pods -n <namespace> -o wide
+kubectl describe pod <pod-name> -n <namespace>
+kubectl get events -n <namespace> --sort-by=.lastTimestamp
+
+# 2. Read current logs and logs from the prior crashed container, if any.
+kubectl logs <pod-name> -n <namespace>
+kubectl logs <pod-name> -n <namespace> --previous
+
+# 3. Does the Service select any ready endpoints?
+kubectl get svc <service-name> -n <namespace> -o yaml
+kubectl get endpoints <service-name> -n <namespace>
+kubectl get endpointslice -n <namespace> -l kubernetes.io/service-name=<service-name>
+
+# 4. Is the route pointed at the intended Service and port?
+kubectl describe ingress <ingress-name> -n <namespace>
+kubectl get ingress <ingress-name> -n <namespace> -o yaml
+
+# 5. Remove the network path temporarily: call the pod through port-forward.
+kubectl port-forward -n <namespace> pod/<pod-name> 8080:<container-port>
+# In another terminal: curl -i http://127.0.0.1:8080/<health-or-real-route>
+
+# 6. Review the rollout before changing the deployment.
+kubectl rollout history deployment/<deployment-name> -n <namespace>
+```
+
+Do not assume that an empty `Endpoints` object is an application bug. First compare the Service selector labels with the pod labels, then check readiness. Kubernetes deliberately removes unready pods from normal Service traffic.
+
+### Common 503 Causes, Explained Simply
+
+| Root cause | What you see | Why users get 503 | Fix and verify |
+| --- | --- | --- | --- |
+| Readiness probe fails | Pod is `Running` but `0/1 Ready`; endpoints are empty or fewer than expected. | Service has no eligible backends. | Fix the readiness condition/path/port/dependency policy; verify Ready pods and EndpointSlices appear. |
+| Service selector is wrong | Healthy ready pods exist, but Service endpoints are empty. | Service cannot find matching pod IPs. | Align labels/selectors; verify endpoints populate. |
+| `targetPort` or app bind address is wrong | Endpoints exist, but controller reports connection refused/timeouts. | Traffic reaches pod IP but not the application listener. | Match Service target port to container listener and bind to the correct interface; test from inside cluster. |
+| Ingress/LB host/path misconfiguration | Only a hostname/path fails; direct Service test works. | Edge routes to the wrong Service/port or has no matching rule. | Correct route/TLS/backend mapping; test external URL and controller logs. |
+| Bad ConfigMap or Secret | New pods start but app logs authentication/config errors. | The app cannot serve its real dependency path. | Correct the referenced values/keys and roll safely; prove the real route works. |
+| Dependency is down or slow | Pods and endpoints look good; application logs/traces show DB, Kafka, DNS, or API failures. | App intentionally or accidentally turns dependency failure into 503. | Restore/degrade/isolate dependency; verify application latency and error rate recover. |
+| Recent deployment bug | 503 starts at rollout time, often only on new replicas. | New code/image/config breaks one point in the request path. | Compare revisions; roll back if needed; then root-cause and add a regression test. |
+
+### What “Healthy” Should Test
+
+Use separate signals for separate decisions:
+
+- **Startup probe:** Is the process still initializing? It prevents Kubernetes from killing a slow starter too early.
+- **Liveness probe:** Is the process stuck and unlikely to recover without restart? Keep this cheap and local; do not make every liveness check depend on a shared database.
+- **Readiness probe:** Should this pod receive normal traffic now? It may include initialized connections and essential serving capacity, but it should have bounded cost and avoid turning one optional dependency failure into a fleet-wide removal.
+
+A green `/health` endpoint that only returns `{ "ok": true }` is valuable, but it is not proof that checkout works. Add a safe synthetic check for the critical user journey, plus tracing that can show where a request stopped.
+
+### Verify the Fix End to End
+
+Do not stop after the pod says `Running`. Confirm all of these:
+
+1. The expected replicas are `Ready`, stable, and not restarting.
+2. The Service has the expected ready EndpointSlice addresses and ports.
+3. The Ingress/load balancer routes the production host and path to that Service.
+4. The real external route returns the expected response, not only an internal health route.
+5. Logs show no continuing probe, authentication, or dependency errors.
+6. Dependency checks/traces are healthy and the 503 rate, latency, and saturation metrics return to baseline.
+
+### Interview-Ready Answer
+
+> A running pod only proves that a container started; it does not prove the user request can reach a working application. I would trace one failing request from DNS and load balancer through Ingress, Service, EndpointSlice, pod, and its dependencies, using the request ID and timestamps to identify the first broken hop. I would first check whether the pod is actually Ready and whether the Service has endpoints, then validate selectors, ports, Ingress host/path rules, and direct in-cluster application behavior. If routing is healthy, I would inspect logs, configuration/secrets, dependency traces, and the recent rollout. I would distinguish startup, liveness, and readiness probes so Kubernetes takes the right action. After fixing the cause, I would verify Ready replicas, EndpointSlices, the real external user route, dependency health, logs, and 503/latency metrics—not merely CPU or pod phase.
